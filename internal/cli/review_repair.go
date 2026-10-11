@@ -368,8 +368,14 @@ func runReviewRepair(ctx context.Context, args []string, stdout io.Writer) error
 			}
 		} else if selectorPresent {
 			return reviewPreflightError(planErr)
-		} else if selectors, selectorsErr := reviewtransaction.ListAuthorityDispositionSelectorsAtRepo(ctx, root); selectorsErr == nil && len(selectors) > 0 {
+		} else if selectors, selectorsErr := reviewtransaction.ListAuthorityDispositionSelectorsAtRepo(ctx, root); selectorsErr == nil && len(selectors) > 1 {
 			result.DispositionSelectors = selectors
+		} else if len(selectors) == 1 {
+			// A lone selector is published only for an eligible rejected-validator
+			// terminal, never for one historical entry beside other diagnostics.
+			if single, err := reviewtransaction.DeriveAuthorityDispositionPlanAtRepo(ctx, root, "", "", selectors[0]); err == nil && single.AnomalyClass == reviewtransaction.RejectedValidatorDispositionClass {
+				result.DispositionSelectors = selectors
+			}
 		}
 		if err := result.Validate(); err != nil {
 			return fmt.Errorf("validate review repair preflight: %w", err)

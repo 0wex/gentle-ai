@@ -75,20 +75,20 @@ const compactHistoricalSnapshotIdentityClass = "retired_compact_snapshot_identit
 // A canonical rejection is valid authority, not corruption. This disposition
 // releases only its active claim, retaining its verdict and consumed correction
 // in the existing audit residue; it never produces approval or starts a review.
-const compactRejectedValidatorDispositionClass = "rejected_targeted_validator_terminal"
+const RejectedValidatorDispositionClass = "rejected_targeted_validator_terminal"
 
 func rejectedValidatorDispositionPlanForSelector(report CompactRecoveryInspectionReport, records map[string]CompactRecord, binding, actor, reason string, selector AuthorityDispositionSelector) (AuthorityDispositionPlan, error) {
 	lineage := selector.SuccessorLineageID
 	record, found := records[lineage]
 	if !found || !report.Complete || len(report.EntryDiagnostics) != 0 {
-		return AuthorityDispositionPlan{}, fmt.Errorf("%w: rejected-validator disposition requires complete canonical authority", errAuthorityDispositionPlanNotDerivable)
+		return AuthorityDispositionPlan{}, fmt.Errorf("%w: rejected-validator disposition of %q requires complete canonical authority", errAuthorityDispositionPlanNotDerivable, lineage)
 	}
 	if record.Revision != selector.SuccessorExpectedRevision {
 		return AuthorityDispositionPlan{}, fmt.Errorf("%w: exact rejected-validator selector no longer matches %q", ErrConcurrentUpdate, lineage)
 	}
 	state := record.State
 	if state.State != StateEscalated || !state.CorrectionAttemptConsumed() || state.Recovery != nil {
-		return AuthorityDispositionPlan{}, fmt.Errorf("%w: selected authority is not an isolated consumed rejected-validator terminal", errAuthorityDispositionPlanNotDerivable)
+		return AuthorityDispositionPlan{}, fmt.Errorf("%w: selected authority %q is not an isolated consumed rejected-validator terminal", errAuthorityDispositionPlanNotDerivable, lineage)
 	}
 	for _, edge := range report.Edges {
 		if edge.PredecessorLineageID == lineage || edge.SuccessorLineageID == lineage {
@@ -97,12 +97,12 @@ func rejectedValidatorDispositionPlanForSelector(report CompactRecoveryInspectio
 	}
 	request, err := RebuildAdmittedTargetedValidationRequest(state, state.CapturePhaseRevision)
 	if err != nil {
-		return AuthorityDispositionPlan{}, fmt.Errorf("%w: rejected-validator request is not canonical: %v", errAuthorityDispositionPlanNotDerivable, err)
+		return AuthorityDispositionPlan{}, fmt.Errorf("%w: rejected-validator request of %q is not canonical: %v", errAuthorityDispositionPlanNotDerivable, lineage, err)
 	}
 	value, admitted := state.AdmittedRoleResult(CompactRoleTargetedValidator, state.CapturePhaseRevision, request.CorrectionTargetIdentity, request.RequestHash)
 	validator, err := decodeCompactAdmittedTargetedValidatorValue(value)
 	if !admitted || err != nil || validator.Outcome != "failed" {
-		return AuthorityDispositionPlan{}, fmt.Errorf("%w: selected authority has no canonical rejected-validator verdict", errAuthorityDispositionPlanNotDerivable)
+		return AuthorityDispositionPlan{}, fmt.Errorf("%w: selected authority %q has no canonical rejected-validator verdict", errAuthorityDispositionPlanNotDerivable, lineage)
 	}
 	inventory, err := authorityInventoryRevision(records, report.historical)
 	if err != nil {
@@ -110,7 +110,7 @@ func rejectedValidatorDispositionPlanForSelector(report CompactRecoveryInspectio
 	}
 	plan := AuthorityDispositionPlan{
 		Schema: AuthorityDispositionPlanSchema, RepositoryBinding: binding,
-		AuthorityInventoryRevision: inventory, AnomalyClass: compactRejectedValidatorDispositionClass,
+		AuthorityInventoryRevision: inventory, AnomalyClass: RejectedValidatorDispositionClass,
 		Selector: &selector, SeedSet: []string{lineage}, Closure: []string{lineage},
 		ExpectedRevisions: map[string]string{lineage: record.Revision},
 		Actor:             strings.TrimSpace(actor), Reason: strings.TrimSpace(reason),
