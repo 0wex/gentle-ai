@@ -183,6 +183,10 @@ func RunArgs(args []string, stdout io.Writer) error {
 		parsedUpgrade = &parsed
 	}
 
+	if err := validateIsolationEnv(); err != nil {
+		return err
+	}
+
 	if err := ensureCurrentOSSupported(); err != nil {
 		return err
 	}
@@ -194,6 +198,16 @@ func RunArgs(args []string, stdout io.Writer) error {
 
 	if !result.System.Supported {
 		return system.EnsureSupportedPlatform(result.System.Profile)
+	}
+
+	// Reject invalid install plans before self-update can persist its cooldown
+	// or replace the binary. Dispatch reuses this plan without reparsing flags.
+	var preparedInstall cli.PreparedInstall
+	if len(args) > 0 && args[0] == "install" {
+		preparedInstall, err = cli.PrepareInstall(args[1:], result)
+		if err != nil {
+			return err
+		}
 	}
 
 	var (
@@ -303,7 +317,7 @@ func RunArgs(args []string, stdout io.Writer) error {
 	case "upgrade":
 		return runUpgrade(context.Background(), *parsedUpgrade, result, stdout)
 	case "install":
-		installResult, err := cli.RunInstall(args[1:], result)
+		installResult, err := cli.RunPreparedInstall(preparedInstall, result)
 		if err != nil {
 			return err
 		}
@@ -1156,7 +1170,7 @@ func ListBackups() []backup.Manifest {
 		return nil
 	}
 
-	backupRoot := filepath.Join(homeDir, ".gentle-ai", "backups")
+	backupRoot := state.BackupsDir(homeDir)
 	entries, err := os.ReadDir(backupRoot)
 	if err != nil {
 		return nil
