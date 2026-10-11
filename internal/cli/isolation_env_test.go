@@ -261,3 +261,18 @@ func TestInstallHelpListsIsolationVariables(t *testing.T) {
 		}
 	}
 }
+
+// A workspace install whose workspace is the home folder keeps the workspace
+// persona file; only a global install follows GENTLE_AI_PI_CONFIG_DIR.
+func TestPiPersonaConfigPathsFollowScopeNotRootEquality(t *testing.T) {
+	home := t.TempDir()
+	piConfigDir := filepath.Join(t.TempDir(), "config")
+	t.Setenv(piagent.GentlePiConfigDirEnv, piConfigDir)
+	workspace := filepath.Join(home, ".pi", "gentle-ai", "persona.json")
+	if got := piPersonaConfigPaths(home, home, ScopeWorkspace); len(got) != 1 || got[0] != workspace {
+		t.Fatalf("workspace install in the home folder = %v, want [%s]", got, workspace)
+	}
+	if got := piPersonaConfigPaths(home, home, ScopeGlobal); len(got) != 1 || got[0] != filepath.Join(piConfigDir, "persona.json") {
+		t.Fatalf("global install = %v, want [%s]", got, filepath.Join(piConfigDir, "persona.json"))
+	}
+}

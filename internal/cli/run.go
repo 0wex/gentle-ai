@@ -4342,11 +4342,12 @@ func componentInjectionDirScoped(homeDir, workspaceDir string, scope InstallScop
 // which GENTLE_AI_PI_CONFIG_DIR may relocate; workspace install writes only
 // the workspace file.
 func piPersonaConfigPaths(homeDir, workspaceDir string, scope InstallScope) []string {
-	root := ResolveAgentConfigDir(scope, homeDir, workspaceDir)
-	if root == homeDir {
+	// The scope decides, not the folder: a workspace install whose workspace is
+	// the home folder still writes the workspace persona file.
+	if scope == ScopeGlobal {
 		return []string{persona.PiGlobalPersonaConfigPath(homeDir)}
 	}
-	return []string{persona.PiPersonaConfigPath(root)}
+	return []string{persona.PiPersonaConfigPath(ResolveAgentConfigDir(scope, homeDir, workspaceDir))}
 }
 
 func nativeReviewCodeGraphGuidanceMarkdown(homeDir string, selected []model.CommunityToolID) string {
