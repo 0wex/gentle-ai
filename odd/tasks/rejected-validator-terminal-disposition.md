@@ -10,7 +10,7 @@ Baseline: 1f9d5e6423e37f7d2316859045f379ba9b5d8c3a. Runner: focused Go tests, fu
 - Non-goals: no historical verdict replacement, correction replenishment, automatic review restart, RDD change or operation on the consumer C3 lineage. Same-target future review policy is not changed deliberately by this feature.
 
 ## Tasks
-- T1 | S1-S3 | inline | in_progress | Reproduce current-main refusal, add regression and minimal disposition; normalize, focused/package/compiled-CLI checks and independent verification; commit pending.
+- T1 | S1-S3 | inline | done (bounded proof accepted) | Commit324e97936efcf184a73a76c497941730c731e2c8; focused/compiled-CLI and independent S1-S3 PASS; full packages unavailable240s accepted by human; native review approved and acknowledged.
 
 ## Log
 - L1: "Vamos a ver porque ese bloqueo y arreglarlo"
@@ -28,3 +28,6 @@ Baseline: 1f9d5e6423e37f7d2316859045f379ba9b5d8c3a. Runner: focused Go tests, fu
 - L11: Needs human decision on proceeding with explicitly limited proof. No work-unit commit, native review closure, provider publication or application to real consumer C3 yet; RDD remainsON and historical C3 escalated. No further suite automatically launched.
 
 - L12: Human answered "si" to continuing with local commit and native review while explicitly accepting the unavailable full affected-package proof. Scoped verification remains PASS only in its stated scope; no broader green claim, publication, installation or consumer disposition is authorized.
+
+- L13: Local work-unit commit324e97936efcf184a73a76c497941730c731e2c8 contains sixpaths347authoredlines (+340/-7). Worktree clean at freeze; no active Git hooks. Native assess high by security escalation (native medium), RDDon; explicit human review request honored.
+- L14: Native review review-885119152b10e37a ran four lenses and closed approved without correction;12 informational advisories are separate follow-up work, not blockers. Exact acknowledgement completed: authority burned, consumed revision sha256:805cd8919c08353d2d6a093b3b5627e09055783929e0d7a414c926a05354e8fb, target sha256:8941d0da6ad4c768b69e8116db7f66d59ea4ac180e0ffde3f51350067108431b. No subsequent STATUS. This approval applies to commit324e97936 only, not consumer C3 or later documentation bookkeeping. No publication/install/release/consumer mutation. Full-package proof remains unavailable, not a pass.
