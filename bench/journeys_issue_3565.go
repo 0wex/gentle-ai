@@ -69,7 +69,7 @@ func issue3565VerifyListDot(sandbox *Sandbox, observation Observation) error {
 	return nil
 }
 
-// issue3565VerifyRefreshDot confirms refresh proceeds instead of reporting a root skip.
+// issue3565VerifyRefreshDot confirms refresh writes the project registry for #3565.
 func issue3565VerifyRefreshDot(sandbox *Sandbox, observation Observation) error {
 	if observation.ExitCode != 0 {
 		return fmt.Errorf("refresh --cwd . exited %d: %s", observation.ExitCode, firstLine(observation.Stderr))
@@ -79,6 +79,9 @@ func issue3565VerifyRefreshDot(sandbox *Sandbox, observation Observation) error 
 	}
 	if !strings.Contains(observation.Stdout, "Skill registry refreshed") {
 		return fmt.Errorf("refresh --cwd . did not report a refreshed project registry: %s", firstLine(observation.Stdout))
+	}
+	if _, err := os.Stat(filepath.Join(sandbox.Repo, ".atl", "skill-registry.md")); err != nil {
+		return fmt.Errorf("refresh --cwd . did not write the project registry: %w", err)
 	}
 	return nil
 }
