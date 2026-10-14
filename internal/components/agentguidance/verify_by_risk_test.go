@@ -99,7 +99,7 @@ func TestOpenCodeWorkerReportIsNeverTheVerificationOfRecord(t *testing.T) {
 	if strings.Contains(worker, "verification of record") {
 		t.Fatal("OpenCode worker still calls its report the verification of record when RDD is on")
 	}
-	if !strings.Contains(worker, "the risk tier decides whether an independent verifier also runs") {
-		t.Fatal("OpenCode worker does not say the risk tier decides the independent verifier")
+	if !strings.Contains(worker, "a named high-risk item, not the risk tier alone, decides whether an independent verifier also runs") {
+		t.Fatal("OpenCode worker does not say a named high-risk item decides the independent verifier (S9 C1: the tier alone never adds one)")
 	}
 }

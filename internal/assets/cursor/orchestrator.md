@@ -79,7 +79,7 @@ Core principle: **does this inflate the parent context without need?** If yes, u
 
 Use a Cursor native bounded worker for delegated-direct work.
 
-Keep each delegated writer bounded, with a short synthesized handoff. Delegation is mandatory at the mapping, write, preparation, and broad-research boundaries, but it remains a direct implementation route.
+Keep each delegated writer bounded, with a short synthesized handoff. Delegation is mandatory only when a mechanism's own trigger fires.
 
 #### Delegation Triggers
 
