@@ -1621,6 +1621,12 @@ func TestOpenCodeGenericAgentsCarryDelegateForReasonDiscipline(t *testing.T) {
 			"add one test proving its previous behavior still holds; add no other cases",
 			"counts as touched when it shares the code you changed",
 			"they need no RED run",
+			// pain-point-iteration S9 C8: PRESERVE ends with a differential
+			// run of the commands sharing the changed code, old vs new.
+			"Before finishing, run a differential check: for each existing command that shares the code you changed, run it with the new or changed input (for example a new option passed to a sibling subcommand) against the previous code (`git stash` or a copy of HEAD) and against your change, and compare stdout, stderr, and exit code; any difference nobody asked for is a regression to fix and pin with a test.",
+			// pain-point-iteration S9 C3: shared state goes through the
+			// existing function, keeping its invariants.
+			"Before you create or change shared state (a record, list entry, file, or setting that other commands also create or read), find the existing function that already does it and reuse it, keeping every invariant it enforces (ordering, uniqueness, validation, normalization). Never re-implement that step inline with a different shape.",
 			"PRESERVE/REFACTOR",
 			// S8: bounded self-correction.
 			"one correction attempt per failing check, and a second only if the same check still fails",

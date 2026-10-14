@@ -948,12 +948,21 @@ func TestRenderRoutingDelegatesForReason(t *testing.T) {
 			"For every existing command or option the change touches, add one test proving its previous behavior still holds",
 			"add no other cases",
 			"An existing behavior counts as touched when it shares the code you changed (options, parsers, helpers, validation)",
+			// pain-point-iteration S9 C8: the differential check compares old
+			// and new output of the commands that share the changed code.
+			"Before finishing, run a differential check: for each existing command that shares the code you changed, run it with the new or changed input (for example a new option passed to a sibling subcommand) against the previous code (`git stash` or a copy of HEAD) and against your change, and compare stdout, stderr, and exit code; any difference nobody asked for is a regression to fix and pin with a test.",
 			"Each test asserts every observable effect of the rule (output, exit code, persisted data), covers the cases the rule itself names, and goes through the public interface",
 			"When you add or change a command, option, or message, update the help text and docs",
 		}, []string{
 			"configured TDD mode",
 			"strict TDD is active",
 		}},
+		// pain-point-iteration S9 C3: parallel writers cannot see each other,
+		// so each writer prompt names the helpers that keep shared invariants.
+		{"S9 shared-state invariants", []string{
+			"**Invariants:** each writer prompt names the existing helpers its unit must reuse for shared state (for example the function that adds an entry other commands also add) and the invariants they keep (ordering, uniqueness, validation, normalization)",
+			"Whoever writes, inline or delegated, reuses the existing function for shared state and never re-implements that step with a different shape.",
+		}, nil},
 	}
 
 	for _, agent := range catalog.AllAgents() {
