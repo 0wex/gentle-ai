@@ -139,7 +139,7 @@ func TestOrchestratorModuleCoreKeepsAuthorityAndSafety(t *testing.T) {
 	for _, required := range []string{
 		"### Identity Contract", "### Lossless Blocking Prompts (MANDATORY)",
 		"#### Gentle AI Provider Defect Handoff (MANDATORY)", "When delegating, forward this contract",
-		"#### Mandatory Delegation Triggers", "#### Delegated Verification Gate (MANDATORY)",
+		"#### Delegation Triggers", "#### Delegated Verification Gate (MANDATORY)", // S9 C4 renamed the heading
 		"#### Native Checking Contract", "#### Review Execution Contract\n\n" + testModuleContract,
 		"#### 1. Inline Direct", "Inline evidence uses one parallel batch", "#### 2. Simple Delegation",
 		"### Allowed edit surfaces (MANDATORY)", "### Delivery strategy",

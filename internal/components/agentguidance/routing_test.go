@@ -727,8 +727,10 @@ func TestRenderRoutingMakesDelegationMandatory(t *testing.T) {
 			}
 
 			for _, want := range []string{
-				"### Mandatory Delegation Triggers",
-				"These triggers are mandatory, not advisory",
+				// pain-point-iteration S9 C4: a trigger is mandatory only once its
+				// condition truly holds; none holds by default, inline when in doubt.
+				"### Delegation Triggers",
+				"Each trigger holds only when its condition truly holds, and only then is it mandatory, not advisory; no trigger holds by default, and when in doubt work inline.",
 				"stop and delegate through the runtime's subagent mechanism",
 				"executing past a fired trigger inline is a routing defect",
 				"**Mapping trigger:** when understanding exceeds the inline batch budget",
@@ -741,7 +743,7 @@ func TestRenderRoutingMakesDelegationMandatory(t *testing.T) {
 				"record the chosen route per task",
 				"so skipped delegation is observable instead of silent",
 				"These triggers only choose between direct inline and delegated direct inside the organic flow",
-				"honoring its mandatory delegation triggers",
+				"honoring its delegation triggers when their conditions truly hold",
 			} {
 				if !strings.Contains(rendered, want) {
 					t.Fatalf("RenderRouting(%q) is missing mandatory delegation clause %q:\n%s", agent.ID, want, rendered)
@@ -896,7 +898,10 @@ func TestRenderRoutingDelegatesForReason(t *testing.T) {
 	}{
 		{"S1 writer by reason", []string{
 			"**Writer trigger:** a writer is delegated only for a named reason",
-			"(a) parallelism: two or more independent units with disjoint edit surfaces, each clearly heavier than starting a subagent, launched together",
+			// pain-point-iteration S9 C4: a unit is an independent behavior with
+			// several minutes of work, never a test/doc/code split of one behavior.
+			"(a) parallelism: two or more independent units of behavior with disjoint edit surfaces, each needing several minutes of work (several files or roughly 100+ changed lines; a subagent spends one to two minutes reading before it writes), launched together",
+			"A unit is one independent piece of behavior with its code, tests, and docs together: never split one behavior into test, docs, and code writers, and a delivery that depends on another is not independent; several small independent changes run inline, one after another.",
 			"(b) context: the long-session backstop below",
 			"Never delegate a writer for size, a large task alone, file count, or a price ratio",
 			"Without a reason, the parent works inline, following its logbook",
@@ -904,6 +909,7 @@ func TestRenderRoutingDelegatesForReason(t *testing.T) {
 		}, []string{
 			"a large task delegates one writer per task",
 			"a large task delegates one bounded writer per task",
+			"each clearly heavier than starting a subagent",
 		}},
 		{"S2 parallel writers", []string{
 			"**Parallel writers:** work in another repository goes in a fresh worktree based on that repository's main",
