@@ -37,7 +37,7 @@ func TestRoutingIncludesApplicableTestFirstPolicy(t *testing.T) {
 func TestRenderRoutingKeepsTestScratchOutOfTheWorktree(t *testing.T) {
 	t.Parallel()
 
-	const rule = "Keep test scratch state (temporary directories, `HOME`, `TMPDIR`, tool caches) outside the worktree in a `mktemp -d` directory; when it must live inside the worktree, use a path git excludes and remove it before finishing, so no tool cache or scratch path remains in the change. Forward the applicable runner, this test discipline"
+	const rule = "Keep test scratch state (temporary directories, `HOME`, `TMPDIR`, tool caches) outside the worktree in a `mktemp -d` directory; when it must live inside the worktree, use a path git excludes and remove it before finishing, so no tool cache or scratch path remains in the change. Subagents never delete scratch: they report its exact paths, and the parent removes outside scratch after use, including the paths a worker or verifier reports. Forward the applicable runner, this test discipline"
 	for _, agent := range catalog.AllAgents() {
 		rendered, err := RenderRouting(agent.ID)
 		if err != nil {

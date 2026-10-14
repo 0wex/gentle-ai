@@ -1705,14 +1705,14 @@ func TestOpenCodeWorkerKeepsScratchOutOfTheDiff(t *testing.T) {
 	}
 }
 
-// C7: scratch outside the worktree is cleaned up too. The verifier removes
-// only the directory its own `mktemp -d` printed; the worker, which never
-// deletes, has tests clean up and names leftovers for the parent.
+// C7: scratch outside the worktree is cleaned up too. Child safety blocks
+// deletion in subagents, so the verifier and the worker never delete: tests
+// clean up in teardown and both report exact scratch paths the parent removes.
 func TestOpenCodeGenericAgentsRemoveTheirScratchAfterUse(t *testing.T) {
 	t.Parallel()
 
 	want := map[string]string{
-		"opencode/agents/gentle-ai-verify.md": "Before returning, remove only the exact scratch directory your own `mktemp -d` printed (`rm -rf -- \"$scratch\"`), never any other path; name it in your result if removal fails.",
+		"opencode/agents/gentle-ai-verify.md": "Before returning, list every scratch directory you created by exact path in your result so the parent removes it; never delete it yourself.",
 		"opencode/agents/gentle-ai-worker.md": "Tests delete the temp directories they create in teardown; name any scratch directory you created outside the worktree in `risks` so the parent removes it.",
 	}
 	for path, clause := range want {
@@ -1722,6 +1722,9 @@ func TestOpenCodeGenericAgentsRemoveTheirScratchAfterUse(t *testing.T) {
 		}
 		if !strings.Contains(string(body), clause) {
 			t.Errorf("%s is missing %q", path, clause)
+		}
+		if strings.Contains(string(body), "rm -rf") {
+			t.Errorf("%s instructs a deletion that child safety blocks", path)
 		}
 	}
 }
