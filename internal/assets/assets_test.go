@@ -1685,6 +1685,47 @@ func TestOpenCodeGenericAgentsCarryDelegateForReasonDiscipline(t *testing.T) {
 	}
 }
 
+// C7: the worker keeps test scratch and tool caches out of the delivered diff
+// and checks `git status --short` before it returns.
+func TestOpenCodeWorkerKeepsScratchOutOfTheDiff(t *testing.T) {
+	t.Parallel()
+
+	body, err := FS.ReadFile("opencode/agents/gentle-ai-worker.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, clause := range []string{
+		"Keep test scratch state (temporary directories, `HOME`, `TMPDIR`, tool caches) outside the worktree in a `mktemp -d` directory.",
+		"When it must live inside the worktree, use a path git excludes and remove it through the test's own cleanup before finishing.",
+		"Before returning, run `git status --short` and confirm it lists no tool cache or scratch path",
+	} {
+		if !strings.Contains(string(body), clause) {
+			t.Errorf("gentle-ai-worker.md is missing %q", clause)
+		}
+	}
+}
+
+// C7: scratch outside the worktree is cleaned up too. The verifier removes
+// only the directory its own `mktemp -d` printed; the worker, which never
+// deletes, has tests clean up and names leftovers for the parent.
+func TestOpenCodeGenericAgentsRemoveTheirScratchAfterUse(t *testing.T) {
+	t.Parallel()
+
+	want := map[string]string{
+		"opencode/agents/gentle-ai-verify.md": "Before returning, remove only the exact scratch directory your own `mktemp -d` printed (`rm -rf -- \"$scratch\"`), never any other path; name it in your result if removal fails.",
+		"opencode/agents/gentle-ai-worker.md": "Tests delete the temp directories they create in teardown; name any scratch directory you created outside the worktree in `risks` so the parent removes it.",
+	}
+	for path, clause := range want {
+		body, err := FS.ReadFile(path)
+		if err != nil {
+			t.Fatalf("ReadFile(%s) error = %v", path, err)
+		}
+		if !strings.Contains(string(body), clause) {
+			t.Errorf("%s is missing %q", path, clause)
+		}
+	}
+}
+
 // Gentleman-Programming/gentle-shell#1713: the generic workers read the ODD
 // feature document as the specification, by reference, instead of a
 // paraphrase of the user's request; verify grounds its verdict in each spec.
