@@ -31,13 +31,16 @@ verification cost or external side effects, accepted residual risk, or delivery.
 | Route | Use it when | What happens |
 |---|---|---|
 | **Direct inline** | The task is **small**: understood within the inline evidence budget, risk contained, and resumable from the request plus `git diff`, whatever the number of files. | Read, edit, and run the focused test and suite inline. |
-| **Delegated direct** | Understanding exceeds the inline evidence budget; or a writer has a named reason (two or more independent units with disjoint edit surfaces launched together, or the long-session context backstop), so reading that prepares that write delegates with it; or the change is **high risk** and needs an independent verifier. Size, a large task alone, file count, or a price ratio never decides it. | Delegate the narrow exploration, one bounded writer per unit with a reason, and/or the verifier needed for that action. |
+| **Delegated direct** | Understanding exceeds the inline evidence budget; or a writer has a named reason (two or more independent units with disjoint edit surfaces launched together, or the long-session context backstop), so reading that prepares that write delegates with it; or the change names a **high-risk** item and needs an independent verifier. Size, a large task alone, file count, or a price ratio never decides it. | Delegate the narrow exploration, one bounded writer per unit with a reason, and/or the verifier needed for that action. |
 
 File count never decides the route or the task size. High risk takes a task
-out of the small path and adds an independent verifier after the change's own
-checks. The feature document still comes only from a failed resume test; a
-large task without a writer reason stays inline, following its logbook. When receipt-driven development is on and native assess returns a
-risk tier, that tier wins; the agent may only raise it.
+out of the small path; a named high-risk item adds an independent verifier
+after the change's own checks. The verifier runs as rarely as possible: a native
+risk tier, an unclear or failed assessment, and the writer's model or effort
+never add one by themselves. The feature document still comes only from a failed resume test; a
+large task without a writer reason stays inline, following its logbook. When receipt-driven development is on, the native assess tier
+decides native review and the agent may only raise it; it never adds an
+independent verifier by itself.
 
 Delegation also applies per action. Tests, builds, installs, and native review
 actors may use fresh workers without changing the implementation route.

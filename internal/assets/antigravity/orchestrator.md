@@ -94,7 +94,7 @@ These are parent-orchestrator routing boundaries. Use the smallest useful topolo
 3. **Write rule**: a small task's writes stay inline, even across files; delegate a writer only for a named reason: parallel units launched together (two or more independent units with disjoint edit surfaces, each clearly heavier than starting a subagent) or the context backstop. Never for size, a large task alone, file count, or a price ratio; without a reason the parent writes inline, following its logbook. File count never fires this rule.
 4. **Context rule**: when the Write rule delegates a write, delegate reading that prepares a write together with it, plus broad research/context compression; an inline write reads inline, and never explore files you will read anyway before writing inline.
 5. **Per-action rule**: tests, builds, installs, and native review actors may use fresh workers without changing the implementation route.
-6. **Verification rule**: a high-risk change (Task Size list) gets an independent verifier after the change's own checks; otherwise the change's own focused test and suite run inline.
+6. **Verification rule**: only a change that names a Task Size high-risk item gets an independent verifier after the change's own checks, as rarely as possible; a native tier, an unclear or failed assessment, and the writer's model or effort never add one by themselves; otherwise the change's own focused test and suite run inline.
 
 #### Delegated Verification Gate (MANDATORY)
 

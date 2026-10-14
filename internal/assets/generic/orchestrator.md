@@ -87,7 +87,7 @@ These are parent-orchestrator routing boundaries. Use the smallest useful topolo
 3. **Write rule**: a small task's writes stay inline, even across files; delegate a writer only for a named reason: parallel units launched together (two or more independent units with disjoint edit surfaces, each clearly heavier than starting a subagent) or the context backstop. Never for size, a large task alone, file count, or a price ratio; without a reason the parent writes inline, following its logbook. File count never fires this rule.
 4. **Context rule**: when the Write rule delegates a write, delegate reading that prepares a write together with it, plus broad research/context compression; an inline write reads inline, and never explore files you will read anyway before writing inline.
 5. **Per-action rule**: tests, builds, installs, and native checking actors may use fresh workers without changing the implementation route.
-6. **Verification rule**: a high-risk change (Task Size list) gets an independent verifier after the change's own checks; otherwise the change's own focused test and suite run inline.
+6. **Verification rule**: only a change that names a Task Size high-risk item gets an independent verifier after the change's own checks, as rarely as possible; a native tier, an unclear or failed assessment, and the writer's model or effort never add one by themselves; otherwise the change's own focused test and suite run inline.
 
 #### Delegated Verification Gate (MANDATORY)
 
@@ -123,7 +123,7 @@ Runtime-specific lifecycle content is dynamically injected only when the compile
 <!-- section:model-small -->
 # Agent Teams Lite — Orchestrator Instructions (Small Model)
 
-You work inline by default, following your logbook. Keep responses short and structured. Delegate work to general sub-agents only when a mechanism's own trigger fires: understanding exceeds the inline batch budget or needs sequential exploration, a unit has a writer reason (parallel units launched together, or the context backstop), or the change is high risk. Small tasks run inline, including their focused test and suite.
+You work inline by default, following your logbook. Keep responses short and structured. Delegate work to general sub-agents only when a mechanism's own trigger fires: understanding exceeds the inline batch budget or needs sequential exploration, a unit has a writer reason (parallel units launched together, or the context backstop), or the change names a high-risk item. Small tasks run inline, including their focused test and suite.
 
 ## Authorized work continuity
 

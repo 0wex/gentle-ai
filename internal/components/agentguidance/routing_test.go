@@ -407,7 +407,9 @@ func TestRenderRoutingClosesEachTaskWithAWorkUnitCommitAndReviewsIt(t *testing.T
 		}},
 	}
 	// Runtimes without receipt-driven development verify each work unit by
-	// risk instead of assessing it for native review.
+	// risk instead of assessing it for native review. pain-point-iteration S9
+	// C1 changed the verifier clauses: only a named high-risk item adds the
+	// independent verifier, and an unclear change no longer counts as high.
 	oddTests := []struct {
 		name    string
 		clauses []string
@@ -415,9 +417,9 @@ func TestRenderRoutingClosesEachTaskWithAWorkUnitCommitAndReviewsIt(t *testing.T
 		{"verify each work unit by risk", []string{
 			"Verification covers a work-unit commit or a PR slice, never a TODO checkbox and never the accumulated feature branch.",
 			"Verify each work-unit commit in proportion to its risk",
-			"an added independent verifier for high-risk changes by the Task Size list",
+			"an added independent verifier only when a named Task Size high-risk item applies",
 			"Record per task the risk tier you applied and the checks you observed",
-			"count an unclear change as high only when a bounded look cannot tell whether the list applies",
+			"an unclear change never adds a verifier by itself",
 		}},
 	}
 
@@ -864,11 +866,17 @@ func TestRenderRoutingSizesTasksByUnderstandingRiskAndResumability(t *testing.T)
 				for _, want := range []string{
 					"--escalate-item <1-6> --escalate-reason",
 					"never lower it",
+					// pain-point-iteration S9 C1: the native tier decides native
+					// review only; it no longer "wins" for the independent verifier.
+					"When RDD is on, the native assess tier decides native review and you may only raise it; it never adds an independent verifier by itself, only a named high-risk item does.",
 				} {
 					if !strings.Contains(rendered, want) {
 						t.Fatalf("RenderRouting(%q) is missing agent escalation clause %q", agent.ID, want)
 					}
 				}
+			}
+			if strings.Contains(rendered, "that tier wins") {
+				t.Fatalf("RenderRouting(%q) keeps the retired native-tier-wins clause", agent.ID)
 			}
 		})
 	}
