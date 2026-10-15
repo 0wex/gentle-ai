@@ -1012,7 +1012,7 @@ func TestRenderRoutingDelegatesForReason(t *testing.T) {
 			"An existing behavior counts as touched when it shares the code you changed (options, parsers, helpers, validation)",
 			// pain-point-iteration S9 C8: the differential check compares old
 			// and new output of the commands that share the changed code.
-			"Before finishing, run a differential check: for each existing command that shares the code you changed, run it with the new or changed input (for example a new option passed to a sibling subcommand) against the previous code (`git stash` or a copy of HEAD) and against your change, and compare stdout, stderr, and exit code; any difference nobody asked for is a regression to fix and pin with a test.",
+			"Before finishing, run a differential check: for each existing command that shares the code you changed, run it with the new or changed input (for example a new option passed to a sibling subcommand) against the previous code (a copy of the base commit in a `mktemp -d` scratch directory, never committed as a test; committed tests never read git history or a fixed commit) and against your change, and compare stdout, stderr, and exit code; any difference nobody asked for is a regression to fix and pin with a test.",
 			"Each test asserts every observable effect of the rule (output, exit code, persisted data), covers the cases the rule itself names, and goes through the public interface",
 			"When you add or change a command, option, or message, update the help text and docs",
 		}, []string{
@@ -1048,5 +1048,32 @@ func TestRenderRoutingDelegatesForReason(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// S15 (pain-point iteration): a bench run read two wishes in one message as separate deliverables and started
+// two writers for ~100-line units (USD 0.55 vs 0.20 inline); blind review found delivered tests pinning a fixed git
+// commit from the differential check. Every runtime gets the three corrections.
+func TestRenderRoutingKeepsSmallTasksInlineAndDifferentialChecksInScratch(t *testing.T) {
+	t.Parallel()
+
+	rules := []string{
+		"separate deliverables the user wants apart (never several features asked at once)",
+		"Units of about 100 changed lines or less always run inline: writing them costs less than starting workers.",
+		"a copy of the base commit in a `mktemp -d` scratch directory, never committed as a test; committed tests never read git history or a fixed commit",
+	}
+	for _, agent := range catalog.AllAgents() {
+		rendered, err := RenderRouting(agent.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, rule := range rules {
+			if !strings.Contains(rendered, rule) {
+				t.Errorf("%s routing is missing %q", agent.ID, rule)
+			}
+		}
+		if strings.Contains(rendered, "(`git stash` or a copy of HEAD)") {
+			t.Errorf("%s routing still suggests git stash or a HEAD copy for the differential check", agent.ID)
+		}
 	}
 }
