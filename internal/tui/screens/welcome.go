@@ -82,7 +82,12 @@ func RenderShellWelcomeWithAdvisory(cursor int, version string, updateBanner str
 }
 
 func renderWelcomeWithInstaller(cursor int, version string, updateBanner string, updateResults []update.UpdateResult, updateCheckDone bool, hasEngines bool, width int, height int, advisory WelcomeAdvisory, shellInstaller bool) string {
-	options := WelcomeOptionsWithShellInstaller(updateResults, updateCheckDone, hasEngines, shellInstaller)
+	var options []string
+	if shellInstaller {
+		options = WelcomeOptionsWithShellInstaller(updateResults, updateCheckDone, hasEngines, true)
+	} else {
+		options = WelcomeOptions(updateResults, updateCheckDone, hasEngines)
+	}
 	minimum := func() string {
 		if shellInstaller && cursor >= 0 && cursor < len(options) {
 			return renderWelcomeMinimumLabel(width, height, options[cursor], true)
