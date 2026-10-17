@@ -6,6 +6,9 @@ func userValidateStageExperience(profile *UserExperience) error {
 	if err := userValidateStagePreferences(profile); err != nil {
 		return err
 	}
+	if profile != nil && profile.GGA != "" {
+		return experienceError("explicit GGA requires a qualified optional private CLI/config stage")
+	}
 	if profile != nil && profile.StrictTDD != "" {
 		return experienceError("explicit Strict TDD requires a supported private SDK stage")
 	}
@@ -16,16 +19,13 @@ func userValidateStageExperience(profile *UserExperience) error {
 }
 
 // Typed preferences and native RDD refusal are shared. POSIX preparation also
-// validates its actual mode; generic/Windows writers retain MCP/Strict TDD refusals.
+// validates its actual mode; generic/Windows writers retain MCP/Strict TDD/GGA refusals.
 func userValidateStagePreferences(profile *UserExperience) error {
 	if profile == nil {
 		return nil
 	}
 	if err := profile.Validate(); err != nil {
 		return err
-	}
-	if profile.GGA != "" {
-		return experienceError("explicit GGA requires a qualified optional private CLI/config stage")
 	}
 	if profile.GlobalRDD != "" {
 		return experienceError("explicit global RDD requires a supported native distribution")
