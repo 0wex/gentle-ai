@@ -35,3 +35,19 @@ Context termination preserves `context.Canceled` and `context.DeadlineExceeded`
 before GGA effects. Deterministic cancellation/past-deadline regression cases
 also check the stage parent stays unchanged. Authored before the fix, they were
 not run locally; current-head CI remains required.
+
+## Qualified fixture parents
+
+PR #5584 at `bb8ef77c6` failed `go test ./...` in the ON/OFF/absent configuration
+and existing-configuration preservation fixtures. Those positive fixtures used
+`t.TempDir()` without establishing the preparer's unchanged private0700 parent
+contract. They now reuse the existing `installStagePath(t)` fixture; no
+production admission check is changed or bypassed.
+
+Explicit0755-parent controls retain physical refusal for all three GGA choices
+and require the confirmed profile, parent identity/metadata and empty directory
+inventory to remain unchanged, with no stage created. The original configuration,
+permission, OFF/absence, unrelated-path, preimage and context-cause assertions stay
+intact. These controls were authored before correcting the positive fixtures.
+No local Go/CLI tests were run; corrected-head CI is still required. The old
+head's skipped benchmark/evidence/deadcode and format steps are not PASS.

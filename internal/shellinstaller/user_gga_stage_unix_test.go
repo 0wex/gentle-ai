@@ -15,7 +15,7 @@ import (
 func TestUserGGAPrivateStageConfiguration(t *testing.T) {
 	for _, choice := range []string{"on", "off", "absent"} {
 		t.Run(choice, func(t *testing.T) {
-			root := filepath.Join(t.TempDir(), "stage")
+			root := installStagePath(t)
 			profile := UserExperience{Persona: "unmanaged", BackgroundSubagents: "off"}
 			if choice != "absent" {
 				profile.GGA = choice
@@ -51,7 +51,7 @@ func TestUserGGAPrivateStageConfiguration(t *testing.T) {
 }
 
 func TestUserGGAStageKeepsExistingConfiguration(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "stage")
+	root := installStagePath(t)
 	if err := userPrepareInstallStage(context.Background(), root, "separate", nil); err != nil {
 		t.Fatal(err)
 	}
@@ -127,6 +127,50 @@ func TestUserGGAStagePreservesContextCause(t *testing.T) {
 			entries, err := os.ReadDir(parent)
 			if err != nil || len(entries) != 0 {
 				t.Fatal("context termination changed the stage parent", entries, err)
+			}
+		})
+	}
+}
+
+func TestUserGGAStageRefusesNonPrivateParent(t *testing.T) {
+	for _, choice := range []string{"on", "off", "absent"} {
+		t.Run(choice, func(t *testing.T) {
+			root := installStagePath(t)
+			parent := filepath.Dir(root)
+			if err := os.Chmod(parent, 0755); err != nil {
+				t.Fatal(err)
+			}
+			before, err := os.Lstat(parent)
+			if err != nil || before.Mode() != os.ModeDir|0755 {
+				t.Fatal("nonprivate parent fixture differs", before, err)
+			}
+			profile := UserExperience{Persona: "unmanaged", BackgroundSubagents: "off"}
+			if choice != "absent" {
+				profile.GGA = choice
+			}
+			if choice == "on" {
+				profile.GGAProvider = "codex"
+			}
+			selected := profile
+			err = userPrepareInstallStage(context.Background(), root, "separate", &profile)
+			var refusal, cause *PrivateRuntimeError
+			if !errors.As(err, &refusal) || refusal.Kind != "refused" ||
+				!errors.As(refusal.Cause, &cause) || cause.Kind != "filesystem" {
+				t.Fatal("nonprivate parent did not fail physical admission", err)
+			}
+			if profile != selected {
+				t.Fatal("parent refusal changed the confirmed selection")
+			}
+			if _, err := os.Lstat(root); !os.IsNotExist(err) {
+				t.Fatal("parent refusal created a stage", err)
+			}
+			after, err := os.Lstat(parent)
+			if err != nil || privateStamp(before) != privateStamp(after) {
+				t.Fatal("parent refusal changed physical preimage", err)
+			}
+			entries, err := os.ReadDir(parent)
+			if err != nil || len(entries) != 0 {
+				t.Fatal("parent refusal added filesystem entries", entries, err)
 			}
 		})
 	}
