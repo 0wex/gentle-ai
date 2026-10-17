@@ -25,8 +25,9 @@ or Shared provisioning. Full immutable profile/mode validation precedes root
 creation; explicit Shared Context7 on/off and native RDD remain refused. No
 selection field is cleared: config and agent policy have distinct consumers.
 
-Profiles without a Context7 selection retain the complete generic validator and
-native config writer. Explicit Context7 on/off uses the validated POSIX composition.
+Profiles without Context7 or Strict TDD selections retain the complete generic
+validator and native config writer. Explicit selections use the validated POSIX
+composition.
 
 Public nonnil profiles and the generic/Windows experience validator remain
 refused. This is internal POSIX stage integration, not a Windows implementation

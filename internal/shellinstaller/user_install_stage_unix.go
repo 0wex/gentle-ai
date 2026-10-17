@@ -21,6 +21,9 @@ func userPrepareInstallStage(ctx context.Context, root, mode string, profile *Us
 	if err := userValidateStagePreferences(profile); err != nil {
 		return err
 	}
+	if profile != nil && profile.StrictTDD != "" && mode != "separate" {
+		return experienceError("explicit Strict TDD requires a private Separate SDK runtime")
+	}
 	if profile != nil && profile.Context7 != "" && mode != "separate" {
 		return experienceError("explicit Context7 requires a private Separate agent")
 	}
@@ -48,7 +51,7 @@ func userPrepareInstallStage(ctx context.Context, root, mode string, profile *Us
 		}
 	}
 	// Ordinary profiles retain the complete generic validator and native writer.
-	if profile != nil && profile.Context7 == "" {
+	if profile != nil && profile.Context7 == "" && profile.StrictTDD == "" {
 		return userStageExperience(ctx, root, profile)
 	}
 	if err := userStageExperienceConfig(ctx, root, files); err != nil {
