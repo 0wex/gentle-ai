@@ -30,3 +30,8 @@ This recovery retains all source030 assertions without repeating local Go/CLI
 qualification. The CLI wrapper reuses the bounded owned-group/pipe-wait helper;
 it does not prove escaped-descendant containment or complete tree settlement.
 No provider health, native installation or installed Ready was newly tested.
+
+Context termination preserves `context.Canceled` and `context.DeadlineExceeded`
+before GGA effects. Deterministic cancellation/past-deadline regression cases
+also check the stage parent stays unchanged. Authored before the fix, they were
+not run locally; current-head CI remains required.

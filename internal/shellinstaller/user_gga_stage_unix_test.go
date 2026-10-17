@@ -4,10 +4,12 @@ package shellinstaller
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestUserGGAPrivateStageConfiguration(t *testing.T) {
@@ -96,5 +98,36 @@ func TestUserGGAStageRefusesBeforeEffects(t *testing.T) {
 	}
 	if _, err := os.Lstat(root); !os.IsNotExist(err) {
 		t.Fatal("invalid profile produced effects", err)
+	}
+}
+
+func TestUserGGAStagePreservesContextCause(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		want error
+	}{
+		{"canceled", context.Canceled},
+		{"deadline", context.DeadlineExceeded},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var ctx context.Context
+			var cancel context.CancelFunc
+			if tc.want == context.Canceled {
+				ctx, cancel = context.WithCancel(context.Background())
+				cancel()
+			} else {
+				ctx, cancel = context.WithDeadline(context.Background(), time.Unix(1, 0))
+				defer cancel()
+			}
+			parent := t.TempDir()
+			root := filepath.Join(parent, "stage")
+			if err := userStageGGA(ctx, root, "separate", "on", "codex"); !errors.Is(err, tc.want) {
+				t.Fatalf("context cause changed: want %v, got %v", tc.want, err)
+			}
+			entries, err := os.ReadDir(parent)
+			if err != nil || len(entries) != 0 {
+				t.Fatal("context termination changed the stage parent", entries, err)
+			}
+		})
 	}
 }

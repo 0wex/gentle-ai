@@ -23,8 +23,11 @@ func userStageGGA(ctx context.Context, root, mode, choice, provider string) erro
 	if choice == "off" {
 		return nil
 	}
-	if ctx == nil || ctx.Err() != nil {
+	if ctx == nil {
 		return privateError("canceled", context.Canceled)
+	}
+	if err := ctx.Err(); err != nil {
+		return privateError("canceled", err)
 	}
 	if !privateHierarchyPath(root) {
 		return experienceError("GGA stage requires an absolute private root")
