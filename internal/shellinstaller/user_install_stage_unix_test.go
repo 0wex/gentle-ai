@@ -48,6 +48,9 @@ func TestUserPrepareInstallStageAppliesCanonicalProfile(t *testing.T) {
 				if err := userPrepareInstallStage(context.Background(), root, "separate", &profile); err != nil {
 					t.Fatal(err)
 				}
+				if _, err := os.Lstat(filepath.Join(root, "agent", "mcp.json")); !os.IsNotExist(err) {
+					t.Fatalf("ordinary profile wrote MCP policy: %v", err)
+				}
 				assertExperienceFile(t, filepath.Join(root, "config/background-subagents.json"), "{\n  \"schema\": \"gentle-pi.background-subagents/v1\",\n  \"policy\": \""+background+"\"\n}\n")
 				path := filepath.Join(root, "config/persona.json")
 				if persona == "unmanaged" {

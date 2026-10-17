@@ -47,6 +47,10 @@ func userPrepareInstallStage(ctx context.Context, root, mode string, profile *Us
 			return err
 		}
 	}
+	// Ordinary profiles retain the complete generic validator and native writer.
+	if profile != nil && profile.Context7 == "" {
+		return userStageExperience(ctx, root, profile)
+	}
 	if err := userStageExperienceConfig(ctx, root, files); err != nil {
 		return err
 	}
