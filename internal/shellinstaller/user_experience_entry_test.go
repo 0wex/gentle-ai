@@ -10,6 +10,8 @@ func TestUserExperienceEntryPreservesSelectionAndRefusal(t *testing.T) {
 	profile.GlobalRDD = "off"
 	profile.Context7 = "on"
 	profile.StrictTDD = "on"
+	profile.GGA = "on"
+	profile.GGAProvider = "codex"
 	encoded, _ := profile.Encode()
 	args := []string{t.TempDir() + "/target", "separate", "", "", "model-only-token", "--experience", encoded}
 	req, err := UserInstallFromEntry(args)
