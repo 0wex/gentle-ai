@@ -37,5 +37,8 @@ Trusted project config can override global entries; file-only `mcp list` health
 is not an active session's permission-qualified tool execution.
 
 This reconciliation does not execute the retained tests or CLI. The complete
-165-line composition matrix is retained as the following proof cut; no current
-parent GREEN, installed effect or public profile acceptance is implied.
+165-line composition matrix is now included: all18 persona/background/MCP
+combinations, immutable selection/encoding, precreation mode/RDD refusals,
+Shared absence and occupied-root preimages. Its explicit legacy fixture is not
+default-API proof. No current parent GREEN, installed effect or public profile
+acceptance is implied.
