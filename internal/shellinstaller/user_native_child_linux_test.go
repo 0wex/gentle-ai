@@ -89,9 +89,24 @@ func TestUserNativeOperation(t *testing.T) {
 }
 
 func TestUserNativeChildReentry(t *testing.T) {
+	kernelErr := UserKernelCheck()
 	var output bytes.Buffer
 	err := RunUserEntry(context.Background(), "", []string{"internal-native-produce"}, nil, &output, &output)
+	if kernelErr != nil {
+		if err == nil || err.Error() != kernelErr.Error() || output.Len() != 0 {
+			t.Fatal("unqualified internal selector bypassed kernel admission", err, kernelErr, output.String())
+		}
+		return
+	}
 	if err == nil || !strings.Contains(err.Error(), "invalid native child arguments") || output.Len() != 0 {
 		t.Fatal("internal selector did not reach guarded child entry", err, output.String())
+	}
+}
+
+func TestUserNativeChildMalformedArguments(t *testing.T) {
+	var output bytes.Buffer
+	err := userNativeChild(context.Background(), nil, &output)
+	if err == nil || !strings.Contains(err.Error(), "invalid native child arguments") || output.Len() != 0 {
+		t.Fatal("malformed child arguments accepted before admission", err, output.String())
 	}
 }

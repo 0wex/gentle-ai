@@ -58,6 +58,9 @@ func TestUserNativeService(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			if _, err := userNativeServiceFileFixture(ctx, root, artifact, mask, runtime); err != nil {
+				t.Fatal("unmodified file-custody baseline refused", err)
+			}
 			refusePreparation := false
 			switch scenario {
 			case "runtime symlink":
@@ -84,7 +87,7 @@ func TestUserNativeService(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			custody, err := prepareUserNativeService(ctx, root, artifact, mask, runtime)
+			custody, err := userNativeServiceFileFixture(ctx, root, artifact, mask, runtime)
 			if refusePreparation {
 				if err == nil || custody != nil {
 					t.Fatal("unsafe preparation accepted")
@@ -162,7 +165,7 @@ func TestUserNativeService(t *testing.T) {
 			}
 			args := []string{"internal-install", "selected"}
 			interactive := scenario != "pipe"
-			got, buildErr := custody.args(ctx, "owned-unit", interactive, "/qualified/self", parent, args, env)
+			got, buildErr := userNativeServiceFileArguments(custody, ctx, "owned-unit", interactive, "/qualified/self", parent, args, env)
 			if scenario != "pty" && scenario != "pipe" {
 				if buildErr == nil || got != nil {
 					t.Fatal("unsafe custody accepted", got, buildErr)
@@ -212,7 +215,7 @@ func TestUserNativeServiceRejectsUnprepared(t *testing.T) {
 	root := userMainCustodyStage(t)
 	artifact, _ := userNativeSourceFixture(t)
 	parent := t.TempDir()
-	if custody, err := prepareUserNativeService(context.Background(), root, artifact, parent, parent); err == nil || custody != nil {
+	if custody, err := userNativeServiceFileFixture(context.Background(), root, artifact, parent, parent); err == nil || custody != nil {
 		t.Fatal("unprepared/overlapping source accepted")
 	}
 }

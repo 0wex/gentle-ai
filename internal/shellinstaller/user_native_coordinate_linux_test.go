@@ -65,10 +65,16 @@ func TestUserNativeFreshSelection(t *testing.T) {
 
 func TestUserNativeCoordinateRefusal(t *testing.T) {
 	var output bytes.Buffer
-	if err := userNativeCoordinate(context.Background(), "", nil, nil, &output, &output); err == nil {
-		t.Fatal("missing coordinator arguments accepted")
+	if err := userNativeCoordinate(context.Background(), "", nil, nil, &output, &output); err == nil || !strings.Contains(err.Error(), "invalid native coordinator arguments") {
+		t.Fatal("missing coordinator arguments accepted", err)
 	}
-	if err := RunUserEntry(context.Background(), "", []string{"internal-native-coordinate"}, nil, &output, &output); err == nil || !strings.Contains(err.Error(), "invalid native coordinator arguments") {
+	kernelErr := UserKernelCheck()
+	err := RunUserEntry(context.Background(), "", []string{"internal-native-coordinate"}, nil, &output, &output)
+	if kernelErr != nil {
+		if err == nil || err.Error() != kernelErr.Error() || output.Len() != 0 {
+			t.Fatal("unqualified coordinator selector bypassed kernel admission", err, kernelErr, output.String())
+		}
+	} else if err == nil || !strings.Contains(err.Error(), "invalid native coordinator arguments") {
 		t.Fatal("coordinator selector not dispatched", err)
 	}
 	if output.Len() != 0 {

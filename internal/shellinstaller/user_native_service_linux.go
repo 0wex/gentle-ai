@@ -43,6 +43,18 @@ func (c *userNativeServiceCustody) capture(ctx context.Context) (map[string]stri
 	if err := UserKernelCheck(); err != nil {
 		return nil, err
 	}
+	return c.captureFiles(ctx)
+}
+
+// captureFiles authenticates file custody only; it is not process admission.
+// Production preparation and argument building reach it through capture.
+func (c *userNativeServiceCustody) captureFiles(ctx context.Context) (map[string]string, error) {
+	if c == nil || ctx == nil {
+		return nil, privateError("refused", nil)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	paths := []string{c.root, c.mask, c.managerRuntime}
 	for i, path := range paths {
 		if !userSelectionPath(path) {
@@ -116,6 +128,12 @@ func (c *userNativeServiceCustody) args(ctx context.Context, unit string, intera
 	if err != nil {
 		return nil, err
 	}
+	return c.argsForIdentities(identities, unit, interactive, self, cwd, args, env)
+}
+
+// argsForIdentities constructs data, not launch authority. The production args
+// wrapper always obtains the fresh identities through kernel-checked capture.
+func (c *userNativeServiceCustody) argsForIdentities(identities map[string]string, unit string, interactive bool, self, cwd string, args, env []string) ([]string, error) {
 	if !reflect.DeepEqual(identities, c.identities) {
 		return nil, privateError("preimage", nil)
 	}

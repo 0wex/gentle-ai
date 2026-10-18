@@ -13,4 +13,12 @@ The builder preserves `userServiceArgs` unchanged, including terminal handling, 
 
 Source/archive and mask identities are captured and rechecked; identical-content inode replacements, symlinks, unsafe ownership/modes, nonempty masks, overlapping paths and cancellation refuse without modifying data. Runtime contents may change while its physical directory identity remains fixed.
 
-The existing462626 qualification demonstrated the mount mechanism and denied the tested parent-root/FD/namespace aliases. These unit tests validate argument construction and physical custody, not new mount execution, installer execution, publication, TUI wiring, or installed acceptance. Generic/Darwin supervision remains unchanged.
+## Ordinary unit contracts and process admission
+
+The 22 file-custody/argument scenarios run through the same file-identity and argument leaves used by the guarded production wrappers. Every scenario first establishes its unmodified file baseline; a kernel refusal cannot masquerade as a symlink, overlap, replacement or malformed-descriptor refusal. The existing assertions, source stamps, cancellation and PTY/pipe properties remain required.
+
+A separate public-boundary test calls the real `prepareUserNativeService` and `args` wrappers. When `UserKernelCheck` refuses the current process, both must return that exact refusal without arguments or source changes. When the process is genuinely qualified, their results must match the file/argument contract. File identities are not kernel admission or launch authority; every production capture/build still repeats the actual kernel and resource checks.
+
+Malformed child/coordinator arguments are tested directly at their existing argument-validation leaves. Public re-entry tests require the exact kernel refusal on an unqualified process and retain the original selector-traversal assertions when the real process is admitted. Ordinary CI is not evidence of qualified selector traversal. No test is skipped or retagged, and no workflow, limits, privilege state or kernel guard is changed.
+
+The existing462626 qualification demonstrated the mount mechanism and denied the tested parent-root/FD/namespace aliases. These unit tests validate argument construction, physical custody and public refusal, not new mount execution, installer execution, publication, TUI wiring, or installed acceptance. Generic/Darwin supervision remains unchanged.
