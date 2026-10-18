@@ -94,10 +94,10 @@ func TestUserNativeSourceBinding(t *testing.T) {
 			if _, err := os.Lstat(filepath.Join(root, "runtime/native-bootstrap")); !os.IsNotExist(err) {
 				t.Fatal("source refusal created bootstrap tooling", err)
 			}
-			_, collectErr := w.Collect(ctx)
+			_, collectErr := w.invokeWithEnvironment(ctx, "collect", nil, false, nil)
 			userAssertNativeSourceRefusal(t, collectErr, name == "canceled")
 			// This inert plan tests source refusal, never installation/plan health.
-			_, runErr := w.Run(ctx, NativeInstallerPlan{owner: w, data: json.RawMessage(`{}`)}, true)
+			_, _, runErr := w.RunWithLocation(ctx, NativeInstallerPlan{owner: w, data: json.RawMessage(`{}`)}, true)
 			userAssertNativeSourceRefusal(t, runErr, name == "canceled")
 			after, err = userTreeStamp(root)
 			if err != nil || before != after {

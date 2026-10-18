@@ -31,7 +31,7 @@ func TestUserPNPMPublish(t *testing.T) {
 	}
 	parent := filepath.Dir(installStagePath(t))
 	stage, root := filepath.Join(parent, "stage"), filepath.Join(parent, "final")
-	got, err := PublishNativePNPMInstallation(ctx, "/out", stage, root, location)
+	got, err := PublishNativePNPMInstallationWithExperience(ctx, "/out", stage, root, location, nil)
 	want := UserInstallResult{root, root + "/pnpm", root + "/agent", "ComponentInstalled"}
 	if err != nil || got != want {
 		t.Fatal("publication failed", got, err)
@@ -47,7 +47,7 @@ func TestUserPNPMPublish(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if result, err := PublishNativePNPMInstallation(ctx, "/out", stage, root, location); err == nil || result.State != "" {
+	if result, err := PublishNativePNPMInstallationWithExperience(ctx, "/out", stage, root, location, nil); err == nil || result.State != "" {
 		t.Fatal("occupied destination accepted", result, err)
 	}
 	if fresh, err := os.ReadFile(root + "/installation.json"); err != nil || string(fresh) != string(saved) {
@@ -55,7 +55,7 @@ func TestUserPNPMPublish(t *testing.T) {
 	}
 	canceled, cancel := context.WithCancel(ctx)
 	cancel()
-	if result, err := PublishNativePNPMInstallation(canceled, "/out", stage, root+"-canceled", location); err == nil || result.State != "" {
+	if result, err := PublishNativePNPMInstallationWithExperience(canceled, "/out", stage, root+"-canceled", location, nil); err == nil || result.State != "" {
 		t.Fatal("canceled publication accepted", result, err)
 	}
 	if _, err := os.Lstat(root + "-canceled"); !os.IsNotExist(err) {

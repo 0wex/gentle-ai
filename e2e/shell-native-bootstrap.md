@@ -5,11 +5,12 @@ confirmation before invoking original bootstrap. It captures the entire callback
 environment and a sealed release plan. Private Node/PNPM are marked bootstrap-only
 using the original probe policy; they are not installed runtime evidence.
 
-Caller-owned `runtime/native-bootstrap` survives collection. Prepared `Run`
+Caller-owned `runtime/native-bootstrap` survives collection. Prepared `RunWithLocation`
 requires consent, reuses those tools/environment, and compares a fresh plan
 before the original runner. The caller owns whole-source authentication,
 isolation, cancellation/settlement and cleanup. No browser or second TUI is used.
-Legacy unprepared `Collect`/`Run` and the stock npm worker remain unchanged.
+Legacy unprepared `collect`/`run` wire protocols retain their direct transport
+controls; their superseded Go wrappers are retired. The stock npm worker is unchanged.
 
 In the bounded offline Linux amd64 Guest, provide the authenticated Shell source
 at `/alan-source` and authentic pinned PNPM DATA at `/pnpm-11.1.1.tgz`, then run:

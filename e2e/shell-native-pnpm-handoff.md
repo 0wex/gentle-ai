@@ -1,8 +1,9 @@
 # Native installer location handoff
 
 `NativeInstallerRuntime.RunWithLocation` requests the original fresh-release
-installer's `onInstallationVerified` callback. `Run` remains unchanged for
-existing callers. Both require the established private worker, immutable source,
+installer's `onInstallationVerified` callback. The original `run` wire protocol
+remains an independent transport control, without a duplicate Go `Run` wrapper.
+Both require the established private worker, immutable source,
 terminal restoration and physical consent; neither creates a sandbox.
 
 The opt-in response preserves the complete original result separately from a
@@ -26,4 +27,4 @@ This API does not change the existing npm manifest or enable a PNPM backend.
 - The original installer callback's positive execution is qualified separately;
   decoder fixtures and blocked transport tests are not installed acceptance.
 
-Rollback removes this opt-in API and its tests without changing legacy `Run`.
+Rollback removes the location handoff and its tests without changing the original `run` wire protocol. The wrapper cleanup preserves these qualification scenarios; it has not rerun their Guest proofs.

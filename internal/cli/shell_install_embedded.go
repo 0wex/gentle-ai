@@ -55,15 +55,10 @@ func ShellInstallArguments(selection ShellInstallSelection) []string {
 	return args
 }
 
-// RunShellInstallSelection runs only after the owning TUI restores its terminal.
-// Confirmed is not authority: the physical selection and token are checked again.
-func RunShellInstallSelection(selection ShellInstallSelection, stdout io.Writer) error {
-	return runShellInstallSelectionWithEntry(selection, stdout, shellInstallEntry)
-}
-
 // RunShellInstallSelectionProcess is for the ordinary process-owning TUI only,
-// after terminal restoration. Fresh native installation may replace this process;
-// callers that require a returning API must use RunShellInstallSelection instead.
+// after the owning TUI restores its terminal. Fresh native installation may
+// replace this process. Confirmed is not authority: the physical selection and
+// token are checked again.
 func RunShellInstallSelectionProcess(selection ShellInstallSelection, stdout io.Writer) error {
 	return runShellInstallSelectionWithEntry(selection, stdout, shellinstaller.RunUserEntryReplacingOwner)
 }

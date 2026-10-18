@@ -67,9 +67,9 @@ func TestUserNativeInstallRefusal(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			native, installed, err := w.InstallToDestination(ctx, req, stage)
-			if err == nil || native.Outcome != "" || installed.State != "" {
-				t.Fatal("unsafe transaction accepted", native, installed, err)
+			native, location, err := w.produceForDestination(ctx, req, stage)
+			if err == nil || native.Outcome != "" || location != nil {
+				t.Fatal("unsafe transaction accepted", native, location, err)
 			}
 			if name == "source drift" && !errors.Is(err, errNativeSourceSnapshot) {
 				t.Fatal("source drift did not refuse before prerequisites", err)

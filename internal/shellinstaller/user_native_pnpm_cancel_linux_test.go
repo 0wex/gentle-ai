@@ -133,7 +133,7 @@ func TestUserNativeInstallerPNPMMutationCancellation(t *testing.T) {
 	done := make(chan error, 1)
 	completed := make(chan struct{})
 	go func() {
-		_, err := w.Run(ctx, plan, true)
+		_, _, err := w.RunWithLocation(ctx, plan, true)
 		done <- err
 		close(completed)
 	}()

@@ -17,7 +17,7 @@ import (
 // NativeInstallerRuntime is a process client, not installation authority or a
 // sandbox. The caller must authenticate the whole source snapshot, keep it
 // immutable, establish the existing bounded worker, restore the terminal and
-// obtain physical consent before preparing dependencies or calling Run.
+// obtain physical consent before preparing dependencies or calling RunWithLocation.
 // This transport does not replace the qualified npm backend or publish roots.
 type NativeInstallerRuntime struct {
 	root, source, node, sourceStamp string
@@ -61,40 +61,6 @@ func NewNativeInstallerRuntime(ctx context.Context, root, source string) (*Nativ
 	}
 	node := filepath.Join(root, "runtime/node/bin/node")
 	return &NativeInstallerRuntime{root: root, source: source, node: node, sourceStamp: privateStamp(entry)}, nil
-}
-
-func (w *NativeInstallerRuntime) Collect(ctx context.Context) (NativeInstallerPlan, error) {
-	data, err := w.invoke(ctx, "collect", nil, false)
-	if err != nil {
-		return NativeInstallerPlan{}, err
-	}
-	if len(data) == 0 || data[0] != '{' {
-		return NativeInstallerPlan{}, privateError("output", nil)
-	}
-	return NativeInstallerPlan{owner: w, data: data}, nil
-}
-
-func (w *NativeInstallerRuntime) Run(ctx context.Context, plan NativeInstallerPlan, consent bool) (NativeInstallerResult, error) {
-	if plan.owner != w || len(plan.data) == 0 {
-		return NativeInstallerResult{}, privateError("refused", nil)
-	}
-	if len(plan.bootstrapEnv) != 0 && !consent {
-		return NativeInstallerResult{}, privateError("refused", nil)
-	}
-	data, err := w.invokeWithEnvironment(ctx, "run", plan.data, consent, plan.bootstrapEnv)
-	if err != nil {
-		return NativeInstallerResult{}, err
-	}
-	var result NativeInstallerResult
-	if json.Unmarshal(data, &result) != nil || result.Outcome == "" {
-		return NativeInstallerResult{}, privateError("output", nil)
-	}
-	result.Details = append(json.RawMessage(nil), data...)
-	return result, nil
-}
-
-func (w *NativeInstallerRuntime) invoke(ctx context.Context, operation string, plan json.RawMessage, consent bool) (json.RawMessage, error) {
-	return w.invokeWithEnvironment(ctx, operation, plan, consent, nil)
 }
 
 func (w *NativeInstallerRuntime) invokeWithEnvironment(ctx context.Context, operation string, plan json.RawMessage, consent bool, env []string) (json.RawMessage, error) {

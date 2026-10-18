@@ -112,7 +112,7 @@ func TestUserNativeInstallerBootstrap(t *testing.T) {
 		}
 	})
 	t.Run("prepared-run-requires-consent", func(t *testing.T) {
-		_, err := w.Run(ctx, plan, false)
+		_, _, err := w.RunWithLocation(ctx, plan, false)
 		var failure *PrivateRuntimeError
 		if !errors.As(err, &failure) || failure.Kind != "refused" {
 			t.Fatalf("prepared consent refusal: %v", err)
@@ -121,7 +121,7 @@ func TestUserNativeInstallerBootstrap(t *testing.T) {
 	t.Run("fresh-plan-change-blocks-installation", func(t *testing.T) {
 		changed := plan
 		changed.data = json.RawMessage(`{"different":true}`)
-		result, err := w.Run(ctx, changed, true)
+		result, _, err := w.RunWithLocation(ctx, changed, true)
 		if err != nil || result.Outcome != "blocked" || result.Reason != "selection-changed" || len(result.Completed) != 0 {
 			t.Fatalf("stale plan: %+v %v", result, err)
 		}

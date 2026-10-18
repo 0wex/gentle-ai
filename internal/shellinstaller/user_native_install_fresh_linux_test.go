@@ -77,7 +77,15 @@ func TestUserNativeInstallFresh(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	native, installed, runErr := w.InstallToDestination(ctx, req, filepath.Join(parent, "stage"))
+	stage := filepath.Join(parent, "stage")
+	native, location, runErr := w.produceForDestination(ctx, req, stage)
+	var installed UserInstallResult
+	if runErr == nil && location != nil {
+		req, runErr = userCanonicalRequest(req)
+		if runErr == nil {
+			installed, runErr = PublishNativePNPMInstallationWithExperience(ctx, w.root, stage, req.Destination, *location, req.Experience)
+		}
+	}
 	message := ""
 	if runErr != nil {
 		message = runErr.Error()

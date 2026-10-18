@@ -9,25 +9,11 @@ import (
 	"path/filepath"
 )
 
-// InstallToDestination joins the original producer to atomic PNPM publication.
+// produceForDestination preserves the original runner and pre-publication guards.
 // The caller owns the qualified worker, immutable snapshot custody, temporary
 // Node, terminal restoration and physical confirmation. It retains producer
 // evidence on failure. This is not an ordinary source-carrier acquisition API.
-// A blocked native result is returned unchanged, without an installed result.
-func (w *NativeInstallerRuntime) InstallToDestination(ctx context.Context, req UserInstallRequest, stage string) (NativeInstallerResult, UserInstallResult, error) {
-	native, location, err := w.produceForDestination(ctx, req, stage)
-	if err != nil || location == nil {
-		return native, UserInstallResult{}, err
-	}
-	req, err = userCanonicalRequest(req)
-	if err != nil {
-		return native, UserInstallResult{}, err
-	}
-	installed, err := PublishNativePNPMInstallationWithExperience(ctx, w.root, stage, req.Destination, *location, req.Experience)
-	return native, installed, err
-}
-
-// produceForDestination preserves the original runner and pre-publication guards.
+// A blocked native result is returned unchanged, without a publication location.
 // Native service callers publish only after this sealed process has terminated.
 func (w *NativeInstallerRuntime) produceForDestination(ctx context.Context, req UserInstallRequest, stage string) (native NativeInstallerResult, location *NativeInstallationLocation, err error) {
 	if err = nativeRuntimeError(ctx, nil); err != nil {

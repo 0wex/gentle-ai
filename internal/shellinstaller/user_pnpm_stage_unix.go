@@ -215,12 +215,6 @@ func userPNPMRelocation(ctx context.Context, path, rel, source, destination stri
 	return data, true, nil
 }
 
-func userPNPMCopyFile(ctx context.Context, source, target string, info os.FileInfo, code bool, oldRoot string) error {
-	return userPNPMCopyFileWithSync(ctx, source, target, info, code, oldRoot, func(file userPNPMSyncFile) error {
-		return errors.Join(file.Sync(), file.Close())
-	})
-}
-
 func userPNPMCopyFileWithSync(ctx context.Context, source, target string, info os.FileInfo, code bool, oldRoot string, flush func(userPNPMSyncFile) error) (resultErr error) {
 	in, err := os.Open(source)
 	if err != nil {

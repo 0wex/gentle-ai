@@ -10,18 +10,13 @@ import (
 	"strings"
 )
 
-// PublishNativePNPMInstallation stages the original producer's retained DATA and
-// publishes it without replacing an existing destination. The caller must own
-// the qualified private execution boundary and the source's custody. This does
-// not execute suppliers or establish launcher/installed-product acceptance.
-func PublishNativePNPMInstallation(ctx context.Context, source, stage, destination string, location NativeInstallationLocation) (UserInstallResult, error) {
-	return PublishNativePNPMInstallationWithExperience(ctx, source, stage, destination, location, nil)
-}
-
-// PublishNativePNPMInstallationWithExperience applies canonical base preferences
-// only to the copied, unpublished stage. It never changes the retained producer
-// or overwrites existing preferences. Unsupported optional effects are refused
-// before any staging; nil preserves the unprofiled publication contract.
+// PublishNativePNPMInstallationWithExperience stages the original producer's
+// retained DATA and publishes it without replacing an existing destination.
+// The caller must own the qualified private execution boundary and the source's
+// custody. This does not execute suppliers or establish installed/launcher health.
+// Canonical base preferences apply only to the copied, unpublished stage. It never
+// changes the retained producer or overwrites existing preferences. Unsupported
+// optional effects are refused before staging; nil preserves the unprofiled contract.
 func PublishNativePNPMInstallationWithExperience(ctx context.Context, source, stage, destination string, location NativeInstallationLocation, profile *UserExperience) (result UserInstallResult, err error) {
 	if err = userValidateStageExperience(profile); err != nil {
 		return result, err

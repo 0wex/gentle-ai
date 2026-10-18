@@ -3,7 +3,7 @@
 `userNativeRuntimeFromSnapshot` reuses retained archive custody and exact private
 source readback. It seals a copy of the caller-authorized descriptor, refuses
 complete-tree drift before bootstrap tooling is created, and rechecks before
-`Collect`, `Prepare`, or `Run` starts a process. No source-root CLI ABI, new bundle
+`Prepare`, `RunWithLocation`, or the shared transport starts a process. No source-root CLI ABI, new bundle
 format, installer engine, web frontend, dependency pin, or publication is added.
 
 ## Proof boundaries

@@ -86,7 +86,7 @@ func TestUserNativeRuntimeAfterStartCancellation(t *testing.T) {
 			done := make(chan error, 1)
 			completed := make(chan struct{})
 			go func() {
-				_, err := w.Collect(ctx) // Genuine original factory, never an installer spy.
+				_, err := w.invokeWithEnvironment(ctx, "collect", nil, false, nil) // Genuine original factory, never an installer spy.
 				done <- err
 				close(completed)
 			}()

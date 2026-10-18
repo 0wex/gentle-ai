@@ -21,6 +21,6 @@ must not opt into process replacement. Internal selectors grant no authority.
 
 After its single Bubble Tea program restores the terminal, the ordinary app
 calls `RunShellInstallSelectionProcess`. It rechecks physical consent through
-the same request validation used by the returning selection API. Cancelled,
+the shared selection-execution boundary. Cancelled,
 stale and invalid selections never reach the replacement boundary. This does
 not add another TUI program or another waiting Go parent process.

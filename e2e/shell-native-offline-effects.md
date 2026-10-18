@@ -1,7 +1,7 @@
 # Read back an original PNPM runner failure
 
 `TestUserNativeInstallerOfflineEffects` exercises the original factory and
-bootstrap through `Prepare` → sealed plan/environment → consented `Run`.
+bootstrap through `Prepare` → sealed plan/environment → consented `RunWithLocation`.
 It does not publish a destination, replace the npm backend, or install a fixture
 product. No installer, probe, process, or persistence-pin adapter is substituted.
 

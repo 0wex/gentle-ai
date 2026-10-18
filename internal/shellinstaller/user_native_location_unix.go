@@ -21,13 +21,13 @@ type NativeInstallationLocation struct {
 }
 
 // RunWithLocation opts into the original runner's verified-installation callback.
-// It has the same consent and caller-owned confinement requirements as Run.
-// Existing Run callers retain their original request and result contract.
+// The caller owns confinement and physical consent. Prepared plans require consent
+// before invoking the runner; the result and installation locator remain separate.
 func (w *NativeInstallerRuntime) RunWithLocation(ctx context.Context, plan NativeInstallerPlan, consent bool) (NativeInstallerResult, *NativeInstallationLocation, error) {
 	if plan.owner != w || len(plan.data) == 0 || (len(plan.bootstrapEnv) != 0 && !consent) {
 		return NativeInstallerResult{}, nil, privateError("refused", nil)
 	}
-	data, err := w.invokeWithEnvironment(ctx, "run-with-location", plan.data, consent, plan.bootstrapEnv)
+	data, err := w.invokeWithEnvironment(ctx, "run-with-location", plan.JSON(), consent, plan.bootstrapEnv)
 	if err != nil {
 		return NativeInstallerResult{}, nil, err
 	}

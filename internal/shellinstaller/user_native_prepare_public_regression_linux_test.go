@@ -172,12 +172,12 @@ func TestIndependentPreparePublicBoundary(t *testing.T) {
 				t.Fatal("symlink target overwritten", e)
 			}
 		}
-		plan, err := w.Collect(context.Background())
-		if err != nil || string(plan.JSON()) != `{"fixture":true}` {
+		plan, err := w.invokeWithEnvironment(context.Background(), "collect", nil, false, nil)
+		if err != nil || string(plan) != `{"fixture":true}` {
 			t.Fatal("Collect changed", err)
 		}
-		result, err := w.Run(context.Background(), plan, true)
-		if err != nil || string(result.Details) != `{"outcome":"blocked","reason":"fixture","completed":[]}` {
+		result, err := w.invokeWithEnvironment(context.Background(), "run", plan, true, nil)
+		if err != nil || string(result) != `{"outcome":"blocked","reason":"fixture","completed":[]}` {
 			t.Fatal("Run changed", err)
 		}
 		if sourceBefore != independentPrepareState(t, source) {
@@ -211,7 +211,7 @@ func TestIndependentPreparePublicBoundary(t *testing.T) {
 	t.Run("nonprepare-failure", func(t *testing.T) {
 		w, root, source := independentPrepareWorker(t, "collect")
 		before := independentPrepareState(t, filepath.Dir(root))
-		_, err := w.Collect(context.Background())
+		_, err := w.invokeWithEnvironment(context.Background(), "collect", nil, false, nil)
 		var exit *exec.ExitError
 		if !errors.As(err, &exit) || strings.Contains(err.Error(), "PRIVATE_DIAGNOSTIC_MARKER") {
 			t.Fatal("Collect failure changed", err)

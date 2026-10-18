@@ -34,7 +34,9 @@ func TestIndependentPNPMCopyCompatibility(t *testing.T) {
 				cancel()
 			}
 			before := sha256.Sum256(data)
-			err = userPNPMCopyFile(ctx, source, target, info, true, "/original")
+			err = userPNPMCopyFileWithSync(ctx, source, target, info, true, "/original", func(file userPNPMSyncFile) error {
+				return errors.Join(file.Sync(), file.Close())
+			})
 			if (err == nil) != (name == "success") {
 				t.Fatalf("unexpected copy outcome: %v", err)
 			}

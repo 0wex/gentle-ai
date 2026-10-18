@@ -36,15 +36,15 @@ func TestShellInstallSelectionExecutionRechecksConsent(t *testing.T) {
 		}
 		return failure
 	}
-	if err := RunShellInstallSelection(selection, output); err != nil || inspected != 0 || entered != 0 {
+	if err := runShellInstallSelectionWithEntry(selection, output, shellInstallEntry); err != nil || inspected != 0 || entered != 0 {
 		t.Fatal("unconfirmed selection has execution effects")
 	}
 	selection.Confirmed, selection.Request.Confirmation = true, "stale-token"
-	if err := RunShellInstallSelection(selection, output); err == nil || entered != 0 {
+	if err := runShellInstallSelectionWithEntry(selection, output, shellInstallEntry); err == nil || entered != 0 {
 		t.Fatal("stale confirmation starts the worker")
 	}
 	selection.Request.Confirmation = "fresh-token"
-	if err := RunShellInstallSelection(selection, output); !errors.Is(err, failure) || entered != 1 || inspected != 2 {
+	if err := runShellInstallSelectionWithEntry(selection, output, shellInstallEntry); !errors.Is(err, failure) || entered != 1 || inspected != 2 {
 		t.Fatalf("guarded execution = %v, inspected=%d entered=%d", err, inspected, entered)
 	}
 	if executedContext.Err() != context.Canceled {

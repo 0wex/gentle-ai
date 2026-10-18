@@ -73,10 +73,11 @@ func TestUserNativeInstallerRuntime(t *testing.T) {
 		return strings.Join(append(stamps, stamp), "\n")
 	}
 	before := stateStamp()
-	plan, err := worker.Collect(ctx)
+	data, err := worker.invokeWithEnvironment(ctx, "collect", nil, false, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
+	plan := NativeInstallerPlan{owner: worker, data: data}
 	var decoded struct {
 		Tools map[string]struct {
 			Status string
@@ -94,7 +95,12 @@ func TestUserNativeInstallerRuntime(t *testing.T) {
 		{"confirmed-but-blocked", true, "preflight-blocked"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := worker.Run(ctx, plan, tt.consent)
+			data, err := worker.invokeWithEnvironment(ctx, "run", plan.JSON(), tt.consent, plan.bootstrapEnv)
+			var result NativeInstallerResult
+			if err == nil {
+				err = json.Unmarshal(data, &result)
+			}
+			result.Details = append(json.RawMessage(nil), data...)
 			if err != nil || result.Outcome != "blocked" || result.Reason != tt.reason || len(result.Completed) != 0 {
 				t.Fatal(result, err)
 			}
@@ -107,7 +113,7 @@ func TestUserNativeInstallerRuntime(t *testing.T) {
 	t.Run("stale-plan", func(t *testing.T) {
 		stale := plan
 		stale.data = json.RawMessage(`{}`)
-		result, err := worker.Run(ctx, stale, true)
+		result, _, err := worker.RunWithLocation(ctx, stale, true)
 		if err != nil || result.Outcome != "blocked" || result.Reason != "selection-changed" || len(result.Completed) != 0 {
 			t.Fatal(result, err)
 		}
@@ -122,7 +128,7 @@ func TestUserNativeInstallerRuntime(t *testing.T) {
 	t.Run("canceled-before-start", func(t *testing.T) {
 		stopped, stop := context.WithCancel(ctx)
 		stop()
-		_, err := worker.Run(stopped, plan, true)
+		_, _, err := worker.RunWithLocation(stopped, plan, true)
 		var failure *PrivateRuntimeError
 		if !errors.As(err, &failure) || failure.Kind != "canceled" || !errors.Is(err, context.Canceled) {
 			t.Fatal(err)
@@ -131,7 +137,7 @@ func TestUserNativeInstallerRuntime(t *testing.T) {
 	t.Run("deadline-refusal", func(t *testing.T) {
 		bounded, stop := context.WithTimeout(ctx, time.Millisecond)
 		defer stop()
-		_, err := worker.Collect(bounded)
+		_, err := worker.invokeWithEnvironment(bounded, "collect", nil, false, nil)
 		var failure *PrivateRuntimeError
 		if !errors.As(err, &failure) || failure.Kind != "deadline" {
 			t.Fatal(err)

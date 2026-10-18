@@ -8,7 +8,7 @@ No installer, source supplier, signal hook, dependency pin, or TUI is added.
 ## Pertinent proof
 
 `TestUserNativeRuntimeAfterStartCancellation` runs only in the bounded offline
-Linux amd64 Guest. It invokes `Collect` with the complete reviewed local source
+Linux amd64 Guest. It invokes the shared transport's `collect` protocol with the complete reviewed local source
 and authenticated Node, identifies the exact private argv/cwd/process group,
 then holds that invocation through a kernel pidfd **after exec**. It confirms
 stopped state, no exit and an active context before cancellation or deadline.

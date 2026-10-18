@@ -134,7 +134,7 @@ func TestUserNativeInstallerPersistentRuntime(t *testing.T) {
 	done := make(chan returned, 1)
 	completed := make(chan struct{})
 	go func() {
-		result, err := w.Run(ctx, plan, true)
+		result, _, err := w.RunWithLocation(ctx, plan, true)
 		done <- returned{result, err}
 		close(completed)
 	}()
