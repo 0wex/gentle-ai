@@ -18,6 +18,13 @@ type UserExperience struct {
 	StrictTDD           string `json:"strict_tdd,omitempty"`
 	GGA                 string `json:"gga,omitempty"`
 	GGAProvider         string `json:"gga_provider,omitempty"`
+	CodeGraph           string `json:"codegraph,omitempty"`
+	SDKSource           string `json:"sdk_source,omitempty"`
+}
+
+// DefaultUserExperience starts a new independent, inert base selection.
+func DefaultUserExperience() UserExperience {
+	return UserExperience{Persona: "gentleman", BackgroundSubagents: "on"}
 }
 
 func (p UserExperience) Validate() error {
@@ -35,6 +42,12 @@ func (p UserExperience) Validate() error {
 	}
 	if p.StrictTDD != "" && p.StrictTDD != "on" && p.StrictTDD != "off" {
 		return experienceError("choose on or off for Strict TDD, or omit it to inherit")
+	}
+	if p.CodeGraph != "" && p.CodeGraph != "on" && p.CodeGraph != "off" {
+		return experienceError("choose on or off for CodeGraph, or omit it to inherit")
+	}
+	if p.SDKSource != "" && p.SDKSource != "stable" && p.SDKSource != "main-preview" {
+		return experienceError("choose stable or main-preview for SDK source, or omit it for stock")
 	}
 	return userValidateGGASelection(p.GGA, p.GGAProvider)
 }
@@ -66,6 +79,8 @@ func DecodeUserExperience(raw string) (UserExperience, error) {
 		"strict_tdd":           &profile.StrictTDD,
 		"gga":                  &profile.GGA,
 		"gga_provider":         &profile.GGAProvider,
+		"codegraph":            &profile.CodeGraph,
+		"sdk_source":           &profile.SDKSource,
 	}
 	seen := make(map[string]bool)
 	for decoder.More() {
@@ -82,6 +97,9 @@ func DecodeUserExperience(raw string) (UserExperience, error) {
 		if err := decoder.Decode(field); err != nil {
 			return UserExperience{}, err
 		}
+		if key == "sdk_source" && *field == "" {
+			return UserExperience{}, experienceError("an explicit SDK source must be stable or main-preview")
+		}
 		if key == "global_rdd" && *field == "" {
 			return UserExperience{}, experienceError("an explicit global RDD choice must be on or off")
 		}
@@ -90,6 +108,9 @@ func DecodeUserExperience(raw string) (UserExperience, error) {
 		}
 		if key == "strict_tdd" && *field == "" {
 			return UserExperience{}, experienceError("an explicit Strict TDD choice must be on or off")
+		}
+		if key == "codegraph" && *field == "" {
+			return UserExperience{}, experienceError("an explicit CodeGraph choice must be on or off")
 		}
 		if (key == "gga" || key == "gga_provider") && *field == "" {
 			return UserExperience{}, experienceError("an explicit GGA choice/provider must not be empty")

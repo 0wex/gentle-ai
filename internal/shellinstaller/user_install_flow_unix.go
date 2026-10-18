@@ -45,6 +45,9 @@ func userValidateInstall(req UserInstallRequest) error {
 	if err := userExperienceSupported(req.Experience); err != nil {
 		return err
 	}
+	if req.Experience != nil && req.Mode != "separate" {
+		return experienceError("explicit experience requires a fresh Separate runtime")
+	}
 	req, err := userCanonicalRequest(req)
 	if err != nil {
 		return err
@@ -58,6 +61,9 @@ func userValidateInstall(req UserInstallRequest) error {
 	}
 	fresh := true
 	if err := privateDestination(req.Destination); err != nil {
+		if req.Experience != nil {
+			return experienceError("explicit experience requires a new empty target; existing preferences are preserved")
+		}
 		fresh = false
 		manifest, readErr := userReadManifest(context.Background(), req.Destination)
 		if readErr != nil || manifest.Mode != req.Mode || (req.Mode == "shared" && (manifest.Prefix != req.SharedPrefix || manifest.Agent != req.SharedAgent)) {
@@ -165,7 +171,10 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 		if err != nil {
 			return result, err
 		}
-		if err = userVerifyGlobal(ctx, req.Destination, manifest.Prefix, manifest.Agent, manifest.Prefix, req.Destination, req.Mode); err != nil {
+		if manifest.PNPM != nil {
+			return UserInstallResult{req.Destination, manifest.Prefix, manifest.Agent, "ComponentInstalled"}, nil
+		}
+		if err = userVerifyInstalledGlobal(ctx, req.Destination, manifest); err != nil {
 			return result, userGraphRepairError(req.Destination, req.Mode, err)
 		}
 		if err = userNativeReadback(ctx, filepath.Join(manifest.Prefix, "lib/node_modules/gentle-pi/.gentle-ai")); err != nil {
@@ -212,6 +221,14 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	if err = userToolsAcquire(ctx, root); err != nil {
 		return result, fmt.Errorf("pinned tool acquisition: %w", err)
 	}
+	if err = userCodeGraphProvision(ctx, root, req.Mode, req.Experience); err != nil {
+		return result, fmt.Errorf("optional CodeGraph provisioning: %w", err)
+	}
+	if req.Experience != nil && req.Experience.CodeGraph == "on" {
+		if err = userStageCodeGraphExecutable(ctx, root, req.Destination); err != nil {
+			return result, err
+		}
+	}
 	if err = userGGAProvision(ctx, root, req.Mode, req.Experience); err != nil {
 		return result, fmt.Errorf("optional GGA provisioning: %w", err)
 	}
@@ -242,6 +259,10 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	if err = userVerifyGlobal(ctx, root, prefix, agent, finalPrefix, req.Destination, req.Mode); err != nil {
 		return result, fmt.Errorf("post-native global readback: %w", err)
 	}
+	mainSDK, err := userInstallMainSDK(ctx, root, req.Destination, req.Experience)
+	if err != nil {
+		return result, fmt.Errorf("Main SDK + stock provider: %w", err)
+	}
 	// A bind refusal here follows Shared provisioning: it stays uncertain and
 	// keeps the staged recovery root instead of claiming an atomic rollback.
 	if err = userTools(ctx, root, agent, true); err != nil {
@@ -256,7 +277,9 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 		return result, fmt.Errorf("supervisor provenance: %w", err)
 	}
 	manifest := userManifest{Schema: userSchema, Destination: req.Destination, Prefix: finalPrefix, Agent: finalAgent, Mode: req.Mode, SupervisorSHA: selfSHA, NodeSHA: privateNativeNodeSHA}
+	manifest.MainSDK = mainSDK
 	manifest.GGA = req.Experience != nil && req.Experience.GGA == "on"
+	manifest.CodeGraph = req.Experience != nil && req.Experience.CodeGraph == "on"
 	manifest.PrefixIdentity, err = userIdentity(prefix)
 	if err == nil {
 		manifest.AgentIdentity, err = userIdentity(agent)
@@ -264,6 +287,12 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	if err != nil {
 		return result, err
 	}
+	return userPublishManifest(ctx, root, prefix, agent, manifest)
+}
+
+// userPublishManifest is the shared publication boundary. A renamed destination
+// is retained on sync/readback failure; success requires final physical readback.
+func userPublishManifest(ctx context.Context, root, prefix, agent string, manifest userManifest) (result UserInstallResult, err error) {
 	data, err := json.Marshal(manifest)
 	if err != nil {
 		return result, err
@@ -272,7 +301,7 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 		return result, err
 	}
 	for _, name := range []string{"gentle-shell", "pi"} {
-		binding := userBinding(req.Destination, name)
+		binding := userManifestBinding(manifest.Destination, name, manifest)
 		if err = userToolWrite(filepath.Join(root, "bin", name), []byte(binding), 0700); err != nil {
 			return result, err
 		}
@@ -283,19 +312,19 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 			return result, privateError("preimage", identityErr)
 		}
 	}
-	if err = privateDestination(req.Destination); err != nil || ctx.Err() != nil {
+	if err = privateDestination(manifest.Destination); err != nil || ctx.Err() != nil {
 		return result, privateError("preimage", errors.Join(err, ctx.Err()))
 	}
-	if err = userRenameNoReplace(root, req.Destination); err != nil {
+	if err = userRenameNoReplace(root, manifest.Destination); err != nil {
 		return result, err
 	}
-	if err = userDirectorySync(filepath.Dir(req.Destination)); err != nil {
+	if err = userDirectorySync(filepath.Dir(manifest.Destination)); err != nil {
 		return result, privateError("uncertain", err)
 	}
-	if _, err = userReadManifest(ctx, req.Destination); err != nil {
+	if _, err = userReadManifest(ctx, manifest.Destination); err != nil {
 		return result, privateError("uncertain", err)
 	}
-	return UserInstallResult{req.Destination, finalPrefix, finalAgent, "ComponentInstalled"}, nil
+	return UserInstallResult{manifest.Destination, manifest.Prefix, manifest.Agent, "ComponentInstalled"}, nil
 }
 
 // userRecover restores the saved Shared preimages of ROOT after a fresh printed
@@ -580,13 +609,17 @@ func userProvisionAssets(ctx context.Context, root string, stage bool) error {
 }
 
 func userVerifyGlobal(ctx context.Context, root, prefix, agent, finalPrefix, finalRoot, mode string) error {
+	return userVerifyGlobalAction(ctx, root, prefix, agent, finalPrefix, finalRoot, mode, "verify")
+}
+
+func userVerifyGlobalAction(ctx context.Context, root, prefix, agent, finalPrefix, finalRoot, mode, action string) error {
 	if err := userProvisionAssets(ctx, root, false); err != nil {
 		return err
 	}
 	helper := filepath.Join(root, "provision.mjs")
 	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, filepath.Join(root, "runtime/node/bin/node"), helper, root, prefix, agent, finalPrefix, finalRoot, mode, "verify")
+	cmd := exec.CommandContext(ctx, filepath.Join(root, "runtime/node/bin/node"), helper, root, prefix, agent, finalPrefix, finalRoot, mode, action)
 	cmd.Dir, cmd.Env = filepath.Join(root, "project"), userEnvironment(root, prefix, agent)
 	_, err := userOwnedRun(ctx, cmd, cancel)
 	return err
@@ -633,6 +666,17 @@ func userReadManifest(ctx context.Context, root string) (userManifest, error) {
 	if err != nil || len(data) > 4096 || json.Unmarshal(data, &manifest) != nil || manifest.Schema != userSchema || manifest.Destination != root || (manifest.Mode != "separate" && manifest.Mode != "shared") {
 		return manifest, privateError("refused", err)
 	}
+	if manifest.PNPM != nil {
+		return userReadPNPMManifest(ctx, root, manifest)
+	}
+	if manifest.CodeGraph {
+		if manifest.Mode != "separate" {
+			return manifest, privateError("refused", errors.New("CodeGraph requires a Separate manifest"))
+		}
+		if err := userCodeGraphReadback(ctx, root); err != nil {
+			return manifest, fmt.Errorf("CodeGraph retained integrity: %w", err)
+		}
+	}
 	if manifest.GGA {
 		if manifest.Mode != "separate" {
 			return manifest, privateError("refused", errors.New("GGA requires a Separate manifest"))
@@ -642,7 +686,7 @@ func userReadManifest(ctx context.Context, root string) (userManifest, error) {
 		}
 	}
 	for _, name := range []string{"gentle-shell", "pi"} {
-		binding := userBinding(root, name)
+		binding := userManifestBinding(root, name, manifest)
 		if _, err := privateNativeFile(ctx, filepath.Join(root, "bin", name), 0700, int64(len(binding)), fmt.Sprintf("%x", sha256.Sum256([]byte(binding)))); err != nil {
 			return manifest, err
 		}
@@ -663,6 +707,11 @@ func userReadManifest(ctx context.Context, root string) (userManifest, error) {
 	}
 	if err := userTools(ctx, root, manifest.Agent, false); err != nil {
 		return manifest, privateError("source", err)
+	}
+	if manifest.MainSDK != nil {
+		if err := userVerifyInstalledGlobal(ctx, root, manifest); err != nil {
+			return manifest, err
+		}
 	}
 	return manifest, nil
 }
@@ -685,6 +734,18 @@ func userLaunchCommand(ctx context.Context, root string, manifest userManifest, 
 			}
 		}
 	}
+	if manifest.CodeGraph && manifest.Mode == "separate" {
+		if strings.ContainsRune(root, os.PathListSeparator) {
+			cmd.Err = privateError("refused", errors.New("private CodeGraph launch root cannot contain a PATH separator"))
+			return cmd
+		}
+		for i, entry := range cmd.Env {
+			if path, ok := strings.CutPrefix(entry, "PATH="); ok {
+				cmd.Env[i] = "PATH=" + filepath.Join(root, "runtime/codegraph/bin") + ":" + path
+			}
+		}
+		cmd.Env = append(cmd.Env, "CODEGRAPH_NO_DOWNLOAD=1", "CODEGRAPH_TELEMETRY=0", "DO_NOT_TRACK=1")
+	}
 	return cmd // Empty Dir inherits the caller's project, not the installer stage.
 }
 
@@ -697,7 +758,7 @@ func userLaunch(ctx context.Context, root string, args []string, stdin io.Reader
 	if _, err := userSourceFile(ctx, cli, -1, ""); err != nil {
 		return userGraphRepairError(root, manifest.Mode, err)
 	}
-	if err := userVerifyGlobal(ctx, root, manifest.Prefix, manifest.Agent, manifest.Prefix, root, manifest.Mode); err != nil {
+	if err := userVerifyInstalledGlobal(ctx, root, manifest); err != nil {
 		return userGraphRepairError(root, manifest.Mode, err)
 	}
 	if err := userNativeReadback(ctx, filepath.Join(manifest.Prefix, "lib/node_modules/gentle-pi/.gentle-ai")); err != nil {
@@ -718,7 +779,14 @@ func userLaunch(ctx context.Context, root string, args []string, stdin io.Reader
 	return userLaunchGroup(cmd, stdin, func(err error) error {
 		settled = true
 		err = userGGAExitReadback(context.Background(), root, manifest.GGA, limited(err))
-		if readbackErr := userVerifyGlobal(context.Background(), root, manifest.Prefix, manifest.Agent, manifest.Prefix, root, manifest.Mode); readbackErr != nil {
+		if manifest.CodeGraph {
+			if readbackErr := userCodeGraphReadback(context.Background(), root); readbackErr != nil {
+				failure := privateError("uncertain", errors.Join(err, readbackErr))
+				failure.Workspace, failure.Destination = root, root
+				return failure
+			}
+		}
+		if readbackErr := userVerifyInstalledGlobal(context.Background(), root, manifest); readbackErr != nil {
 			failure := privateError("uncertain", errors.Join(err, readbackErr))
 			failure.Workspace, failure.Destination = root, manifest.Prefix
 			return failure

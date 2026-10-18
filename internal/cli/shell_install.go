@@ -55,7 +55,7 @@ func RunShell(args []string, stdout io.Writer) (resultErr error) {
 		return err
 	}
 	switch args[0] {
-	case "install", "launch", "recover", "internal-check", "internal-install", "internal-launch", "internal-recover":
+	case "install", "launch-pnpm", "internal-launch-pnpm", "launch", "recover", "internal-check", "internal-install", "internal-launch", "internal-recover", "internal-native-produce", "internal-native-coordinate", "internal-native-own":
 		// The delegated supervisor or worker re-enters here; internal selectors
 		// still repeat kernel qualification and never grant execution authority.
 		// Each backend refuses the operations its platform does not provide.
@@ -83,7 +83,13 @@ func RunShell(args []string, stdout io.Writer) (resultErr error) {
 	return runShellInstallRequest(ctx, self, req, inspect, stdout)
 }
 
+type shellEntryRunner func(context.Context, string, []string, io.Reader, io.Writer, io.Writer) error
+
 func runShellInstallRequest(ctx context.Context, self string, req shellinstaller.UserInstallRequest, inspect bool, stdout io.Writer) error {
+	return runShellInstallRequestWithEntry(ctx, self, req, inspect, stdout, shellInstallEntry)
+}
+
+func runShellInstallRequestWithEntry(ctx context.Context, self string, req shellinstaller.UserInstallRequest, inspect bool, stdout io.Writer, entry shellEntryRunner) error {
 	token, err := shellInstallInspect(req)
 	if err != nil {
 		return err
@@ -99,7 +105,7 @@ func runShellInstallRequest(ctx context.Context, self string, req shellinstaller
 	if len(args) == 0 {
 		return errors.New("invalid or oversized experience selection; run gentle-ai shell install to review it again")
 	}
-	return shellInstallEntry(ctx, self, args, os.Stdin, stdout, os.Stderr)
+	return entry(ctx, self, args, os.Stdin, stdout, os.Stderr)
 }
 
 func shellExecutionContext() (context.Context, context.CancelFunc, string, error) {

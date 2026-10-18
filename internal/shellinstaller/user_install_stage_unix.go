@@ -6,20 +6,35 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 // userPrepareInstallStage is called after physical confirmation, before any
 // acquisition or Shared provisioning. Its caller owns unpublished-workspace
 // cleanup and uncertain failure evidence; this function never removes roots.
 func userPrepareInstallStage(ctx context.Context, root, mode string, profile *UserExperience) error {
-	if ctx == nil || ctx.Err() != nil {
+	if ctx == nil {
 		return privateError("canceled", context.Canceled)
+	}
+	if err := ctx.Err(); err != nil {
+		return privateError("canceled", err)
 	}
 	if mode != "separate" && mode != "shared" {
 		return experienceError("installation stage requires separate or shared mode")
 	}
 	if err := userValidateStagePreferences(profile); err != nil {
 		return err
+	}
+	if profile != nil && profile.SDKSource == "main-preview" {
+		if err := userExperienceSupported(profile); err != nil {
+			return err
+		}
+		if mode != "separate" {
+			return experienceError("Main SDK requires a fresh Separate stage")
+		}
+	}
+	if profile != nil && profile.CodeGraph != "" && (mode != "separate" || runtime.GOOS != "linux" || runtime.GOARCH != "amd64") {
+		return experienceError("explicit CodeGraph requires Linux amd64 Separate")
 	}
 	if profile != nil && profile.GGA != "" && mode != "separate" {
 		return experienceError("explicit GGA requires a private Separate configuration stage")
@@ -54,7 +69,7 @@ func userPrepareInstallStage(ctx context.Context, root, mode string, profile *Us
 		}
 	}
 	// Ordinary profiles retain the complete generic validator and native writer.
-	if profile != nil && profile.Context7 == "" && profile.StrictTDD == "" && profile.GGA == "" {
+	if profile != nil && profile.Context7 == "" && profile.StrictTDD == "" && profile.GGA == "" && profile.CodeGraph == "" && profile.SDKSource != "main-preview" {
 		return userStageExperience(ctx, root, profile)
 	}
 	if err := userStageExperienceConfig(ctx, root, files); err != nil {

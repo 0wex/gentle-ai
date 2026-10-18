@@ -14,10 +14,13 @@ type UserInstallResult struct {
 }
 
 type userManifest struct {
+	PNPM                                     *userPNPMManifest `json:"pnpm,omitempty"`
 	Schema, Destination, Prefix, Agent, Mode string
 	SupervisorSHA, NodeSHA                   string
 	PrefixIdentity, AgentIdentity            string
-	GGA                                      bool `json:"gga,omitempty"`
+	GGA                                      bool                  `json:"gga,omitempty"`
+	CodeGraph                                bool                  `json:"codegraph,omitempty"`
+	MainSDK                                  *userSnapshotArtifact `json:"main_sdk,omitempty"`
 }
 
 const userSchema = "gentle-shell-user-install/v1"
@@ -52,4 +55,17 @@ func userServiceArgs(unit string, interactive bool, self, cwd string, args, env 
 	result = append(result, "/usr/bin/env", "-i")
 	result = append(result, env...)
 	return append(append(result, userCapabilityDrop, "--inh-caps=-all", "--ambient-caps=-all", "--no-new-privs", "--", self, "shell"), args...)
+}
+
+// Keep npm bytes intact; construct the PNPM command without rewriting path text.
+func userManifestBinding(root, name string, manifest userManifest) string {
+	if manifest.PNPM == nil {
+		return userBinding(root, name)
+	}
+	root = strings.ReplaceAll(root, "'", "'\\''")
+	binding := "#!/bin/sh\nexec '" + root + "/supervisor' shell launch-pnpm '" + root + "' '" + name + "' \"$@\"\n"
+	if name == "gentle-shell" {
+		binding = "#!/bin/sh\nif test \"${1-}\" = install; then shift; exec '" + root + "/supervisor' shell install \"$@\"; fi\n" + binding[len("#!/bin/sh\n"):]
+	}
+	return binding
 }

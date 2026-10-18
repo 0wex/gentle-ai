@@ -89,6 +89,9 @@ func InspectUserInstall(req UserInstallRequest) (string, error) {
 	}
 	identity := "absent"
 	if _, err := os.Lstat(req.Destination); err == nil {
+		if req.Experience != nil {
+			return "", experienceError("explicit experience requires a new empty target; existing preferences are preserved")
+		}
 		selected, err := userWindowsIdentity(req.Destination, true)
 		if err != nil {
 			return "", err
@@ -393,6 +396,9 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 		if err := os.MkdirAll(filepath.Join(stage, filepath.FromSlash(directory)), 0700); err != nil {
 			return result, err
 		}
+	}
+	if err := userStageExperience(ctx, stage, req.Experience); err != nil {
+		return result, err
 	}
 	selection, _ := json.Marshal(req)
 	if err := userWindowsWrite(filepath.Join(stage, "selection.json"), selection); err != nil {

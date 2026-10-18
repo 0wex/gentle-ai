@@ -39,7 +39,7 @@ var (
 	selfUpdateFn              = selfUpdate
 	ensureCurrentOSSupported  = system.EnsureCurrentOSSupported
 	detectSystem              = system.Detect
-	runShellInstallSelection  = cli.RunShellInstallSelection
+	runShellInstallSelection  = cli.RunShellInstallSelectionProcess
 	runTUI                    = func(m tea.Model, opts ...tea.ProgramOption) (tea.Model, error) {
 		p := tea.NewProgram(m, opts...)
 		return p.Run()
