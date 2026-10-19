@@ -77,7 +77,8 @@ func TestUserContext7ExperienceRefusesUnsupportedStage(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if files, err := userStageExperienceFiles(&profile); err == nil || files != nil || !strings.Contains(err.Error(), "Context7") {
+		profile.SDKSource = "main-preview" // MCP plus Main still lacks a qualified consumer.
+		if files, err := userStageExperienceFiles(&profile); err == nil || files != nil || !strings.Contains(err.Error(), "Main SDK") {
 			t.Fatalf("unsupported MCP staging silently accepted: %v, %v", files, err)
 		}
 		if err := userExperienceSupported(&profile); err == nil {

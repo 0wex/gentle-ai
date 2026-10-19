@@ -102,6 +102,7 @@ func TestUserStageExperienceRefusesBeforeWrites(t *testing.T) {
 				profile.Persona = "custom"
 			case "rdd":
 				profile.GlobalRDD = "on"
+				profile.SDKSource = "main-preview" // This consumer combination is still refused.
 			case "canceled":
 				var cancel context.CancelFunc
 				ctx, cancel = context.WithCancel(ctx)
@@ -153,6 +154,7 @@ func TestUserStageExperienceRefusesBeforeWrites(t *testing.T) {
 func TestUserStageExperienceRejectsExplicitRDD(t *testing.T) {
 	profile := UserExperience{Persona: "gentleman", BackgroundSubagents: "on"}
 	profile.GlobalRDD = "off"
+	profile.SDKSource = "main-preview"
 	if err := userStageExperience(context.Background(), "missing", &profile); err == nil || !strings.Contains(err.Error(), "RDD") {
 		t.Fatalf("explicit RDD was dropped or touched paths before refusal: %v", err)
 	}

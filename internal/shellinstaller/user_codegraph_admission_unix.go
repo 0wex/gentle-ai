@@ -16,6 +16,10 @@ import (
 // Reconstruct only the fixed retained sources, authenticate both whole SRIs,
 // then admit their exact original members. No process, download or index.
 func userCodeGraphReadback(ctx context.Context, root string) error {
+	return userCodeGraphReadbackWithNode(ctx, root, "runtime/node/bin/node")
+}
+
+func userCodeGraphReadbackWithNode(ctx context.Context, root, node string) error {
 	if ctx == nil {
 		return privateError("source", errors.New("missing CodeGraph admission context"))
 	}
@@ -41,7 +45,7 @@ func userCodeGraphReadback(ctx context.Context, root string) error {
 	if err != nil {
 		return err
 	}
-	files = append(files, userExperienceStageFile{"bin/codegraph", []byte(userCodeGraphCommand(root))})
+	files = append(files, userExperienceStageFile{"bin/codegraph", []byte(userCodeGraphCommandWithNode(root, node))})
 	children := map[string]map[string]bool{"": {}}
 	for _, file := range files {
 		for name := file.name; name != "."; name = filepath.Dir(name) {

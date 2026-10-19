@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/cli"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/shellinstaller"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/system"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/tui/screens"
 )
@@ -46,8 +47,16 @@ func experienceStart(t *testing.T) Model {
 	return m
 }
 
+// Legacy requests remain independently testable without rewriting fresh defaults.
+func experienceInherited(t *testing.T) Model {
+	t.Helper()
+	m := experienceStart(t)
+	m.shellExperience.profile = shellinstaller.DefaultUserExperience()
+	return m
+}
+
 func TestShellExperienceConfigureDestinationReady(t *testing.T) {
-	m := experienceFocus(t, experienceStart(t), screens.ShellExperiencePersona, "neutral")
+	m := experienceFocus(t, experienceInherited(t), screens.ShellExperiencePersona, "neutral")
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	m = experienceFocus(t, m, screens.ShellExperiencePersona, "unmanaged")
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
@@ -98,14 +107,17 @@ func TestShellExperienceConfigureDestinationReady(t *testing.T) {
 }
 
 func TestShellExperiencePreservesUnsupportedChoicesAndCancel(t *testing.T) {
-	m := experienceFocus(t, experienceStart(t), screens.ShellExperienceCodeGraph, "")
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // CodeGraph on
+	m := experienceFocus(t, experienceStart(t), screens.ShellExperienceGGA, "")
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // OFF → inherit.
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // Inherit → ON is still unqualified.
+	m = experienceFocus(t, m, screens.ShellExperienceProvider, "")
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("codex")})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(shellExperienceTarget(t))})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	state, _ := cli.ShellInstallPresentationOf(m.shellInstallModel)
-	if state.Error == nil || state.Review || state.Request.Experience.CodeGraph != "on" {
+	if state.Error == nil || state.Review || state.Request.Experience.GGA != "on" || state.Request.Experience.GGAProvider != "codex" {
 		t.Fatal("unsupported choice dropped or admitted")
 	}
 	for _, key := range []tea.KeyType{tea.KeyEsc, tea.KeyCtrlC} {

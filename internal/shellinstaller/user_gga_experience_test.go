@@ -83,10 +83,14 @@ func TestUserGGAExperienceHistoricalAndRefusal(t *testing.T) {
 		{Persona: "unmanaged", BackgroundSubagents: "off", GGA: "off"},
 		{Persona: "unmanaged", BackgroundSubagents: "off", GGA: "on", GGAProvider: "codex"},
 	} {
+		refusal := "GGA"
+		if profile.GGA == "off" {
+			profile.SDKSource, refusal = "main-preview", "Main SDK"
+		}
 		if err := userExperienceSupported(&profile); err == nil {
 			t.Fatal("transport granted public installation")
 		}
-		if files, err := userStageExperienceFiles(&profile); err == nil || files != nil || !strings.Contains(err.Error(), "GGA") {
+		if files, err := userStageExperienceFiles(&profile); err == nil || files != nil || !strings.Contains(err.Error(), refusal) {
 			t.Fatal("unqualified generic/Windows stage accepted GGA", files, err)
 		}
 	}

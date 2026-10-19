@@ -15,7 +15,7 @@ import (
 
 func shellFlowDestination(t *testing.T) Model {
 	t.Helper()
-	m := experienceStart(t)
+	m := experienceInherited(t)
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
 	return experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 }

@@ -17,7 +17,7 @@ func sdkSourceRow(t *testing.T, m Model) Model {
 }
 
 func TestShellExperienceSDKSourceHandoff(t *testing.T) {
-	m := sdkSourceRow(t, experienceStart(t))
+	m := sdkSourceRow(t, experienceInherited(t))
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	if m.shellExperience == nil || m.shellExperience.profile.SDKSource != "stable" {
 		t.Fatal("SDK stock choice missing from Configure")
@@ -72,7 +72,7 @@ func TestShellExperienceSDKSourceHandoff(t *testing.T) {
 }
 
 func TestShellExperienceSDKSourcePreservesConflicts(t *testing.T) {
-	m := experienceFocus(t, experienceStart(t), screens.ShellExperienceTDD, "")
+	m := experienceFocus(t, experienceInherited(t), screens.ShellExperienceTDD, "")
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // explicit Strict TDD on
 	m = sdkSourceRow(t, m)
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // stock
@@ -87,7 +87,7 @@ func TestShellExperienceSDKSourceEditingConflictAndClear(t *testing.T) {
 	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
 		return // Main is not an offered choice on these platforms.
 	}
-	m := sdkSourceRow(t, experienceStart(t))
+	m := sdkSourceRow(t, experienceInherited(t))
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyDown})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})

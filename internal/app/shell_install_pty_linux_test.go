@@ -46,6 +46,16 @@ type shellPTYModel struct{ tea.Model }
 
 func (shellPTYModel) Init() tea.Cmd { return nil }
 
+func shellPTYExperience(scenario string) shellinstaller.UserExperience {
+	profile := shellinstaller.DefaultUserExperience()
+	if strings.HasPrefix(scenario, "confirm-main") {
+		profile.SDKSource = "main-preview"
+	} else {
+		profile.StrictTDD, profile.GlobalRDD, profile.CodeGraph, profile.Context7, profile.GGA = "on", "on", "on", "on", "off"
+	}
+	return profile
+}
+
 func TestShellInstallParentPhysicalPTY(t *testing.T) {
 	scenarios := []string{"confirm", "confirm-edit", "cancel-target", "cancel-review", "ctrl-c-target", "ctrl-c-review"}
 	if runtime.GOARCH == "amd64" {
@@ -144,10 +154,7 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 					return fmt.Errorf("worker hook before terminal restoration: %v", err)
 				}
 				fresh, err := shellinstaller.InspectUserInstall(selection.Request)
-				wantProfile := shellinstaller.DefaultUserExperience()
-				if strings.HasPrefix(scenario, "confirm-main") {
-					wantProfile.SDKSource = "main-preview"
-				}
+				wantProfile := shellPTYExperience(scenario)
 				if strings.HasSuffix(scenario, "edit") {
 					wantProfile.Persona = "neutral"
 				}
@@ -227,6 +234,10 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 			send("\r")
 			waitFor("Configure Gentle-Shell experience")
 			if strings.HasPrefix(scenario, "confirm-main") {
+				// Physically inherit the five optional choices before Main; the
+				// fresh ON/OFF preset must not be silently cleared by production.
+				send(strings.Repeat("\x1b[B", 4) + strings.Repeat("\r\r\x1b[B", 4))
+				send(strings.Repeat("\x1b[B", 2) + "\r\x1b[H")
 				send(strings.Repeat("\x1b[B", 9) + "\r")
 				waitFor("SDK Main + stock provider")
 			}
@@ -250,10 +261,7 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 				waitFor("About: Install Gentle-Shell")
 			}
 			if strings.HasSuffix(scenario, "edit") {
-				profile := shellinstaller.DefaultUserExperience()
-				if strings.HasPrefix(scenario, "confirm-main") {
-					profile.SDKSource = "main-preview"
-				}
+				profile := shellPTYExperience(scenario)
 				originalConfirmation, err = shellinstaller.InspectUserInstall(shellinstaller.UserInstallRequest{
 					Destination: target, Mode: "separate", Experience: &profile,
 				})

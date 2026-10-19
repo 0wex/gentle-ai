@@ -91,6 +91,13 @@ func userNativeCoordinate(ctx context.Context, self string, args []string, stdin
 	if err := userBootstrap(ctx, root, workspace); err != nil {
 		return err
 	}
+	var codegraph [][]byte
+	if req.Experience != nil && req.Experience.CodeGraph == "on" {
+		codegraph, err = userAcquireCodeGraphArchives(ctx)
+		if err != nil {
+			return err
+		}
+	}
 	worker, err := StageNativeInstallerCarrier(ctx, root)
 	if err != nil {
 		return err
@@ -130,7 +137,7 @@ func userNativeCoordinate(ctx context.Context, self string, args []string, stdin
 	if err != nil {
 		return err
 	}
-	installed, err := PublishNativePNPMInstallationWithExperience(ctx, root, stage, req.Destination, *location, req.Experience)
+	installed, err := userPublishNativePNPMPrepared(ctx, root, stage, req.Destination, *location, req.Experience, codegraph)
 	if err != nil {
 		return err
 	}

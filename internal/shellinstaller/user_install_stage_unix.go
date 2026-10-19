@@ -42,8 +42,8 @@ func userPrepareInstallStage(ctx context.Context, root, mode string, profile *Us
 	if profile != nil && profile.StrictTDD != "" && mode != "separate" {
 		return experienceError("explicit Strict TDD requires a private Separate SDK runtime")
 	}
-	if profile != nil && profile.Context7 != "" && mode != "separate" {
-		return experienceError("explicit Context7 requires a private Separate agent")
+	if profile != nil && (profile.Context7 != "" || profile.GlobalRDD != "") && mode != "separate" {
+		return experienceError("explicit Context7/RDD requires a private Separate agent")
 	}
 	files, err := userExperienceConfigFiles(profile)
 	if err != nil {
@@ -77,6 +77,9 @@ func userPrepareInstallStage(ctx context.Context, root, mode string, profile *Us
 	}
 	if profile == nil {
 		return nil
+	}
+	if userQualifiedStockExperience(profile) {
+		return userStagePrivateChoices(ctx, root, profile)
 	}
 	if err := userStageContext7(ctx, root, mode, profile.Context7); err != nil {
 		return err

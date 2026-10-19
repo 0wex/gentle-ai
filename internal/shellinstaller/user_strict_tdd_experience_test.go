@@ -24,6 +24,7 @@ func TestUserStrictTDDExperienceCodec(t *testing.T) {
 			if err != nil || json.Unmarshal(data, &identity) != nil || len(identity) != 4 || identity[3] != raw {
 				t.Fatalf("confirmation did not bind Strict TDD: %s: %v", data, err)
 			}
+			profile.SDKSource = "main-preview" // Canonical bytes do not qualify an unsupported SDK combination.
 			if err := userExperienceSupported(&profile); err == nil {
 				t.Fatal("codec granted public support")
 			}
@@ -75,8 +76,9 @@ func TestUserStrictTDDExperienceGenericStageRefused(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		profile.SDKSource = "main-preview" // Generic staging still cannot compose this SDK.
 		files, err := userStageExperienceFiles(&profile)
-		if err == nil || files != nil || !strings.Contains(err.Error(), "Strict TDD") {
+		if err == nil || files != nil || !strings.Contains(err.Error(), "Main SDK") {
 			t.Fatal("unqualified generic/Windows stage accepted choice", files, err)
 		}
 	}

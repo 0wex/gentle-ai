@@ -63,6 +63,7 @@ func TestUserExperienceAdmissionKeepsScopeAndFeatureRefusals(t *testing.T) {
 		}
 	}
 	profile.CodeGraph = "on"
+	profile.GGA, profile.GGAProvider = "on", "codex"
 	if token, err := InspectUserInstall(UserInstallRequest{Destination: filepath.Join(parent, "advanced"), Mode: "separate", Experience: &profile}); err == nil || token != "" {
 		t.Fatal("unqualified advanced effects admitted")
 	}

@@ -29,9 +29,16 @@ func userExperienceConfirmationData(fields []string, profile *UserExperience) ([
 	return json.Marshal(fields)
 }
 
-// A transport or valid DTO is not proof that the selected runtime applies it.
-// Base persona/background use the existing canonical stage and pinned consumer.
-// Additional explicit choices stay refused until their installed chain exists.
+// Only the stock Linux amd64 path has the qualified private consumers below.
+// Request validation still owns fresh Separate paths and physical confirmation;
+// this predicate never grants execution or changes a reviewed preference.
+func userQualifiedStockExperience(profile *UserExperience) bool {
+	return profile != nil && runtime.GOOS == "linux" && runtime.GOARCH == "amd64" &&
+		profile.SDKSource != "main-preview" && profile.GGA != "on"
+}
+
+// A valid DTO alone is not admission: unsupported distributions/combinations
+// retain their refusal, while the qualified route materializes every selection.
 func userExperienceSupported(profile *UserExperience) error {
 	if profile == nil {
 		return nil
@@ -42,7 +49,7 @@ func userExperienceSupported(profile *UserExperience) error {
 	if profile.SDKSource == "main-preview" && (runtime.GOOS != "linux" || runtime.GOARCH != "amd64") {
 		return experienceError("SDK Main + stock provider requires Linux amd64 Separate")
 	}
-	if profile.GlobalRDD != "" || profile.Context7 != "" || profile.StrictTDD != "" || profile.GGA != "" || profile.CodeGraph != "" {
+	if (profile.GlobalRDD != "" || profile.Context7 != "" || profile.StrictTDD != "" || profile.GGA != "" || profile.CodeGraph != "") && !userQualifiedStockExperience(profile) {
 		return experienceError("selected additional experience preferences require a compatible installed runtime")
 	}
 	return nil

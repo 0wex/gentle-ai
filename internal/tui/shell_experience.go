@@ -11,9 +11,21 @@ import (
 	"github.com/gentleman-programming/gentle-ai/v4/internal/tui/screens"
 )
 
+// The ordinary Welcome starts with the agreed product preset. Incoming requests
+// retain their explicit OFF/inherited choices; the transport defaults stay inert.
+func shellWelcomeExperience() shellinstaller.UserExperience {
+	profile := shellinstaller.DefaultUserExperience()
+	profile.StrictTDD = "on"
+	profile.GlobalRDD = "on"
+	profile.CodeGraph = "on"
+	profile.Context7 = "on"
+	profile.GGA = "off"
+	return profile
+}
+
 func (m *Model) beginShellExperience() {
 	m.shellReadyCursor, m.shellReadyOffset = 0, 0
-	profile := shellinstaller.DefaultUserExperience()
+	profile := shellWelcomeExperience()
 	m.shellExperience = &shellExperienceConfig{profile: profile}
 	m.shellInstallModel = cli.NewShellInstallModelWithExperience(nil, profile)
 }
@@ -149,7 +161,7 @@ func (m Model) shellExperienceNavigation(key tea.KeyMsg) (Model, bool) {
 		return m, false
 	}
 	if key.Type == tea.KeyCtrlE {
-		profile := shellinstaller.DefaultUserExperience()
+		profile := shellWelcomeExperience()
 		if state.Request.Experience != nil {
 			profile = *state.Request.Experience
 		}

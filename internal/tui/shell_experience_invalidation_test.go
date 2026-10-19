@@ -23,7 +23,7 @@ func shellExperienceTarget(t *testing.T) string {
 }
 
 func TestShellExperienceEditingImmediatelyInvalidatesInspection(t *testing.T) {
-	m := experienceStart(t)
+	m := experienceInherited(t)
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	target := shellExperienceTarget(t)
@@ -48,6 +48,9 @@ func TestShellExperienceEditingImmediatelyInvalidatesInspection(t *testing.T) {
 
 func TestShellExperienceEditingDoesNotEraseExplicitProvider(t *testing.T) {
 	m := experienceStart(t)
+	// Exercise inherited-toggle editing independently of the fresh ON/OFF preset.
+	m.shellExperience.profile.GGA = ""
+	m.shellExperience.profile.StrictTDD = ""
 	focus := func(control screens.ShellExperienceControl) {
 		m = experienceFocus(t, m, control, "")
 	}

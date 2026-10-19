@@ -734,18 +734,7 @@ func userLaunchCommand(ctx context.Context, root string, manifest userManifest, 
 			}
 		}
 	}
-	if manifest.CodeGraph && manifest.Mode == "separate" {
-		if strings.ContainsRune(root, os.PathListSeparator) {
-			cmd.Err = privateError("refused", errors.New("private CodeGraph launch root cannot contain a PATH separator"))
-			return cmd
-		}
-		for i, entry := range cmd.Env {
-			if path, ok := strings.CutPrefix(entry, "PATH="); ok {
-				cmd.Env[i] = "PATH=" + filepath.Join(root, "runtime/codegraph/bin") + ":" + path
-			}
-		}
-		cmd.Env = append(cmd.Env, "CODEGRAPH_NO_DOWNLOAD=1", "CODEGRAPH_TELEMETRY=0", "DO_NOT_TRACK=1")
-	}
+	userCodeGraphLaunchEnv(root, manifest, cmd)
 	return cmd // Empty Dir inherits the caller's project, not the installer stage.
 }
 
