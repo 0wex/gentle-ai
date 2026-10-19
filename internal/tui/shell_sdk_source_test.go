@@ -110,7 +110,7 @@ func TestShellExperienceSDKSourceResponsiveDisclosure(t *testing.T) {
 	profile.SDKSource = "main-preview"
 	req := shellinstaller.UserInstallRequest{Destination: "/selected", Mode: "separate", Experience: &profile}
 	for _, size := range [][2]int{{120, 30}, {80, 14}, {30, 7}, {5, 1}} {
-		views := []string{screens.RenderShellExperience(profile, 8, nil, size[0], size[1]), screens.RenderShellReady(req, "", size[0], size[1], 0), screens.RenderShellReady(req, "", size[0], size[1], screens.ShellReadyLastOffset(req, "", size[0], size[1]))}
+		views := []string{screens.RenderShellExperience(profile, 8, nil, size[0], size[1]), screens.RenderShellReady(req, "", size[0], size[1], 0, 0), screens.RenderShellReady(req, "", size[0], size[1], screens.ShellReadyLastOffset(req, "", size[0], size[1]), 0)}
 		for _, view := range views {
 			if len(strings.Split(view, "\n")) > size[1] {
 				t.Fatal("SDK disclosure exceeds viewport height")

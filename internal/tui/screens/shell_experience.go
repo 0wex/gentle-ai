@@ -2,11 +2,11 @@ package screens
 
 import (
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"runtime"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/shellinstaller"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/tui/styles"
@@ -26,45 +26,118 @@ func RenderShellExperience(p shellinstaller.UserExperience, cursor int, err erro
 	return view
 }
 
+var shellReadyActions = []string{"Install Gentle-Shell", "Back", "Cancel"}
+
+// shellReadyLines retains the complete current request and truthful scopes.
+// Only presentation chrome is clipped; all request/preview data stays pageable.
 func shellReadyLines(req shellinstaller.UserInstallRequest, preview string, width int) []string {
 	data, err := json.MarshalIndent(req, "", "  ")
-	left := "Selected experience\n" + shellSDKSourceLabel(req.Experience) + "\n" + string(data)
+	selection := string(data)
 	if err != nil {
-		left = "Selected experience unavailable\n" + err.Error()
+		selection = "Selected experience unavailable: " + err.Error()
 	}
 	suffix := ""
 	if runtime.GOOS == "windows" {
 		suffix = ".cmd"
 	}
-	right := strings.Join([]string{
-		"Changes + scopes",
-		"New selected runtime; personal Pi/projects unchanged.",
+	logical := []string{
+		"Selected experience", shellSDKSourceLabel(req.Experience),
+		"Changes + scopes", "New selected runtime; personal Pi/projects unchanged.",
+		"Ready reviews choices, not installed health or qualification proof.",
 		"Config: " + filepath.Join(req.Destination, "config"),
 		"Target HOME/state: " + filepath.Join(req.Destination, "home"),
 		"Commands: " + filepath.Join(req.Destination, "bin", "gentle-shell"+suffix) + " and " + filepath.Join(req.Destination, "bin", "pi"+suffix),
 		"Project overrides remain; no automatic indexing/GGA hooks.",
-		preview,
-	}, "\n")
+	}
 	if req.Experience != nil && req.Experience.SDKSource == "main-preview" {
-		right = "SDK Main + stock provider: Linux amd64 fresh Separate only.\nReady reviews choices, not installed health.\nMain installer is inert DATA; stock native/pins remain.\nSource + selected SDK: " + filepath.Join(req.Destination, "runtime") + "\n" + right
+		logical = append(logical, "SDK Main + stock provider: Linux amd64 fresh Separate only.",
+			"Main installer is inert DATA; stock native/pins remain.",
+			"Source + selected SDK: "+filepath.Join(req.Destination, "runtime"))
 	}
-	content := left + "\n\n" + right
-	if width >= 100 {
-		panel := (width-2)/2 - 4
-		box := styles.PanelStyle.Width(panel)
-		content = lipgloss.JoinHorizontal(lipgloss.Top, box.Render(ansi.Hardwrap(left, panel, true)), box.Render(ansi.Hardwrap(right, panel, true)))
-	}
-	return strings.Split(ansi.Hardwrap(content, width, true), "\n")
+	logical = append(logical, "Confirm this physical selection and both command bindings? y installs; n edits target; Ctrl-E configures.",
+		"Complete validated selection:", selection, "Inspection preview:", preview)
+	return strings.Split(ansi.Hardwrap(strings.Join(logical, "\n"), width, true), "\n")
 }
 
-func RenderShellReady(req shellinstaller.UserInstallRequest, preview string, width, height, offset int) string {
+func shellReadyLayout(width, height int) (contentWidth, slots int, wide bool) {
+	wide = width >= 100 && height >= 10
+	contentWidth, slots = width, max(1, height-2)
+	if height >= 6 {
+		slots = height - 3
+	}
+	if wide {
+		contentWidth = width - width/3 - 1
+	}
+	return
+}
+
+// RenderShellReady is the historical Plan/About view over the current selector.
+// The action cursor is inert; only the containing model may confirm a handoff.
+func RenderShellReady(req shellinstaller.UserInstallRequest, preview string, width, height, offset, action int) string {
 	width, height = shellViewport(width, height)
-	return shellViewportRender("Ready — review before installation", shellReadyLines(req, preview, width), offset, width, height, "y confirms; n edits target; Ctrl-E configures; Esc cancels; PgUp/PgDn/Home/End scroll")
+	action = min(max(action, 0), len(shellReadyActions)-1)
+	contentWidth, slots, wide := shellReadyLayout(width, height)
+	data := shellReadyLines(req, preview, contentWidth)
+	last := max(0, len(data)-slots)
+	offset = min(max(offset, 0), last)
+	page := data[offset:min(len(data), offset+slots)]
+	var lines []string
+	if height >= 6 {
+		lines = append(lines, renderShellExperienceConfigLine(styles.TitleStyle, "Ready — review before installation", width))
+	}
+	if wide {
+		leftWidth := width - contentWidth - 1
+		left := []string{renderShellExperienceConfigLine(styles.HeadingStyle, "Plan", leftWidth)}
+		for i, label := range shellReadyActions {
+			style, marker := styles.UnselectedStyle, " "
+			if i == action {
+				style, marker = styles.SelectedStyle, ">"
+			}
+			left = append(left, renderShellExperienceConfigLine(style, marker+label, leftWidth))
+		}
+		left = append(left, "Install: confirm handoff", "Back: edit destination", "Cancel: do not install")
+		summary := []string{"Target: " + req.Destination, "Mode: " + req.Mode}
+		if req.Experience != nil {
+			summary = append(summary, "Persona: "+req.Experience.Persona, "Background subagents: "+req.Experience.BackgroundSubagents)
+		}
+		for _, text := range summary[:min(len(summary), slots+1-len(left))] {
+			left = append(left, renderShellExperienceConfigLine(styles.SubtextStyle, text, leftWidth))
+		}
+		right := append([]string{renderShellExperienceConfigLine(styles.HeadingStyle, "About: "+shellReadyActions[action], contentWidth)}, page...)
+		for i := 0; i < slots+1; i++ {
+			l, r := "", ""
+			if i < len(left) {
+				l = left[i]
+			}
+			if i < len(right) {
+				r = right[i]
+			}
+			lines = append(lines, padShellExperienceConfigStyled(l, leftWidth)+styles.SubtextStyle.Render("│")+r)
+		}
+	} else {
+		label := shellFlowFit(width, ">"+shellReadyActions[action], ">"+[]string{"Install", "Back", "Cancel"}[action], ">"+[]string{"I", "B", "C"}[action])
+		lines = append(lines, renderShellExperienceConfigLine(styles.SelectedStyle, label, width))
+		lines = append(lines, page...)
+	}
+	footer := shellFlowFit(width,
+		fmt.Sprintf("[%d/%d] j/k: action • enter: select • pgup/pgdn: review • esc: cancel", offset, last),
+		fmt.Sprintf("[%d/%d] pgup/pgdn: review • esc: cancel", offset, last),
+		fmt.Sprintf("[%d/%d]", offset, last), "esc", "←")
+	lines = append(lines, renderShellExperienceConfigLine(styles.HelpStyle, footer, width))
+	return joinShellExperienceConfigLines(lines, height)
+}
+
+// ShellReadyPageRows is the exact data stride used by the visible review.
+func ShellReadyPageRows(width, height int) int {
+	width, height = shellViewport(width, height)
+	_, slots, _ := shellReadyLayout(width, height)
+	return slots
 }
 
 func ShellReadyLastOffset(req shellinstaller.UserInstallRequest, preview string, width, height int) int {
 	width, height = shellViewport(width, height)
-	return max(0, len(shellReadyLines(req, preview, width))-max(1, height-2))
+	contentWidth, slots, _ := shellReadyLayout(width, height)
+	return max(0, len(shellReadyLines(req, preview, contentWidth))-slots)
 }
 
 func shellViewport(width, height int) (int, int) {
@@ -75,20 +148,6 @@ func shellViewport(width, height int) (int, int) {
 		height = 30
 	}
 	return width, height
-}
-
-func shellViewportRender(title string, lines []string, offset, width, height int, footer string) string {
-	if height == 1 {
-		return ansi.Truncate(lines[min(max(0, offset), len(lines)-1)], width, "")
-	}
-	start := min(max(0, offset), max(0, len(lines)-max(1, height-2)))
-	end := min(len(lines), start+max(1, height-2))
-	view := []string{ansi.Truncate(styles.TitleStyle.Render(title), width, "")}
-	view = append(view, lines[start:end]...)
-	if height > 2 {
-		view = append(view, ansi.Truncate(styles.HelpStyle.Render(footer), width, ""))
-	}
-	return strings.Join(view, "\n")
 }
 
 func shellSDKSourceLabel(p *shellinstaller.UserExperience) string {

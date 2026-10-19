@@ -235,6 +235,19 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 			if !strings.HasSuffix(scenario, "target") {
 				send(target + "\r")
 				waitFor("Ready — review before installation")
+				waitFor(">Install Gentle-Shell")
+				waitFor("About: Install Gentle-Shell")
+				waitFor("[0/")
+				mu.Lock()
+				output.Reset()
+				mu.Unlock()
+				send("j")
+				waitFor("About: Back")
+				mu.Lock()
+				output.Reset()
+				mu.Unlock()
+				send("k")
+				waitFor("About: Install Gentle-Shell")
 			}
 			if strings.HasSuffix(scenario, "edit") {
 				profile := shellinstaller.DefaultUserExperience()
@@ -267,10 +280,27 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 				mu.Unlock()
 				send("\r")
 				waitFor("Ready — review before installation")
-				waitFor("neutral")
+				waitFor("neutral") // Observe the changed profile before clearing differential repaint bytes.
+				waitFor(">Install Gentle-Shell")
+				waitFor("About: Install Gentle-Shell")
+				waitFor("[0/")
+				mu.Lock()
+				output.Reset()
+				mu.Unlock()
+				send("j")
+				waitFor("About: Back")
+				mu.Lock()
+				output.Reset()
+				mu.Unlock()
+				send("k")
+				waitFor("About: Install Gentle-Shell")
 			}
 			if strings.HasPrefix(scenario, "confirm") {
-				send("y")
+				if scenario == "confirm" {
+					send("\r") // Focused Install uses the existing physical y path.
+				} else {
+					send("y") // Retain legacy y confirmation controls too.
+				}
 			} else {
 				mu.Lock()
 				output.Reset()

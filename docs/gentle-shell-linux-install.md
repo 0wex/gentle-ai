@@ -23,6 +23,8 @@ Run `gentle-ai shell install`. Arrows select mode; Tab cycles mode-appropriate f
 
 The ordinary `gentle-ai` Welcome screen starts with the featured **Install Gentle-Shell, our own agent** campaign below the logo. Enter opens the grouped configuration menu and its focused detail panel; narrower terminals use the same choices in a compact layout. End selects Continue. The selector uses the existing Bubble Tea program; a confirmed selection returns to the host before installation starts. The host then rechecks the physical selection and fresh confirmation token. Cancelling returns to Welcome without starting a worker.
 
+The embedded Welcome flow restores the original destination editor with a field-specific **About** column. Its Ready screen has **Install Gentle-Shell / Back / Cancel** on the left and the focused action’s pageable request/scopes on the right. Use arrows or j/k for actions and Enter to select; y/n, Ctrl-E and Escape keep their existing meanings. The `[offset/last]` footer reports review line offsets, not pages. Back preserves the complete request while clearing consent; no action focus, scrolling or rendering starts installation. This presentation does not change the standalone CLI selector.
+
 This entry-point slice connects the existing installation protocol. It does not establish original-installer/PNPM publication or installed-platform qualification.
 
 The internal request binds preference values to physical confirmation while preserving legacy bytes when no profile is supplied. Non-nil profiles are currently refused before installation effects; this slice does not expose new preference controls or silently drop unsupported choices.

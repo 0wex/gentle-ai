@@ -638,6 +638,7 @@ const (
 type Model struct {
 	shellExperience       *shellExperienceConfig
 	shellReadyOffset      int
+	shellReadyCursor      int
 	shellInstallEnabled   bool
 	shellInstallModel     tea.Model
 	shellInstallSelection cli.ShellInstallSelection

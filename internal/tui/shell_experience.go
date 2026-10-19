@@ -12,6 +12,7 @@ import (
 )
 
 func (m *Model) beginShellExperience() {
+	m.shellReadyCursor, m.shellReadyOffset = 0, 0
 	profile := shellinstaller.DefaultUserExperience()
 	m.shellExperience = &shellExperienceConfig{profile: profile}
 	m.shellInstallModel = cli.NewShellInstallModelWithExperience(nil, profile)
@@ -105,7 +106,7 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 					state.Request.Experience = &config.profile
 					m.shellInstallModel = cli.NewShellInstallModelWithRequest(nil, state.Request)
 					m.shellInstallModel, _ = m.shellInstallModel.Update(tea.WindowSizeMsg{Width: m.Width, Height: m.Height})
-					m.shellExperience, m.shellReadyOffset = nil, 0
+					m.shellExperience, m.shellReadyOffset, m.shellReadyCursor = nil, 0, 0
 					return m, nil
 				}
 			case screens.ShellExperienceCancel:
@@ -134,7 +135,10 @@ func (m Model) shellInstallView() string {
 	}
 	state, ok := cli.ShellInstallPresentationOf(m.shellInstallModel)
 	if ok && state.Review {
-		return screens.RenderShellReady(state.Request, state.Preview, m.Width, m.Height, m.shellReadyOffset)
+		return screens.RenderShellReady(state.Request, state.Preview, m.Width, m.Height, m.shellReadyOffset, m.shellReadyCursor)
+	}
+	if ok {
+		return screens.RenderUserInstallDestination(state.Request, state.Field, state.Error, m.Width, m.Height)
 	}
 	return m.shellInstallModel.View()
 }
@@ -152,7 +156,7 @@ func (m Model) shellExperienceNavigation(key tea.KeyMsg) (Model, bool) {
 		m.shellInstallModel = cli.NewShellInstallModelWithRequest(nil, state.Request)
 		m.shellInstallModel, _ = m.shellInstallModel.Update(tea.WindowSizeMsg{Width: m.Width, Height: m.Height})
 		m.shellInstallSelection = cli.ShellInstallSelection{}
-		m.shellReadyOffset = 0
+		m.shellReadyOffset, m.shellReadyCursor = 0, 0
 		m.shellExperience = &shellExperienceConfig{profile: profile}
 		return m, true
 	}
@@ -160,10 +164,14 @@ func (m Model) shellExperienceNavigation(key tea.KeyMsg) (Model, bool) {
 		return m, false
 	}
 	switch key.String() {
+	case "up", "k":
+		m.shellReadyCursor = max(0, m.shellReadyCursor-1)
+	case "down", "j":
+		m.shellReadyCursor = min(2, m.shellReadyCursor+1)
 	case "pgup":
-		m.shellReadyOffset -= max(1, m.Height-2)
+		m.shellReadyOffset -= screens.ShellReadyPageRows(m.Width, m.Height)
 	case "pgdown":
-		m.shellReadyOffset += max(1, m.Height-2)
+		m.shellReadyOffset += screens.ShellReadyPageRows(m.Width, m.Height)
 	case "home":
 		m.shellReadyOffset = 0
 	case "end":
