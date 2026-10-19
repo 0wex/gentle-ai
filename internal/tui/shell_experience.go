@@ -36,57 +36,66 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	config := *m.shellExperience
 	config.err = nil
-	if config.cursor == 7 && key.Type == tea.KeyRunes {
+	options := screens.ShellExperienceOptions(config.profile)
+	config.cursor = min(max(0, config.cursor), len(options)-1)
+	entry := options[config.cursor]
+	if entry.Control == screens.ShellExperienceProvider && key.Type == tea.KeyRunes {
 		text := string(key.Runes)
 		if len(config.profile.GGAProvider)+len(text) <= 64 && strings.IndexFunc(text, func(r rune) bool { return r < 32 || r > 126 }) < 0 {
 			config.profile.GGAProvider += text
 		}
 	} else {
-		switch key.String() {
+		pressed := key.String()
+		if strings.EqualFold(pressed, "x") {
+			return m.configureShellExperience(tea.KeyMsg{Type: tea.KeyEsc})
+		}
+		if strings.EqualFold(pressed, "c") {
+			for i, option := range options {
+				if option.Control == screens.ShellExperienceContinue {
+					config.cursor, entry = i, option
+				}
+			}
+			pressed = "enter"
+		}
+		switch pressed {
 		case "up", "k":
-			config.cursor = (config.cursor + 9) % 10
+			config.cursor = max(0, config.cursor-1)
 		case "down", "j", "tab":
-			config.cursor = (config.cursor + 1) % 10
+			config.cursor = min(len(options)-1, config.cursor+1)
 		case "home":
 			config.cursor = 0
 		case "end":
-			config.cursor = 9
+			for i, option := range options {
+				if option.Control == screens.ShellExperienceContinue {
+					config.cursor = i
+				}
+			}
 		case "backspace":
-			if config.cursor == 8 {
+			if entry.Control == screens.ShellExperienceSDK {
 				config.profile.SDKSource = ""
 			}
-			if config.cursor == 7 && len(config.profile.GGAProvider) > 0 {
+			if entry.Control == screens.ShellExperienceProvider && len(config.profile.GGAProvider) > 0 {
 				config.profile.GGAProvider = config.profile.GGAProvider[:len(config.profile.GGAProvider)-1]
 			}
 		case "enter":
-			switch config.cursor {
-			case 0:
-				choices := []string{"gentleman", "neutral", "unmanaged"}
-				for i, p := range choices {
-					if config.profile.Persona == p {
-						config.profile.Persona = choices[(i+1)%3]
-						break
-					}
-				}
-			case 1:
+			switch entry.Control {
+			case screens.ShellExperiencePersona:
+				config.profile.Persona = entry.Choice
+			case screens.ShellExperienceBackground:
 				if config.profile.BackgroundSubagents == "on" {
 					config.profile.BackgroundSubagents = "off"
 				} else {
 					config.profile.BackgroundSubagents = "on"
 				}
-			case 7: // Provider is typed explicitly, never inferred from Pi.
-			case 8:
-				switch config.profile.SDKSource {
-				case "":
-					config.profile.SDKSource = "stable"
-				case "stable":
-					if config.err = shellMainSDKChoiceError(config.profile); config.err == nil {
-						config.profile.SDKSource = "main-preview"
-					}
-				default:
-					config.profile.SDKSource = ""
+			case screens.ShellExperienceProvider: // Typed explicitly, never inferred from Pi.
+			case screens.ShellExperienceSDK:
+				if entry.Choice == "main-preview" {
+					config.err = shellMainSDKChoiceError(config.profile)
 				}
-			case 9:
+				if config.err == nil {
+					config.profile.SDKSource = entry.Choice
+				}
+			case screens.ShellExperienceContinue:
 				config.err = config.profile.Validate()
 				if config.err == nil && config.profile.SDKSource == "main-preview" {
 					config.err = shellMainSDKChoiceError(config.profile)
@@ -99,9 +108,11 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.shellExperience, m.shellReadyOffset = nil, 0
 					return m, nil
 				}
+			case screens.ShellExperienceCancel:
+				return m.configureShellExperience(tea.KeyMsg{Type: tea.KeyEsc})
 			default:
 				fields := []*string{&config.profile.StrictTDD, &config.profile.GlobalRDD, &config.profile.CodeGraph, &config.profile.Context7, &config.profile.GGA}
-				field := fields[config.cursor-2]
+				field := fields[entry.Control-screens.ShellExperienceTDD]
 				switch *field {
 				case "":
 					*field = "on"

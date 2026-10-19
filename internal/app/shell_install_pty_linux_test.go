@@ -223,11 +223,11 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 					t.Error("PTY reader did not join during cleanup")
 				}
 			})
-			waitFor("Install Gentle Shell")
-			send(strings.Repeat("\x1b[B", 11) + "\r")
-			waitFor("Configure experience")
+			waitFor("Install Gentle-Shell, our own agent")
+			send("\r")
+			waitFor("Configure Gentle-Shell experience")
 			if strings.HasPrefix(scenario, "confirm-main") {
-				send(strings.Repeat("\x1b[B", 8) + "\r\r")
+				send(strings.Repeat("\x1b[B", 9) + "\r")
 				waitFor("SDK Main + stock provider")
 			}
 			send("\x1b[F\r")
@@ -251,8 +251,8 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 				output.Reset()
 				mu.Unlock()
 				send("\x05")
-				waitFor("Configure experience")
-				send("\r\x1b[F\r")
+				waitFor("Configure Gentle-Shell experience")
+				send("\x1b[B\r\x1b[F\r")
 				waitFor("Target:")
 				if _, err := os.Lstat(target); !os.IsNotExist(err) {
 					t.Fatal("editing published before physical confirmation", err)
@@ -280,7 +280,7 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 				} else {
 					send("\x1b")
 				}
-				waitFor("Install Gentle Shell")
+				waitFor("Install Gentle-Shell, our own agent")
 				send("q")
 			}
 			select {

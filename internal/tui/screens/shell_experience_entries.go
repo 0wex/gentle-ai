@@ -1,0 +1,107 @@
+package screens
+
+import (
+	"strings"
+
+	"github.com/gentleman-programming/gentle-ai/v4/internal/shellinstaller"
+)
+
+// ShellExperienceControl identifies an existing preference or navigation action,
+// independently of the restored radio rows and their visual cursor positions.
+type ShellExperienceControl int
+
+const (
+	ShellExperienceFoundation ShellExperienceControl = -1
+	ShellExperiencePersona    ShellExperienceControl = iota - 1
+	ShellExperienceBackground
+	ShellExperienceTDD
+	ShellExperienceRDD
+	ShellExperienceCodeGraph
+	ShellExperienceContext7
+	ShellExperienceGGA
+	ShellExperienceProvider
+	ShellExperienceSDK
+	ShellExperienceContinue
+	ShellExperienceCancel
+)
+
+// ShellExperienceEntry is an inert projection, never a second preference store.
+type ShellExperienceEntry struct {
+	Category, Kind, Label, Description, Value, Choice string
+	Control                                           ShellExperienceControl
+	Cursor                                            int
+	Current, Checked, Selectable                      bool
+}
+
+func shellExperienceCategories() []string {
+	return []string{"Required foundation", "Persona", "Recommended", "SDK source", "Optional workflows", "Advanced", "Actions"}
+}
+
+// shellExperienceEntries restores the original grouping using only preferences
+// carried by UserExperience. Retired SDD and whole-Shell channel rows stay absent.
+func shellExperienceEntries(p shellinstaller.UserExperience) []ShellExperienceEntry {
+	var entries []ShellExperienceEntry
+	cursor := 0
+	add := func(e ShellExperienceEntry) {
+		e.Cursor = -1
+		if e.Control != ShellExperienceFoundation {
+			e.Cursor, e.Selectable = cursor, true
+			cursor++
+		}
+		entries = append(entries, e)
+	}
+	for _, item := range [][2]string{
+		{"Gentle-Shell", "The managed Gentle-Shell foundation provides ODD + core skills."},
+		{"Persistent memory + MCP", "Persistent memory and MCP support are included."},
+		{"ODD + core skills", "Organic Driven Development and the core skill set are included."},
+		{"Subagent/interaction stack", "Subagent delegation and human interaction support are included."},
+		{"Security-first Permissions", "Security-first permission guardrails are included."},
+	} {
+		add(ShellExperienceEntry{Control: ShellExperienceFoundation, Category: "Required foundation", Kind: "foundation", Label: item[0], Description: item[1], Value: "required"})
+	}
+	for _, choice := range [][3]string{
+		{"gentleman", "Gentleman", "Natural voseo in Spanish + English technical artifacts"},
+		{"neutral", "Neutral", "Neutral conversational tone + English technical artifacts"},
+		{"unmanaged", "Custom", "Keep your own persona; Gentle AI won't manage it."},
+	} {
+		add(ShellExperienceEntry{Control: ShellExperiencePersona, Category: "Persona", Kind: "persona", Label: choice[1], Description: choice[2], Choice: choice[0], Value: p.Persona, Current: p.Persona == choice[0]})
+	}
+	addToggle := func(control ShellExperienceControl, category, label, description, value string) {
+		caption := strings.ToUpper(value)
+		if value == "" {
+			caption = "SDK default (no override)"
+		}
+		add(ShellExperienceEntry{Control: control, Category: category, Kind: "toggle", Label: label, Description: description, Value: caption, Checked: value == "on"})
+	}
+	addToggle(ShellExperienceBackground, "Recommended", "Background subagents", "Independent work without blocking terminal", p.BackgroundSubagents)
+	addToggle(ShellExperienceTDD, "Recommended", "Strict TDD", "Prove behavior with a failing test before implementation", p.StrictTDD)
+	addToggle(ShellExperienceRDD, "Recommended", "Global RDD", "Independent reviewers preserve evidence; extra reviewer-agent tokens; applies globally", p.GlobalRDD)
+	addToggle(ShellExperienceCodeGraph, "Recommended", "CodeGraph", "Structural indexing/navigation; project overrides and explicit qualification remain.", p.CodeGraph)
+	addToggle(ShellExperienceContext7, "Recommended", "Context7", "Current library docs through MCP", p.Context7)
+	for _, choice := range [][3]string{
+		{"stable", "Stable", "Stock SDK source; native installer and pins remain unchanged. Backspace inherits the stock default."},
+		{"main-preview", "Main preview", "SDK Main + stock provider, not installed health. Linux amd64 fresh Separate only; native installer and pins remain stock."},
+	} {
+		add(ShellExperienceEntry{Control: ShellExperienceSDK, Category: "SDK source", Kind: "radio", Label: choice[1], Description: choice[2], Choice: choice[0], Value: shellSDKSourceLabel(&p), Current: p.SDKSource == choice[0] || p.SDKSource == "" && choice[0] == "stable"})
+	}
+	addToggle(ShellExperienceGGA, "Optional workflows", "GGA", "Off by default. An explicit provider is required when enabled; inheritance does not write an OFF override.", p.GGA)
+	provider := p.GGAProvider
+	if provider == "" {
+		provider = "not selected"
+	}
+	add(ShellExperienceEntry{Control: ShellExperienceProvider, Category: "Advanced", Kind: "text", Label: "GGA provider (type explicitly)", Description: "Type the provider explicitly; it is never inferred from Pi configuration.", Value: provider})
+	add(ShellExperienceEntry{Control: ShellExperienceContinue, Category: "Actions", Kind: "action", Label: "Continue", Description: "Continue to Destination with the full selected experience. Installation still requires physical confirmation."})
+	add(ShellExperienceEntry{Control: ShellExperienceCancel, Category: "Actions", Kind: "action", Label: "Cancel", Description: "Cancel configuration without applying changes."})
+	return entries
+}
+
+// ShellExperienceOptions is the same selectable projection used by every layout.
+func ShellExperienceOptions(p shellinstaller.UserExperience) []ShellExperienceEntry {
+	var options []ShellExperienceEntry
+	for _, entry := range shellExperienceEntries(p) {
+		if entry.Selectable {
+			options = append(options, entry)
+		}
+	}
+	return options
+}

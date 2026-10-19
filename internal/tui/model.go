@@ -2018,7 +2018,11 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			}
 		}
-		switch m.Cursor {
+		welcomeCursor := m.Cursor
+		if m.shellInstallEnabled {
+			welcomeCursor--
+		}
+		switch welcomeCursor {
 		case 0:
 			m.InstallFlowActive = true
 			m.setScreen(ScreenDetection)
@@ -2066,29 +2070,29 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 		default:
 			next := 6
 
-			if m.Cursor == next {
+			if welcomeCursor == next {
 				m.setScreen(ScreenBackups)
 				return m, nil
 			}
 			next++
 
-			if m.Cursor == next {
+			if welcomeCursor == next {
 				return m.startReviewStoreResetSurvey()
 			}
 			next++
 
-			if m.Cursor == next {
+			if welcomeCursor == next {
 				return m.startReviewModeLoad()
 			}
 			next++
 
-			if m.Cursor == next {
+			if welcomeCursor == next {
 				m.setScreen(ScreenUninstallMode)
 				return m, nil
 			}
 			next++
 
-			if m.Cursor == next {
+			if welcomeCursor == next {
 				m.CommunityToolsStandalone = true
 				m.CommunityToolResults = nil
 				m.CommunityToolErr = nil
@@ -2101,7 +2105,7 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 			}
 			next++
 
-			if m.Cursor == next {
+			if welcomeCursor == next {
 				return m, tea.Quit
 			}
 		}

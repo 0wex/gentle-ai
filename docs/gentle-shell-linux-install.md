@@ -21,7 +21,7 @@ Other platforms: [macOS](gentle-shell-macos-install.md) and [Windows](gentle-she
 
 Run `gentle-ai shell install`. Arrows select mode; Tab cycles mode-appropriate fields (Shared adds prefix/agent). Enter reviews; `y` confirms and closes the TUI before terminal handoff. Escape aborts before installation; Ctrl-C during installation requests cancellation and waits for stop/reap.
 
-The ordinary `gentle-ai` Welcome menu also offers **Install Gentle Shell**. Its selector uses the existing Bubble Tea program; a confirmed selection returns to the host before installation starts. The host then rechecks the physical selection and fresh confirmation token. Cancelling returns to Welcome without starting a worker.
+The ordinary `gentle-ai` Welcome screen starts with the featured **Install Gentle-Shell, our own agent** campaign below the logo. Enter opens the grouped configuration menu and its focused detail panel; narrower terminals use the same choices in a compact layout. End selects Continue. The selector uses the existing Bubble Tea program; a confirmed selection returns to the host before installation starts. The host then rechecks the physical selection and fresh confirmation token. Cancelling returns to Welcome without starting a worker.
 
 This entry-point slice connects the existing installation protocol. It does not establish original-installer/PNPM publication or installed-platform qualification.
 

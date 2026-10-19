@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/cli"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/system"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/tui/screens"
 )
 
 func experienceKey(m Model, key tea.KeyMsg) Model {
@@ -15,22 +16,42 @@ func experienceKey(m Model, key tea.KeyMsg) Model {
 	return model.(Model)
 }
 
+func experienceFocus(t *testing.T, m Model, control screens.ShellExperienceControl, choice string) Model {
+	t.Helper()
+	if m.shellExperience == nil {
+		t.Fatal("configuration is not active")
+	}
+	for _, entry := range screens.ShellExperienceOptions(m.shellExperience.profile) {
+		if entry.Control == control && (choice == "" || entry.Choice == choice) {
+			m = experienceKey(m, tea.KeyMsg{Type: tea.KeyHome})
+			for i := 0; i < entry.Cursor; i++ {
+				m = experienceKey(m, tea.KeyMsg{Type: tea.KeyDown})
+			}
+			return m
+		}
+	}
+	t.Fatal("supported configuration action is missing", control, choice)
+	return m
+}
+
 func experienceStart(t *testing.T) Model {
 	t.Helper()
+	t.Setenv("HOME", t.TempDir())
 	m := NewModel(system.DetectionResult{}, "dev").WithShellInstaller()
-	m.Width, m.Height, m.Cursor = 120, 30, 11
+	m.Width, m.Height = 120, 30
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	if !strings.Contains(m.View(), "Configure experience") {
+	if !strings.Contains(m.View(), "Configure Gentle-Shell experience") {
 		t.Fatal("ordinary installer skips Configure")
 	}
 	return m
 }
 
 func TestShellExperienceConfigureDestinationReady(t *testing.T) {
-	m := experienceStart(t)
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // neutral
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // unmanaged
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyDown})
+	m := experienceFocus(t, experienceStart(t), screens.ShellExperiencePersona, "neutral")
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = experienceFocus(t, m, screens.ShellExperiencePersona, "unmanaged")
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = experienceFocus(t, m, screens.ShellExperienceBackground, "")
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // background off
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
@@ -77,10 +98,7 @@ func TestShellExperienceConfigureDestinationReady(t *testing.T) {
 }
 
 func TestShellExperiencePreservesUnsupportedChoicesAndCancel(t *testing.T) {
-	m := experienceStart(t)
-	for i := 0; i < 4; i++ {
-		m = experienceKey(m, tea.KeyMsg{Type: tea.KeyDown})
-	}
+	m := experienceFocus(t, experienceStart(t), screens.ShellExperienceCodeGraph, "")
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // CodeGraph on
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})

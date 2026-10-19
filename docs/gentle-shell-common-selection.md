@@ -17,7 +17,7 @@ args := cli.ShellInstallArguments(selection)
 
 The existing Linux/macOS `gentle-ai shell install` route already consumes these helpers: it creates the selector, reads its outcome and forwards its argument vector only after its owning program returns. Cancellation still produces no worker invocation.
 
-The ordinary application opts into `WithShellInstaller()` and exposes **Install Gentle Shell** in Welcome. Selection stays inside its existing Bubble Tea program; only a confirmed result after terminal restoration reaches the guarded host handoff. See [Linux installation and limits](gentle-shell-linux-install.md).
+The ordinary application opts into `WithShellInstaller()` and initially focuses the original **Install Gentle-Shell, our own agent** campaign. Enter opens the grouped configuration menu; its controls project the current `UserExperience`, including inherited choices rather than false OFF overrides. Retired backend controls are not reintroduced. Selection stays inside its existing Bubble Tea program; only a confirmed result after terminal restoration reaches the guarded host handoff. See [Linux installation and limits](gentle-shell-linux-install.md).
 
 ## Verification and rollback
 

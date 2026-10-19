@@ -12,20 +12,17 @@ import (
 	"github.com/gentleman-programming/gentle-ai/v4/internal/tui/screens"
 )
 
-func sdkSourceRow(m Model) Model {
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyHome})
-	for i := 0; i < 8; i++ {
-		m = experienceKey(m, tea.KeyMsg{Type: tea.KeyDown})
-	}
-	return m
+func sdkSourceRow(t *testing.T, m Model) Model {
+	return experienceFocus(t, m, screens.ShellExperienceSDK, "stable")
 }
 
 func TestShellExperienceSDKSourceHandoff(t *testing.T) {
-	m := sdkSourceRow(experienceStart(t))
+	m := sdkSourceRow(t, experienceStart(t))
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	if m.shellExperience == nil || m.shellExperience.profile.SDKSource != "stable" {
 		t.Fatal("SDK stock choice missing from Configure")
 	}
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyDown})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
 		if m.shellExperience.profile.SDKSource != "stable" || m.shellExperience.err == nil {
@@ -58,8 +55,8 @@ func TestShellExperienceSDKSourceHandoff(t *testing.T) {
 		t.Fatal("Main selection lost before worker", err)
 	}
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyCtrlE})
-	m = sdkSourceRow(m)
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // back to omitted stock
+	m = sdkSourceRow(t, m)
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyBackspace}) // back to omitted stock
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	state, _ = cli.ShellInstallPresentationOf(m.shellInstallModel)
@@ -75,12 +72,11 @@ func TestShellExperienceSDKSourceHandoff(t *testing.T) {
 }
 
 func TestShellExperienceSDKSourcePreservesConflicts(t *testing.T) {
-	m := experienceStart(t)
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyDown})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyDown})
+	m := experienceFocus(t, experienceStart(t), screens.ShellExperienceTDD, "")
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // explicit Strict TDD on
-	m = sdkSourceRow(m)
+	m = sdkSourceRow(t, m)
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // stock
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyDown})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // Main refusal
 	if m.shellExperience == nil || m.shellExperience.profile.StrictTDD != "on" || m.shellExperience.profile.SDKSource != "stable" || m.shellExperience.err == nil {
 		t.Fatal("Main silently clears unsupported preferences")
@@ -91,19 +87,18 @@ func TestShellExperienceSDKSourceEditingConflictAndClear(t *testing.T) {
 	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
 		return // Main is not an offered choice on these platforms.
 	}
-	m := sdkSourceRow(experienceStart(t))
+	m := sdkSourceRow(t, experienceStart(t))
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyDown})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyHome})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyDown})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyDown})
+	m = experienceFocus(t, m, screens.ShellExperienceTDD, "")
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	if m.shellExperience == nil || m.shellExperience.err == nil || m.shellExperience.profile.SDKSource != "main-preview" || m.shellExperience.profile.StrictTDD != "on" {
 		t.Fatal("editing Main combination silently changes selections or advances")
 	}
-	m = sdkSourceRow(m)
+	m = sdkSourceRow(t, m)
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyBackspace})
 	if m.shellExperience.profile.SDKSource != "" || m.shellExperience.profile.StrictTDD != "on" {
 		t.Fatal("clearing SDK source changes unrelated preferences")

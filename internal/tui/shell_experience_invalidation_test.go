@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/cli"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/tui/screens"
 )
 
 func shellExperienceTarget(t *testing.T) string {
@@ -47,20 +48,17 @@ func TestShellExperienceEditingImmediatelyInvalidatesInspection(t *testing.T) {
 
 func TestShellExperienceEditingDoesNotEraseExplicitProvider(t *testing.T) {
 	m := experienceStart(t)
-	focus := func(row int) {
-		m = experienceKey(m, tea.KeyMsg{Type: tea.KeyHome})
-		for i := 0; i < row; i++ {
-			m = experienceKey(m, tea.KeyMsg{Type: tea.KeyDown})
-		}
+	focus := func(control screens.ShellExperienceControl) {
+		m = experienceFocus(t, m, control, "")
 	}
-	focus(7)
+	focus(screens.ShellExperienceProvider)
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("codex")})
-	focus(2)
+	focus(screens.ShellExperienceTDD)
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	if m.shellExperience == nil || m.shellExperience.profile.GGAProvider != "codex" || m.shellExperience.profile.StrictTDD != "on" {
 		t.Fatal("editing another preference silently cleared the explicit provider")
 	}
-	focus(6)
+	focus(screens.ShellExperienceGGA)
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	if m.shellExperience.profile.GGA != "off" || m.shellExperience.profile.GGAProvider != "codex" {

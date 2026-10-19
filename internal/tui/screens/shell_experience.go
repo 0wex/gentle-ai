@@ -14,33 +14,16 @@ import (
 
 func RenderShellExperience(p shellinstaller.UserExperience, cursor int, err error, width, height int) string {
 	width, height = shellViewport(width, height)
-	value := func(s string) string {
-		if s == "" {
-			return "not selected"
-		}
-		return s
-	}
-	options := []string{
-		"Persona: " + p.Persona,
-		"Background subagents: " + p.BackgroundSubagents,
-		"Strict TDD: " + value(p.StrictTDD),
-		"Global RDD: " + value(p.GlobalRDD),
-		"CodeGraph: " + value(p.CodeGraph),
-		"Context7: " + value(p.Context7),
-		"Optional GGA: " + value(p.GGA),
-		"GGA provider (type explicitly): " + p.GGAProvider,
-		shellSDKSourceLabel(&p),
-		"Continue to Destination",
-	}
-	cursor = min(max(0, cursor), len(options)-1)
-	content := renderOptions(options, cursor)
+	view := renderShellExperienceConfig(p, cursor, width, height)
 	if err != nil {
-		content += styles.WarningStyle.Render(err.Error())
+		warning := wrapShellExperienceConfigText(err.Error(), width)
+		warning = warning[:min(len(warning), max(1, min(3, height-1)))]
+		for i := range warning {
+			warning[i] = styles.WarningStyle.Render(warning[i])
+		}
+		return joinShellExperienceConfigLines(append(warning, strings.Split(view, "\n")...), height)
 	}
-	lines := strings.Split(ansi.Hardwrap(strings.TrimSuffix(content, "\n"), width, true), "\n")
-	focus := len(strings.Split(ansi.Hardwrap(strings.TrimSuffix(renderOptions(options[:cursor], -1), "\n"), width, true), "\n"))
-	start := min(max(0, focus-max(1, height-2)/2), max(0, len(lines)-max(1, height-2)))
-	return shellViewportRender("Configure experience", lines, start, width, height, "Enter changes; Backspace clears SDK choice; End→Enter continues; Esc backs. Native channel stays at Destination.")
+	return view
 }
 
 func shellReadyLines(req shellinstaller.UserInstallRequest, preview string, width int) []string {
