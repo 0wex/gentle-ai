@@ -54,13 +54,16 @@ func TestShellOriginalWelcomeAndMenu(t *testing.T) {
 		}
 		for _, want := range []string{
 			"Configure Gentle-Shell experience", "REQUIRED FOUNDATION", "Persistent memory + MCP",
-			"PERSONA", "RECOMMENDED", "SDK SOURCE", "OPTIONAL WORKFLOWS", "ADVANCED", "ACTIONS",
+			"PERSONA", "RECOMMENDED", "SDK SOURCE", "OPTIONAL WORKFLOWS", "ACTIONS",
 			"ABOUT THIS OPTION", "WHAT IT CHANGES", "CURRENT VALUE",
 			"GENTLEMAN PROGRAMMING RECOMMENDS", "WHY WE RECOMMEND IT", "│",
 		} {
 			if !strings.Contains(m.View(), want) {
 				t.Fatalf("configuration omits original menu content %q:\n%s", want, m.View())
 			}
+		}
+		if strings.Contains(m.View(), "ADVANCED") || strings.Contains(m.View(), "GGA provider") {
+			t.Fatal("default configuration exposes an unnecessary Advanced/provider row")
 		}
 		next, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 		m = next.(Model)

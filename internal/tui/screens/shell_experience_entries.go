@@ -34,7 +34,7 @@ type ShellExperienceEntry struct {
 }
 
 func shellExperienceCategories() []string {
-	return []string{"Required foundation", "Persona", "Recommended", "SDK source", "Optional workflows", "Advanced", "Actions"}
+	return []string{"Required foundation", "Persona", "Recommended", "SDK source", "Optional workflows", "Actions"}
 }
 
 // shellExperienceEntries restores the original grouping using only preferences
@@ -85,11 +85,15 @@ func shellExperienceEntries(p shellinstaller.UserExperience) []ShellExperienceEn
 		add(ShellExperienceEntry{Control: ShellExperienceSDK, Category: "SDK source", Kind: "radio", Label: choice[1], Description: choice[2], Choice: choice[0], Value: shellSDKSourceLabel(&p), Current: p.SDKSource == choice[0] || p.SDKSource == "" && choice[0] == "stable"})
 	}
 	addToggle(ShellExperienceGGA, "Optional workflows", "GGA", "Off by default. An explicit provider is required when enabled; inheritance does not write an OFF override.", p.GGA)
-	provider := p.GGAProvider
-	if provider == "" {
-		provider = "not selected"
+	// A retained provider stays editable so invalid OFF/inherit combinations
+	// can be corrected without silently discarding an explicit selection.
+	if p.GGA == "on" || p.GGAProvider != "" {
+		provider := p.GGAProvider
+		if provider == "" {
+			provider = "not selected"
+		}
+		add(ShellExperienceEntry{Control: ShellExperienceProvider, Category: "Optional workflows", Kind: "text", Label: "GGA provider (type explicitly)", Description: "Type the provider explicitly; it is never inferred from Pi configuration.", Value: provider})
 	}
-	add(ShellExperienceEntry{Control: ShellExperienceProvider, Category: "Advanced", Kind: "text", Label: "GGA provider (type explicitly)", Description: "Type the provider explicitly; it is never inferred from Pi configuration.", Value: provider})
 	add(ShellExperienceEntry{Control: ShellExperienceContinue, Category: "Actions", Kind: "action", Label: "Continue", Description: "Continue with this Gentle-Shell profile. Installation still requires physical confirmation."})
 	add(ShellExperienceEntry{Control: ShellExperienceCancel, Category: "Actions", Kind: "action", Label: "Cancel", Description: "Cancel configuration without applying changes."})
 	return entries

@@ -51,6 +51,8 @@ func TestShellExperienceEditingDoesNotEraseExplicitProvider(t *testing.T) {
 	focus := func(control screens.ShellExperienceControl) {
 		m = experienceFocus(t, m, control, "")
 	}
+	focus(screens.ShellExperienceGGA)
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // Explicit ON reveals provider input.
 	focus(screens.ShellExperienceProvider)
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("codex")})
 	focus(screens.ShellExperienceTDD)
@@ -59,8 +61,7 @@ func TestShellExperienceEditingDoesNotEraseExplicitProvider(t *testing.T) {
 		t.Fatal("editing another preference silently cleared the explicit provider")
 	}
 	focus(screens.ShellExperienceGGA)
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // ON → OFF retains the explicit value.
 	if m.shellExperience.profile.GGA != "off" || m.shellExperience.profile.GGAProvider != "codex" {
 		t.Fatal("editing GGA silently discarded the explicitly typed provider")
 	}
@@ -68,6 +69,18 @@ func TestShellExperienceEditingDoesNotEraseExplicitProvider(t *testing.T) {
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	if m.shellExperience == nil || m.shellExperience.err == nil || m.shellExperience.profile.GGAProvider != "codex" {
 		t.Fatal("incompatible explicit choices were advanced or silently replaced")
+	}
+	focus(screens.ShellExperienceProvider) // Retained invalid data must remain correctable.
+	for range "codex" {
+		m = experienceKey(m, tea.KeyMsg{Type: tea.KeyBackspace})
+	}
+	if m.shellExperience.profile.GGAProvider != "" || m.shellExperience.profile.GGA != "off" || m.shellExperience.profile.Validate() != nil || m.ShellInstallSelection().Confirmed {
+		t.Fatal("clearing the retained provider lost GGA choice or acquired consent")
+	}
+	for _, entry := range screens.ShellExperienceOptions(m.shellExperience.profile) {
+		if entry.Control == screens.ShellExperienceProvider {
+			t.Fatal("cleared inactive provider row did not disappear")
+		}
 	}
 }
 

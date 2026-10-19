@@ -14,7 +14,7 @@ func TestShellConfigVideoGroupHeadings(t *testing.T) {
 	view := RenderShellExperience(profile, 0, nil, 209, 61)
 	left, _ := shellConfigVideoColumns(view)
 	position := -1
-	for _, heading := range []string{"REQUIRED FOUNDATION", "PERSONA", "RECOMMENDED", "SDK SOURCE", "OPTIONAL WORKFLOWS", "ADVANCED", "ACTIONS"} {
+	for _, heading := range []string{"REQUIRED FOUNDATION", "PERSONA", "RECOMMENDED", "SDK SOURCE", "OPTIONAL WORKFLOWS", "ACTIONS"} {
 		next := strings.Index("\n"+left+"\n", "\n"+heading+"\n")
 		if next <= position {
 			t.Fatalf("video group heading missing or out of order: %q:\n%s", heading, left)
@@ -34,10 +34,14 @@ func TestShellConfigVideoGroupHeadings(t *testing.T) {
 	if strings.Contains(ansi.Strip(view), "Required foundation • Persona") {
 		t.Fatal("category breadcrumb replaced the actual group headings")
 	}
+	if strings.Contains(ansi.Strip(view), "ADVANCED") {
+		t.Fatal("removed Advanced section returned")
+	}
 }
 
 func TestShellConfigVideoFocusedPanels(t *testing.T) {
 	profile := shellinstaller.DefaultUserExperience()
+	profile.GGA = "on" // Keep the explicit provider's contextual panel covered.
 	for _, entry := range ShellExperienceOptions(profile) {
 		if entry.Kind == "action" {
 			continue
