@@ -11,18 +11,21 @@ import (
 
 const shellExperienceConfigHelp = "j/k: navigate • enter: select • End: continue • esc: back"
 
-// These layouts restore e1f6bbe's configuration presentation. Their entries are
-// projections of UserExperience, not the retired profile or review controller.
+// These layouts restore the original configuration hierarchy and contextual
+// help. Entries project UserExperience, not the retired profile or controller.
 func renderShellExperienceConfig(p shellinstaller.UserExperience, cursor, width, height int) string {
 	entries := shellExperienceEntries(p)
 	cursor = min(max(0, cursor), len(ShellExperienceOptions(p))-1)
 	if width <= 5 || height <= 4 {
 		return renderShellExperienceConfigMinimum(entries, cursor, width, height)
 	}
-	rows := len(entries) + 3
-	for i := 1; i < len(entries); i++ {
-		if entries[i].Category != entries[i-1].Category {
-			rows++
+	rows := len(entries) + 2 // Title and keyboard help.
+	for i, entry := range entries {
+		if i == 0 || entry.Category != entries[i-1].Category {
+			rows++ // Group heading.
+			if i > 0 {
+				rows++ // Space between groups.
+			}
 		}
 	}
 	if width >= 100 && height >= rows {
@@ -34,20 +37,20 @@ func renderShellExperienceConfig(p shellinstaller.UserExperience, cursor, width,
 func renderShellExperienceConfigWide(entries []ShellExperienceEntry, cursor, width, height int) string {
 	leftWidth := (width - 1) / 2
 	rightWidth := width - leftWidth - 1
-	left := make([]string, 0, len(entries)+len(shellExperienceCategories())-1)
+	left := make([]string, 0, len(entries)+2*len(shellExperienceCategories()))
 	for index, entry := range entries {
-		if index > 0 && entry.Category != entries[index-1].Category {
-			left = append(left, "")
+		if index == 0 || entry.Category != entries[index-1].Category {
+			if index > 0 {
+				left = append(left, "")
+			}
+			left = append(left, renderShellExperienceConfigCategory(entry.Category, leftWidth))
 		}
 		left = append(left, renderShellExperienceConfigEntry(entry, entry.Selectable && entry.Cursor == cursor, leftWidth))
 	}
 	focused, _ := shellExperienceConfigEntryAtCursor(entries, cursor)
-	right := renderShellExperienceConfigPanel(entries, focused, rightWidth)
+	right := renderShellExperienceConfigPanel(focused, rightWidth)
 	rows := max(len(left), len(right))
-	lines := []string{
-		renderShellExperienceConfigLine(styles.TitleStyle, "Configure Gentle-Shell experience", width),
-		renderShellExperienceConfigLine(styles.SubtextStyle, strings.Join(shellExperienceCategories(), " • "), width),
-	}
+	lines := []string{renderShellExperienceConfigLine(styles.TitleStyle, "Configure Gentle-Shell experience", width)}
 	for i := 0; i < rows; i++ {
 		var l, r string
 		if i < len(left) {
@@ -106,31 +109,70 @@ func renderShellExperienceConfigCompact(entries []ShellExperienceEntry, cursor, 
 	return joinShellExperienceConfigLines(lines, height)
 }
 
-func renderShellExperienceConfigPanel(entries []ShellExperienceEntry, focused ShellExperienceEntry, width int) []string {
+func renderShellExperienceConfigCategory(category string, width int) string {
+	style := styles.SubtextStyle.Bold(true)
+	switch category {
+	case "Required foundation":
+		style = styles.TitleStyle
+	case "Persona":
+		style = styles.HeadingStyle
+	case "Recommended":
+		style = styles.SuccessStyle.Bold(true)
+	case "SDK source":
+		style = styles.WarningStyle.Bold(true)
+	case "Optional workflows":
+		style = lipgloss.NewStyle().Foreground(styles.ColorBlue).Bold(true)
+	}
+	return renderShellExperienceConfigLine(style, strings.ToUpper(category), width)
+}
+
+func renderShellExperienceConfigPanel(focused ShellExperienceEntry, width int) []string {
 	contentWidth := width - styles.PanelStyle.GetHorizontalFrameSize()
 	if contentWidth < 1 {
 		return []string{renderShellExperienceConfigLine(styles.SubtextStyle, focused.Label, width)}
 	}
-	content := []string{"Focused: " + focused.Label}
-	if focused.Value != "" && focused.Kind != "foundation" {
-		content = append(content, "Entry value: "+focused.Value)
-	}
-	persona, sdk, gga := "", "", ""
-	for _, entry := range entries {
-		switch entry.Control {
-		case ShellExperiencePersona:
-			persona = entry.Value
-		case ShellExperienceSDK:
-			sdk = entry.Value
-		case ShellExperienceGGA:
-			gga = entry.Value
+	var content []string
+	section := func(title, text string) {
+		if len(content) > 0 {
+			content = append(content, "")
 		}
+		content = append(content, styles.HeadingStyle.Render(title))
+		content = append(content, wrapShellExperienceConfigText(text, contentWidth)...)
 	}
-	if persona == "" {
-		persona = "unset"
+	section("ABOUT THIS OPTION", focused.Label)
+	section("WHAT IT CHANGES", focused.Description)
+	if focused.Kind != "action" {
+		value := focused.Value
+		if value == "" {
+			value = "unset"
+		}
+		section("CURRENT VALUE", value)
+		recommendation, reason := shellExperienceRecommendation(focused)
+		section("GENTLEMAN PROGRAMMING RECOMMENDS", recommendation)
+		heading := "WHY WE RECOMMEND IT"
+		if focused.Control == ShellExperienceSDK && focused.Choice == "main-preview" {
+			heading = "WHEN TO USE MAIN PREVIEW"
+		}
+		section(heading, reason)
 	}
-	content = append(content, "Current: "+persona, sdk, "GGA: "+gga, "")
-	content = append(content, wrapShellExperienceConfigText(focused.Description, contentWidth)...)
+	hint := "Enter: select"
+	switch focused.Kind {
+	case "toggle":
+		hint = "Enter: cycle default / ON / OFF"
+		if focused.Control == ShellExperienceBackground {
+			hint = "Enter: toggle"
+		}
+	case "radio":
+		hint = "Enter: select • Backspace: inherit stock default"
+	case "text":
+		hint = "Type provider • Backspace: delete • Enter: keep"
+	case "action":
+		hint = "Enter: " + strings.ToLower(focused.Label)
+	}
+	content = append(content, "")
+	for _, line := range wrapShellExperienceConfigText(hint, contentWidth) {
+		content = append(content, styles.HelpStyle.Render(line))
+	}
 	return strings.Split(styles.PanelStyle.Width(contentWidth).Render(strings.Join(content, "\n")), "\n")
 }
 

@@ -52,7 +52,12 @@ func TestShellOriginalWelcomeAndMenu(t *testing.T) {
 		if m.Screen != ScreenShellInstall || cmd != nil {
 			t.Fatal("installer entry must open its menu without executing a command")
 		}
-		for _, want := range []string{"Configure Gentle-Shell experience", "Required foundation", "Persistent memory + MCP", "Persona", "Recommended", "Optional workflows", "Advanced", "Actions", "Focused:", "│"} {
+		for _, want := range []string{
+			"Configure Gentle-Shell experience", "REQUIRED FOUNDATION", "Persistent memory + MCP",
+			"PERSONA", "RECOMMENDED", "SDK SOURCE", "OPTIONAL WORKFLOWS", "ADVANCED", "ACTIONS",
+			"ABOUT THIS OPTION", "WHAT IT CHANGES", "CURRENT VALUE",
+			"GENTLEMAN PROGRAMMING RECOMMENDS", "WHY WE RECOMMEND IT", "│",
+		} {
 			if !strings.Contains(m.View(), want) {
 				t.Fatalf("configuration omits original menu content %q:\n%s", want, m.View())
 			}

@@ -19,6 +19,8 @@ The existing Linux/macOS `gentle-ai shell install` route already consumes these 
 
 The ordinary application opts into `WithShellInstaller()` and initially focuses the original **Install Gentle-Shell, our own agent** campaign. Enter opens the grouped configuration menu; its controls project the current `UserExperience`, including inherited choices rather than false OFF overrides. Retired backend controls are not reintroduced. Selection stays inside its existing Bubble Tea program; only a confirmed result after terminal restoration reaches the guarded host handoff. See [Linux installation and limits](gentle-shell-linux-install.md).
 
+Wide configuration retains colored headings above each group. Its contextual panel separates About, changes, current value, recommendation and rationale; recommendations never replace selected or inherited values. Continue and Cancel have short action-specific panels.
+
 The embedded destination view uses the historical two-column field/About layout. Ready offers the original Plan action cursor and About panel, with a zero-based line-offset indicator and responsive compact fallbacks. Selecting Install forwards only the existing physical confirmation/quit path; Back clears old consent without discarding the request; Cancel returns to Welcome. Complete JSON, SDK qualifications and changes/scopes remain pageable, including long paths and confirmation values. No additional preference authority or nested program is introduced.
 
 ## Verification and rollback
