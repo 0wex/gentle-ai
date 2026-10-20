@@ -358,10 +358,15 @@ func (m Model) shellInstallView() string {
 			steps[index] = screens.ShellInstallStep{Label: step.Label, State: step.State, Details: step.Details}
 		}
 		failure := ""
+		published := false
 		if m.shellInstallRun.err != nil {
 			failure = m.shellInstallRun.err.Error()
+			if destination := m.shellInstallSelection.Request.Destination; destination != "" {
+				_, statErr := os.Lstat(destination)
+				published = statErr == nil
+			}
 		}
-		return screens.RenderShellInstall(steps, failure, m.shellInstallRun.done, m.shellInstallRun.spinner, m.Width, m.Height)
+		return screens.RenderShellInstall(steps, failure, m.shellInstallRun.done, m.shellInstallRun.spinner, published, m.shellInstallSelection.Request.Mode, m.Width, m.Height)
 	}
 	if m.shellPlan != nil {
 		return screens.RenderShellPlan(m.shellPlan, m.Width, m.Height)

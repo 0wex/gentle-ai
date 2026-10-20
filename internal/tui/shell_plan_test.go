@@ -154,7 +154,7 @@ func TestShellInstallFailureStaysInTUI(t *testing.T) {
 		t.Fatalf("failure did not preserve ordered step state: %+v", m.shellInstallRun)
 	}
 	view := m.View()
-	if !strings.Contains(view, "Installation failed") || !strings.Contains(view, "workspace=") || !strings.Contains(view, "Enter: back to menu") {
+	if !strings.Contains(view, "Installation failed") || !strings.Contains(view, "workspace=") || !strings.Contains(view, "Enter: back to menu") || !strings.Contains(view, "No installation was applied") {
 		t.Fatalf("failure screen hides evidence or next action:\n%s", view)
 	}
 	next, quit := m.Update(tea.KeyMsg{Type: tea.KeyEnter})

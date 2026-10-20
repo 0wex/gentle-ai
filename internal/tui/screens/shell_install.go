@@ -19,7 +19,7 @@ var shellInstallSpinner = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "�
 
 // RenderShellInstall keeps the operator inside the TUI while the owned worker
 // runs. It never claims success without a completed worker result.
-func RenderShellInstall(steps []ShellInstallStep, failure string, done bool, frame, width, height int) string {
+func RenderShellInstall(steps []ShellInstallStep, failure string, done bool, frame int, destinationPublished bool, mode string, width, height int) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
@@ -64,7 +64,16 @@ func RenderShellInstall(steps []ShellInstallStep, failure string, done bool, fra
 		}
 	}
 	if failure != "" {
-		lines = append(lines, "", styles.ErrorStyle.Render("The installation stopped before publishing a verified result:"))
+		lines = append(lines, "")
+		switch {
+		case !destinationPublished && mode == "separate":
+			lines = append(lines, styles.WarningStyle.Render("No installation was applied: the process did not complete and no target was published."))
+		case !destinationPublished:
+			lines = append(lines, styles.WarningStyle.Render("No target was published. Agent/Shared side effects may need inspection before retrying."))
+		default:
+			lines = append(lines, styles.WarningStyle.Render("A destination exists; the transaction may be partial or uncertain. Inspect the preserved evidence."))
+		}
+		lines = append(lines, styles.ErrorStyle.Render("The installation stopped before publishing a verified result:"))
 		for _, line := range strings.Split(failure, "\n") {
 			for len(line) > width-2 && width > 2 {
 				lines = append(lines, "  "+line[:width-2])
