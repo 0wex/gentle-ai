@@ -32,6 +32,7 @@ type shellInstallRun struct {
 	done    bool
 	err     error
 	spinner int
+	bloom   int
 }
 
 type shellInstallTick struct{}
@@ -460,7 +461,14 @@ func (m Model) manageDetectedInstall() Model {
 
 func (m Model) updateShellInstallRun(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if _, ok := msg.(shellInstallTick); ok {
-		if m.shellInstallRun == nil || m.shellInstallRun.done {
+		if m.shellInstallRun == nil {
+			return m, nil
+		}
+		if m.shellInstallRun.done {
+			if m.shellInstallRun.err == nil && m.shellInstallRun.bloom < screens.ShellBloomFrames-1 {
+				m.shellInstallRun.bloom++
+				return m, tea.Tick(250*time.Millisecond, func(time.Time) tea.Msg { return shellInstallTick{} })
+			}
 			return m, nil
 		}
 		m.shellInstallRun.spinner++
@@ -474,6 +482,9 @@ func (m Model) updateShellInstallRun(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if event.done {
 			run.done, run.err = true, event.err
+			if event.err == nil {
+				return m, tea.Tick(250*time.Millisecond, func(time.Time) tea.Msg { return shellInstallTick{} })
+			}
 			if event.err != nil {
 				for index := range run.steps {
 					if run.steps[index].State == "running" {

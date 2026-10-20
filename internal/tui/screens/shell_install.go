@@ -4,8 +4,44 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/tui/styles"
 )
+
+// ShellBloomFrames is the number of rose-opening frames on success.
+const ShellBloomFrames = 4
+
+var shellRoseFrames = [][]string{
+	{
+		"      ╭─────╮",
+		"      │  ●  │",
+		"      ╰──┬──╯",
+		"         │",
+		"        ╱ ╲",
+	},
+	{
+		"     ╭───────╮",
+		"     │   ●   │",
+		"    ╰───┬───╯",
+		"         │",
+		"        ╱ ╲",
+	},
+	{
+		"    ╭─────────╮",
+		"    │    ●    │",
+		"   ╰────┬────╯",
+		"         │",
+		"        ╱ ╲",
+	},
+	{
+		"      ╭─────╮",
+		"    ╭─┤  ●  ├─╮",
+		"    │ ╰──┬──╯ │",
+		"    ╰────┼────╯",
+		"         │",
+		"        ╱ ╲",
+	},
+}
 
 // ShellInstallStep is one ordered installation step. State is pending,
 // running, done or failed. It carries no installation authority.
@@ -19,7 +55,7 @@ var shellInstallSpinner = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "�
 
 // RenderShellInstall keeps the operator inside the TUI while the owned worker
 // runs. It never claims success without a completed worker result.
-func RenderShellInstall(steps []ShellInstallStep, failure string, done bool, frame int, destinationPublished bool, mode string, width, height int) string {
+func RenderShellInstall(steps []ShellInstallStep, failure string, done bool, frame, bloom int, destinationPublished bool, mode string, width, height int) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
@@ -81,6 +117,15 @@ func RenderShellInstall(steps []ShellInstallStep, failure string, done bool, fra
 			}
 			lines = append(lines, "  "+line)
 		}
+	}
+	if done && failure == "" {
+		bloom = min(max(0, bloom), len(shellRoseFrames)-1)
+		rose := lipgloss.NewStyle().Foreground(styles.ColorMauve)
+		lines = append(lines, "")
+		for _, line := range shellRoseFrames[bloom] {
+			lines = append(lines, rose.Render("  "+line))
+		}
+		lines = append(lines, "", styles.TitleStyle.Render("Welcome to the gentle-tailored experience"), styles.SubtextStyle.Render("Your Gentle Shell is ready."))
 	}
 	lines = append(lines, "")
 	if !done {

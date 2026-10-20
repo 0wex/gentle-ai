@@ -85,8 +85,16 @@ func TestShellPlanEnterRunsInstallationInsideTUI(t *testing.T) {
 			t.Fatalf("step was not completed in order: %+v", m.shellInstallRun.steps)
 		}
 	}
-	if view := m.View(); !strings.Contains(view, "Installation complete") || !strings.Contains(view, "Enter: finish") {
+	if view := m.View(); !strings.Contains(view, "Installation complete") || !strings.Contains(view, "Welcome to the gentle-tailored experience") || !strings.Contains(view, "Enter: finish") {
 		t.Fatalf("completion screen differs:\n%s", view)
+	}
+	if cmd == nil {
+		t.Fatal("completion did not start the rose animation")
+	}
+	next, _ = m.Update(cmd())
+	m = next.(Model)
+	if m.shellInstallRun.bloom != 1 {
+		t.Fatalf("rose animation did not advance: %d", m.shellInstallRun.bloom)
 	}
 	if _, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil {
 		t.Fatal("completion enter did not leave the TUI")
