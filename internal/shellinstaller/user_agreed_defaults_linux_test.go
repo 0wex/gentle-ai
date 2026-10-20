@@ -60,7 +60,14 @@ func TestUserAgreedDefaultsReachInspection(t *testing.T) {
 			case "gga-on-with-provider":
 				changed.GGA, changed.GGAProvider = "on", "codex"
 			}
-			if _, err := InspectUserInstall(selection); err == nil {
+			_, err := InspectUserInstall(selection)
+			if scenario == "main-combination" {
+				if err != nil {
+					t.Fatalf("Main lost the stock preference parity: %v", err)
+				}
+				return
+			}
+			if err == nil {
 				t.Fatal("defaults bypassed an unsupported selection")
 			}
 		})

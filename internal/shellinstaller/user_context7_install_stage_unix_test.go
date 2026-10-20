@@ -68,7 +68,6 @@ func TestUserPrepareInstallStageContext7ModeRefusals(t *testing.T) {
 		{name: "nil-unknown-mode", mode: "auto", nilProfile: true},
 		{name: "nil-empty-mode", nilProfile: true},
 		{name: "invalid-choice", mode: "separate", choice: "auto"},
-		{name: "main-codegraph-with-context7", mode: "separate", choice: "on", sdk: "main-preview", codegraph: "on"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := installStagePath(t)

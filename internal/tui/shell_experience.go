@@ -210,9 +210,6 @@ func shellMainSDKChoiceError(p shellinstaller.UserExperience) error {
 	if err := shellMainPlatformError(); err != nil {
 		return err
 	}
-	if p.CodeGraph == "on" {
-		return errors.New("Main preview does not support CodeGraph; turn it off or choose Stable")
-	}
 	if p.GGA == "on" {
 		return errors.New("Main preview does not support GGA; turn it off or choose Stable")
 	}

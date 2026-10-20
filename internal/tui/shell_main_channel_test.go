@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -58,21 +57,20 @@ func TestShellMainChannelIsSelectable(t *testing.T) {
 	m = next.(Model)
 	next, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = next.(Model)
-	if cmd != nil || m.shellExperience == nil {
-		t.Fatal("unsupported Main combination advanced to installation")
+	if cmd != nil || m.shellExperience != nil {
+		t.Fatalf("Main lost the stock preference parity: %+v", m.shellExperience)
 	}
-	message := m.shellExperience.err
-	if message == nil || !strings.Contains(message.Error(), "CodeGraph") {
-		t.Fatalf("unsupported Main combination was not named precisely: %v", message)
+	state, ok := cli.ShellInstallPresentationOf(m.shellInstallModel)
+	if !ok || state.Request.Experience == nil || state.Request.Experience.SDKSource != "main-preview" || state.Request.Experience.CodeGraph != "on" {
+		t.Fatalf("Main request dropped a qualified preference: %+v", state.Request.Experience)
+	}
+	if state.Request.Confirmation != "" || m.ShellInstallSelection().Confirmed {
+		t.Fatal("Main channel reused or forged consent")
 	}
 }
 
 func TestShellMainAcceptsQualifiedSelections(t *testing.T) {
 	m := openAgreedConfiguration(t)
-	profile := m.shellExperience.profile
-	profile.CodeGraph = "off" // Main keeps CodeGraph outside its qualified set.
-	profile.GGA = "off"
-	m.shellExperience.profile = profile
 	m, _ = focusMainPreview(t, m)
 	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = next.(Model)
@@ -92,7 +90,7 @@ func TestShellMainAcceptsQualifiedSelections(t *testing.T) {
 	}
 	want := shellinstaller.UserExperience{
 		Persona: "gentleman", BackgroundSubagents: "on", StrictTDD: "on",
-		GlobalRDD: "on", Context7: "on", CodeGraph: "off", GGA: "off",
+		GlobalRDD: "on", Context7: "on", CodeGraph: "on", GGA: "off",
 		SDKSource: "main-preview",
 	}
 	if state.Request.Experience == nil || *state.Request.Experience != want {

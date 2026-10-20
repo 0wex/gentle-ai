@@ -23,18 +23,21 @@ func TestUserCodeGraphStageRefusesBeforeEffects(t *testing.T) {
 				root := filepath.Join(parent, "stage")
 				var refusal error
 				if mode == "separate" && runtime.GOOS == "linux" && runtime.GOARCH == "amd64" {
-					// Qualified Separate has paired positive coverage; an unsupported
-					// Main+CodeGraph combination keeps the generic refusal.
+					// Stock is qualified for the generic writer; Main owns its
+					// runtime through the authenticated worker and is admitted
+					// by the shared profile validation instead.
 					if files, err := userStageExperienceFiles(&profile); err != nil || len(files) == 0 {
-						t.Fatal("qualified profile lost generic staging", files, err)
+						t.Fatalf("qualified stock profile lost generic staging: %v %v", files, err)
 					}
-					refused := profile
-					refused.SDKSource, refused.CodeGraph = "main-preview", "on"
-					files, err := userStageExperienceFiles(&refused)
-					if files != nil {
-						t.Fatal("generic CodeGraph refusal returned staged files", files)
+					main := profile
+					main.SDKSource = "main-preview"
+					if files, err := userStageExperienceFiles(&main); err == nil || files != nil {
+						t.Fatalf("stock PNPM writer admitted Main: %v %v", files, err)
 					}
-					refusal = err
+					if err := userExperienceSupported(&main); err != nil {
+						t.Fatalf("Main CodeGraph parity lost: %v", err)
+					}
+					return
 				} else {
 					refusal = userPrepareInstallStage(context.Background(), root, mode, &profile)
 				}

@@ -28,8 +28,8 @@ func TestUserStrictTDDExperienceCodec(t *testing.T) {
 			if err := userExperienceSupported(&profile); err != nil {
 				t.Fatalf("qualified Main + Strict TDD was refused: %v", err)
 			}
-			profile.CodeGraph = "on"
-			if err := userExperienceSupported(&profile); err == nil || !strings.Contains(err.Error(), "CodeGraph") {
+			profile.GGA = "on"
+			if err := userExperienceSupported(&profile); err == nil || !strings.Contains(err.Error(), "GGA") {
 				t.Fatal("codec granted an unsupported Main combination")
 			}
 		})

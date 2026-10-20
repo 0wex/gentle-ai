@@ -14,7 +14,7 @@ import (
 func mainDefaultsProfile() UserExperience {
 	return UserExperience{
 		Persona: "gentleman", BackgroundSubagents: "on", StrictTDD: "on",
-		GlobalRDD: "on", Context7: "on", GGA: "off", SDKSource: "main-preview",
+		GlobalRDD: "on", CodeGraph: "on", Context7: "on", GGA: "off", SDKSource: "main-preview",
 	}
 }
 
@@ -25,11 +25,12 @@ func TestUserMainDefaultsAdmission(t *testing.T) {
 	if err := userExperienceSupported(&profile); err != nil {
 		t.Fatalf("qualified Main defaults refused: %v", err)
 	}
+	// Every preference that the stock path consumes also works with Main;
+	// only GGA ON keeps the stock path's own refusal.
 	for _, blocked := range []struct {
 		name, want string
 		apply      func(*UserExperience)
 	}{
-		{"codegraph", "CodeGraph", func(p *UserExperience) { p.CodeGraph = "on" }},
 		{"gga", "GGA", func(p *UserExperience) { p.GGA = "on" }},
 	} {
 		t.Run(blocked.name, func(t *testing.T) {

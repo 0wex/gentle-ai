@@ -61,13 +61,13 @@ func TestUserCodeGraphPrivateSeparateStage(t *testing.T) {
 					if err := userExperienceSupported(&profile); err != nil {
 						t.Fatalf("qualified stock profile was refused: %v", err)
 					}
-					refused := profile
-					refused.SDKSource, refused.CodeGraph = "main-preview", "on"
-					if files, err := userStageExperienceFiles(&refused); err == nil || files != nil || !strings.Contains(err.Error(), "Main SDK") {
-						t.Fatal("unsupported Main CodeGraph opened the generic writer", files, err)
+					main := profile
+					main.SDKSource = "main-preview"
+					if err := userExperienceSupported(&main); err != nil {
+						t.Fatalf("Main lost the qualified CodeGraph profile: %v", err)
 					}
-					if err := userExperienceSupported(&refused); err == nil || !strings.Contains(err.Error(), "CodeGraph") {
-						t.Fatal("private preparation opened unqualified public installation", err)
+					if files, err := userStageExperienceFiles(&main); err == nil || files != nil || !strings.Contains(err.Error(), "Main SDK") {
+						t.Fatal("stock PNPM stage admitted Main without its producer", files, err)
 					}
 					after, err := userTreeStamp(root)
 					if err != nil || after != stamp {
