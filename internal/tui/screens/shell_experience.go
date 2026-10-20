@@ -12,9 +12,9 @@ import (
 	"github.com/gentleman-programming/gentle-ai/v4/internal/tui/styles"
 )
 
-func RenderShellExperience(p shellinstaller.UserExperience, cursor int, err error, width, height int) string {
+func RenderShellExperience(p shellinstaller.UserExperience, cursor int, err error, width, height int, targets ...ShellExperienceEntry) string {
 	width, height = shellViewport(width, height)
-	view := renderShellExperienceConfig(p, cursor, width, height)
+	view := renderShellExperienceConfig(p, cursor, width, height, targets...)
 	if err != nil {
 		warning := wrapShellExperienceConfigText(err.Error(), width)
 		warning = warning[:min(len(warning), max(1, min(3, height-1)))]

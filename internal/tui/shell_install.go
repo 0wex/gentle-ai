@@ -41,6 +41,16 @@ func (m Model) updateShellInstall(msg tea.Msg) (tea.Model, tea.Cmd) {
 			msg = tea.KeyMsg{Type: tea.KeyEsc}
 		}
 	}
+	if key, ok := msg.(tea.KeyMsg); ok {
+		if state, ok := cli.ShellInstallPresentationOf(m.shellInstallModel); ok && !state.Review {
+			if state.Field == 1 && (key.Type == tea.KeyLeft || key.Type == tea.KeyRight) {
+				return m, nil // Install target is chosen in configuration.
+			}
+			if state.Field >= 2 && (key.Type == tea.KeyRunes || key.Type == tea.KeyBackspace) {
+				return m, nil // Detected Shared paths are read-only.
+			}
+		}
+	}
 	m.shellInstallModel, _ = m.shellInstallModel.Update(msg)
 	after, _ := cli.ShellInstallPresentationOf(m.shellInstallModel)
 	if before.Review != after.Review {

@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/cli"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/shellinstaller"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/tui/screens"
 )
 
@@ -48,10 +49,18 @@ func TestShellFlowDestinationContext(t *testing.T) {
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyTab})
 	shellFlowContains(t, m, "About: Mode")
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyRight})
+	shellFlowContains(t, m, "Mode: separate") // Install target is chosen in configuration.
+	profile := shellinstaller.DefaultUserExperience()
+	req := shellinstaller.UserInstallRequest{Destination: shellExperienceTarget(t), Mode: "shared", SharedPrefix: "/pi/prefix", SharedAgent: "/pi/agent", Experience: &profile}
+	m.shellInstallModel = cli.NewShellInstallModelWithRequest(nil, req)
+	m.Width, m.Height = 209, 61
+	m.setScreen(ScreenShellInstall)
+	shellFlowContains(t, m, "Mode: shared", "Shared prefix: /pi/prefix", "Shared agent: /pi/agent")
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyTab})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyTab})
 	shellFlowContains(t, m, "About: Shared prefix")
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyTab})
-	shellFlowContains(t, m, "About: Shared agent")
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+	shellFlowContains(t, m, "Shared prefix: /pi/prefix")
 	if m.ShellInstallSelection().Confirmed {
 		t.Fatal("field navigation acquired installation consent")
 	}

@@ -23,6 +23,7 @@ const (
 	ShellExperienceSDK
 	ShellExperienceContinue
 	ShellExperienceCancel
+	ShellExperienceInstallTarget
 )
 
 // ShellExperienceEntry is an inert projection, never a second preference store.
@@ -34,12 +35,27 @@ type ShellExperienceEntry struct {
 }
 
 func shellExperienceCategories() []string {
-	return []string{"Required foundation", "Persona", "Recommended", "SDK source", "Optional workflows", "Actions"}
+	return []string{"Required foundation", "Persona", "Recommended", "SDK source", "Install target", "Optional workflows", "Actions"}
 }
 
 // shellExperienceEntries restores the original grouping using only preferences
 // carried by UserExperience. Retired SDD and whole-Shell channel rows stay absent.
-func shellExperienceEntries(p shellinstaller.UserExperience) []ShellExperienceEntry {
+// ShellInstallTargetEntries projects the install-target choice. It is not part
+// of UserExperience, so the transport DTO stays unchanged; the caller owns the
+// selection and the detected Pi data.
+func ShellInstallTargetEntries(mode string, piFound bool) []ShellExperienceEntry {
+	piDescription := "Reuse the single detected Pi prefix and agent; Context7 is written into its mcp.json."
+	if !piFound {
+		piDescription = "No single npm-style Pi install was detected; fix that Pi install or choose Separate."
+	}
+	sharedValue, separateValue := "On my existing Pi", "Separate install (Gentle-Shell)"
+	return []ShellExperienceEntry{
+		{Control: ShellExperienceInstallTarget, Category: "Install target", Kind: "radio", Label: sharedValue, Description: piDescription, Choice: "shared", Value: sharedValue, Current: mode == "shared"},
+		{Control: ShellExperienceInstallTarget, Category: "Install target", Kind: "radio", Label: separateValue, Description: "Own target: private prefix, agent, runtime and launchers; your personal Pi is untouched.", Choice: "separate", Value: separateValue, Current: mode != "shared"},
+	}
+}
+
+func shellExperienceEntries(p shellinstaller.UserExperience, targets ...ShellExperienceEntry) []ShellExperienceEntry {
 	var entries []ShellExperienceEntry
 	cursor := 0
 	add := func(e ShellExperienceEntry) {
@@ -84,6 +100,9 @@ func shellExperienceEntries(p shellinstaller.UserExperience) []ShellExperienceEn
 	} {
 		add(ShellExperienceEntry{Control: ShellExperienceSDK, Category: "SDK source", Kind: "radio", Label: choice[1], Description: choice[2], Choice: choice[0], Value: shellSDKSourceLabel(&p), Current: p.SDKSource == choice[0] || p.SDKSource == "" && choice[0] == "stable"})
 	}
+	for _, target := range targets {
+		add(target)
+	}
 	addToggle(ShellExperienceGGA, "Optional workflows", "GGA", "Off by default. A provider is optional; leave it empty and GGA configures it later. Inheritance does not write an OFF override.", p.GGA)
 	// A retained provider stays editable so invalid OFF/inherit combinations
 	// can be corrected without silently discarding an explicit selection.
@@ -100,9 +119,9 @@ func shellExperienceEntries(p shellinstaller.UserExperience) []ShellExperienceEn
 }
 
 // ShellExperienceOptions is the same selectable projection used by every layout.
-func ShellExperienceOptions(p shellinstaller.UserExperience) []ShellExperienceEntry {
+func ShellExperienceOptions(p shellinstaller.UserExperience, targets ...ShellExperienceEntry) []ShellExperienceEntry {
 	var options []ShellExperienceEntry
-	for _, entry := range shellExperienceEntries(p) {
+	for _, entry := range shellExperienceEntries(p, targets...) {
 		if entry.Selectable {
 			options = append(options, entry)
 		}
