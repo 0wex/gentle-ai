@@ -26,7 +26,7 @@ func experienceFocus(t *testing.T, m Model, control screens.ShellExperienceContr
 	if shellAgentUsable(m.shellExperience.agent) {
 		reuseAgent = m.shellExperience.agent
 	}
-	targets := screens.ShellInstallTargetEntries(m.shellExperience.choice, m.shellExperience.piFound, m.shellExperience.piNote, reuseAgent, m.shellExperience.existing)
+	targets := screens.ShellInstallTargetEntries(m.shellExperience.mode, m.shellExperience.piFound, m.shellExperience.piNote, reuseAgent, m.shellExperience.existing, m.shellExperience.reconfigure)
 	for _, entry := range screens.ShellExperienceOptions(m.shellExperience.profile, targets...) {
 		if entry.Control == control && (choice == "" || entry.Choice == choice) {
 			m = experienceKey(m, tea.KeyMsg{Type: tea.KeyHome})

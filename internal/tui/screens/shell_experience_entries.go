@@ -31,7 +31,7 @@ type ShellExperienceEntry struct {
 	Category, Kind, Label, Description, Value, Choice string
 	Control                                           ShellExperienceControl
 	Cursor                                            int
-	Current, Checked, Selectable                      bool
+	Current, Checked, Selectable, Locked              bool
 }
 
 func shellExperienceCategories() []string {
@@ -43,7 +43,7 @@ func shellExperienceCategories() []string {
 // ShellInstallTargetEntries projects the install-target choice. It is not part
 // of UserExperience, so the transport DTO stays unchanged; the caller owns the
 // selection and the detected Pi data.
-func ShellInstallTargetEntries(mode string, piFound bool, piNote string, agent string, existing []shellinstaller.UserShellInstall) []ShellExperienceEntry {
+func ShellInstallTargetEntries(mode string, piFound bool, piNote string, agent string, existing []shellinstaller.UserShellInstall, locked bool) []ShellExperienceEntry {
 	_ = existing // Existing-install configuration is not a target choice.
 	agentDescription := "Install privately but reuse " + agent + " for settings and MCP; its prefix (for example Homebrew) is never written."
 	if agent == "" {
@@ -53,8 +53,8 @@ func ShellInstallTargetEntries(mode string, piFound bool, piNote string, agent s
 		}
 	}
 	return []ShellExperienceEntry{
-		{Control: ShellExperienceInstallTarget, Category: "Install target", Kind: "radio", Label: "On my existing Pi", Description: agentDescription, Choice: "agent", Value: "On my existing Pi", Current: mode == "agent"},
-		{Control: ShellExperienceInstallTarget, Category: "Install target", Kind: "radio", Label: "Separate install (Gentle-Shell)", Description: "Own target: private prefix, agent, runtime and launchers; your personal Pi is untouched.", Choice: "separate", Value: "Separate install (Gentle-Shell)", Current: mode == "separate"},
+		{Control: ShellExperienceInstallTarget, Category: "Install target", Kind: "radio", Label: "On my existing Pi", Description: agentDescription, Choice: "agent", Value: "On my existing Pi", Current: mode == "agent" || mode == "shared", Locked: locked},
+		{Control: ShellExperienceInstallTarget, Category: "Install target", Kind: "radio", Label: "Separate install (Gentle-Shell)", Description: "Own target: private prefix, agent, runtime and launchers; your personal Pi is untouched.", Choice: "separate", Value: "Separate install (Gentle-Shell)", Current: mode == "separate", Locked: locked},
 	}
 }
 
@@ -63,7 +63,7 @@ func shellExperienceEntries(p shellinstaller.UserExperience, targets ...ShellExp
 	cursor := 0
 	add := func(e ShellExperienceEntry) {
 		e.Cursor = -1
-		if e.Control != ShellExperienceFoundation {
+		if e.Control != ShellExperienceFoundation && !e.Locked {
 			e.Cursor, e.Selectable = cursor, true
 			cursor++
 		}

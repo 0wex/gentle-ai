@@ -131,7 +131,7 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if shellAgentUsable(config.agent) {
 		reuseAgent = config.agent
 	}
-	targets := screens.ShellInstallTargetEntries(config.choice, config.piFound, config.piNote, reuseAgent, config.existing)
+	targets := screens.ShellInstallTargetEntries(config.mode, config.piFound, config.piNote, reuseAgent, config.existing, config.reconfigure)
 	options := screens.ShellExperienceOptions(config.profile, targets...)
 	config.cursor = min(max(0, config.cursor), len(options)-1)
 	entry := options[config.cursor]
@@ -340,7 +340,7 @@ func (m Model) shellInstallView() string {
 		if shellAgentUsable(m.shellExperience.agent) {
 			reuseAgent = m.shellExperience.agent
 		}
-		targets := screens.ShellInstallTargetEntries(m.shellExperience.choice, m.shellExperience.piFound, m.shellExperience.piNote, reuseAgent, m.shellExperience.existing)
+		targets := screens.ShellInstallTargetEntries(m.shellExperience.mode, m.shellExperience.piFound, m.shellExperience.piNote, reuseAgent, m.shellExperience.existing, m.shellExperience.reconfigure)
 		return screens.RenderShellExperience(m.shellExperience.profile, m.shellExperience.cursor, m.shellExperience.err, m.Width, m.Height, targets...)
 	}
 	state, ok := cli.ShellInstallPresentationOf(m.shellInstallModel)

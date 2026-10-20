@@ -83,6 +83,9 @@ func TestShellMultipleInstallsRequireChoice(t *testing.T) {
 	if m.shellExperience == nil || m.shellExperience.target != agent || m.shellExperience.mode != "agent" {
 		t.Fatalf("selected install did not open Manage: %+v", m.shellExperience)
 	}
+	if view := m.View(); !strings.Contains(view, "(*) On my existing Pi  · locked") || !strings.Contains(view, "( ) Separate install (Gentle-Shell)  · locked") {
+		t.Fatalf("agent target is not the locked current target:\n%s", view)
+	}
 }
 
 func TestShellDetectsManagedInstallAndManage(t *testing.T) {
@@ -111,8 +114,9 @@ func TestShellDetectsManagedInstallAndManage(t *testing.T) {
 	if m.shellExperience == nil || !m.shellExperience.reconfigure || m.shellExperience.target != target || m.shellExperience.choice != "existing" {
 		t.Fatalf("manage did not prefill the discovered install: %+v", m.shellExperience)
 	}
-	if !strings.Contains(m.View(), "Configure Gentle-Shell experience") {
-		t.Fatalf("manage did not open the customization screen:\n%s", m.View())
+	view := m.View()
+	if !strings.Contains(view, "Configure Gentle-Shell experience") || !strings.Contains(view, "(*) Separate install (Gentle-Shell)  · locked") || !strings.Contains(view, "( ) On my existing Pi  · locked") {
+		t.Fatalf("manage did not lock the managed target:\n%s", view)
 	}
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})

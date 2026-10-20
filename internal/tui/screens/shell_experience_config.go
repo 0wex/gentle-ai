@@ -177,7 +177,7 @@ func renderShellExperienceConfigEntry(entry ShellExperienceEntry, focused bool, 
 	prefix, style := "  ", styles.UnselectedStyle
 	if focused {
 		prefix, style = styles.Cursor, styles.SelectedStyle
-	} else if entry.Kind == "foundation" {
+	} else if entry.Kind == "foundation" || entry.Locked {
 		style = styles.SubtextStyle
 	}
 	label := entry.Label
@@ -190,6 +190,9 @@ func renderShellExperienceConfigEntry(entry ShellExperienceEntry, focused bool, 
 			marker = "(*)"
 		}
 		label = marker + " " + label
+		if entry.Locked {
+			label += "  · locked"
+		}
 	case "toggle":
 		marker := "[ ]"
 		if entry.Checked {
