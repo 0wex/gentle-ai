@@ -1,10 +1,10 @@
 package screens
 
 import (
-	"fmt"
 	"os"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/tui/styles"
 )
 
@@ -16,38 +16,32 @@ type ShellDetectedInstall struct {
 	TDD, RDD, CodeGraph, Context7, GGA string
 }
 
-var shellDetectedActions = []string{"Manage this installation", "Back"}
-
 // ShellDetectedEntry is one installation row in the multi-install selector.
 type ShellDetectedEntry struct {
 	Target, Mode, Channel string
 }
 
-// RenderShellDetectedList never guesses between installations: the operator
-// selects the target to manage.
-func RenderShellDetectedList(entries []ShellDetectedEntry, cursor, width, height int) string {
-	if width <= 0 || height <= 0 {
-		return ""
-	}
-	lines := []string{styles.TitleStyle.Render("Gentle-Shell installations detected"), "", "  Choose the installation to manage:", ""}
-	for index, entry := range entries {
-		marker := "  "
-		if index == cursor {
-			marker = "▸ "
-		}
-		lines = append(lines, fmt.Sprintf("  %s%s  ·  %s", marker, entry.Mode, entry.Channel), "      "+shellDetectedTarget(entry.Target))
-	}
-	lines = append(lines, "", styles.HelpStyle.Render("j/k: navigate • enter: manage selected • esc: back"))
-	if len(lines) > height {
-		lines = lines[:height]
-	}
-	for index, line := range lines {
-		if len(line) > width {
-			lines[index] = line[:width]
-		}
-	}
-	return strings.Join(lines, "\n")
-}
+var (
+	detectedCardStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(styles.ColorLavender).
+				Background(styles.ColorSurface).
+				Padding(1, 2)
+
+	detectedLabelStyle = lipgloss.NewStyle().
+				Foreground(styles.ColorSubtext).
+				Width(14)
+
+	detectedValueStyle = lipgloss.NewStyle().
+				Foreground(styles.ColorText)
+
+	detectedAccentStyle = lipgloss.NewStyle().
+				Foreground(styles.ColorLavender).
+				Bold(true)
+
+	detectedSubtleStyle = lipgloss.NewStyle().
+				Foreground(styles.ColorSubtext)
+)
 
 func shellDetectedTarget(path string) string {
 	home, err := os.UserHomeDir()
@@ -58,10 +52,47 @@ func shellDetectedTarget(path string) string {
 }
 
 func shellDetectedValue(value string) string {
-	if value == "" {
-		return "inherit"
+	switch value {
+	case "":
+		return "Inherit"
+	case "on":
+		return "On"
+	case "off":
+		return "Off"
+	case "gentleman":
+		return "Gentleman"
+	case "neutral":
+		return "Neutral"
+	case "unmanaged":
+		return "Unmanaged"
+	default:
+		return value
 	}
-	return value
+}
+
+func shellDetectedToggle(label, value string) string {
+	raw := value
+	if raw == "" {
+		raw = "inherit"
+	}
+	color := styles.ColorOverlay
+	switch raw {
+	case "on":
+		color = styles.ColorGreen
+	case "off":
+		color = styles.ColorRed
+	}
+	return label + " " + lipgloss.NewStyle().Foreground(color).Render(raw)
+}
+
+func shellDetectedRow(label, value string) string {
+	return detectedLabelStyle.Render(label) + detectedValueStyle.Render(value)
+}
+
+func shellDetectedCard(content string, width, height int) string {
+	cardWidth := min(78, max(30, width-8))
+	card := detectedCardStyle.Width(cardWidth).Render(content)
+	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, card)
 }
 
 // RenderShellDetected identifies an existing managed installation before the
@@ -70,34 +101,67 @@ func RenderShellDetected(install ShellDetectedInstall, cursor, width, height int
 	if width <= 0 || height <= 0 {
 		return ""
 	}
-	lines := []string{
-		styles.TitleStyle.Render("Gentle-Shell detected"),
-		"",
-		"  Found a managed Gentle-Shell installation:",
-		"  " + shellDetectedTarget(install.Target),
-		"",
-		fmt.Sprintf("  Mode: %s    Channel: %s", install.Mode, install.Channel),
-		fmt.Sprintf("  Persona: %s    Background subagents: %s", shellDetectedValue(install.Persona), shellDetectedValue(install.Background)),
-		fmt.Sprintf("  Strict TDD: %s    Global RDD: %s    CodeGraph: %s", shellDetectedValue(install.TDD), shellDetectedValue(install.RDD), shellDetectedValue(install.CodeGraph)),
-		fmt.Sprintf("  Context7: %s    GGA: %s", shellDetectedValue(install.Context7), shellDetectedValue(install.GGA)),
-		"",
-		styles.TitleStyle.Render("MANAGE"),
+	target := shellDetectedTarget(install.Target)
+	if runes := []rune(target); len(runes) > 58 {
+		target = string(runes[:28]) + "…" + string(runes[len(runes)-28:])
 	}
-	for index, action := range shellDetectedActions {
-		marker := "  "
+	var lines []string
+	lines = append(lines,
+		detectedAccentStyle.Render("◆  Gentle-Shell detected"),
+		detectedSubtleStyle.Render("Found a managed Gentle-Shell installation"),
+		"",
+		styles.SuccessStyle.Render("● Managed")+"  "+detectedSubtleStyle.Render(target),
+		"",
+		shellDetectedRow("MODE", install.Mode),
+		shellDetectedRow("CHANNEL", install.Channel),
+		shellDetectedRow("PERSONA", shellDetectedValue(install.Persona)),
+		shellDetectedRow("BACKGROUND", shellDetectedValue(install.Background)),
+		shellDetectedRow("WORKFLOWS", shellDetectedToggle("TDD", install.TDD)+"  ·  "+shellDetectedToggle("RDD", install.RDD)+"  ·  "+shellDetectedToggle("CodeGraph", install.CodeGraph)),
+		shellDetectedRow("INTEGRATIONS", shellDetectedToggle("Context7", install.Context7)+"  ·  "+shellDetectedToggle("GGA", install.GGA)),
+		"",
+		detectedSubtleStyle.Render(strings.Repeat("─", 64)),
+	)
+	actions := []string{"Manage this installation", "Back"}
+	for index, action := range actions {
+		marker := "   "
+		label := detectedValueStyle.Render(action)
 		if index == cursor {
-			marker = "▸ "
+			marker = " ▸ "
+			label = detectedAccentStyle.Render(action)
 		}
-		lines = append(lines, "  "+marker+action)
+		lines = append(lines, marker+label)
 	}
-	lines = append(lines, "", styles.HelpStyle.Render("j/k: navigate • enter: select • esc: back"))
-	if len(lines) > height {
-		lines = lines[:height]
+	lines = append(lines, "", detectedSubtleStyle.Render("j/k: navigate  •  enter: select  •  esc: back"))
+	return shellDetectedCard(strings.Join(lines, "\n"), width, height)
+}
+
+// RenderShellDetectedList never guesses between installations: the operator
+// selects the target to manage.
+func RenderShellDetectedList(entries []ShellDetectedEntry, cursor, width, height int) string {
+	if width <= 0 || height <= 0 {
+		return ""
 	}
-	for index, line := range lines {
-		if len(line) > width {
-			lines[index] = line[:width]
+	lines := []string{
+		detectedAccentStyle.Render("◆  Gentle-Shell installations detected"),
+		detectedSubtleStyle.Render("Choose the installation to manage"),
+		"",
+	}
+	for index, entry := range entries {
+		marker := "   "
+		mode := detectedValueStyle.Render(entry.Mode)
+		if index == cursor {
+			marker = " ▸ "
+			mode = detectedAccentStyle.Render(entry.Mode)
 		}
+		target := shellDetectedTarget(entry.Target)
+		if runes := []rune(target); len(runes) > 56 {
+			target = string(runes[:26]) + "…" + string(runes[len(runes)-26:])
+		}
+		lines = append(lines,
+			marker+mode+detectedSubtleStyle.Render("  ·  "+entry.Channel),
+			"      "+detectedSubtleStyle.Render(target),
+		)
 	}
-	return strings.Join(lines, "\n")
+	lines = append(lines, "", detectedSubtleStyle.Render("j/k: navigate  •  enter: manage selected  •  esc: back"))
+	return shellDetectedCard(strings.Join(lines, "\n"), width, height)
 }
