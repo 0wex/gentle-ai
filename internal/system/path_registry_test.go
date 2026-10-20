@@ -11,6 +11,39 @@ import (
 	"time"
 )
 
+func mustReplacePathTestScript(t *testing.T, script, anchor, replacement string) string {
+	t.Helper()
+	if !strings.Contains(script, anchor) {
+		t.Fatalf("injection anchor %q not found in script", anchor)
+	}
+	return strings.ReplaceAll(script, anchor, replacement)
+}
+
+func TestUserPathScriptInjectionRequiresAnchor(t *testing.T) {
+	const childFlag = "GENTLE_AI_PATH_MISSING_ANCHOR_TEST"
+	if os.Getenv(childFlag) == "1" {
+		mustReplacePathTestScript(t, "unchanged script", "missing anchor", "injected failure")
+		return
+	}
+	if got := mustReplacePathTestScript(t, "before anchor after", "anchor", "injected"); got != "before injected after" {
+		t.Fatalf("replacement = %q", got)
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(executable, "-test.run=^TestUserPathScriptInjectionRequiresAnchor$", "-test.count=1")
+	cmd.Env = append(os.Environ(), childFlag+"=1")
+	output, err := cmd.CombinedOutput()
+	exitErr, ok := err.(*exec.ExitError)
+	if !ok || exitErr.ExitCode() != 1 {
+		t.Fatalf("missing anchor: error = %v, output = %s; want exit 1", err, output)
+	}
+	if !strings.Contains(string(output), `injection anchor "missing anchor" not found in script`) {
+		t.Fatalf("missing anchor diagnostic not found: %s", output)
+	}
+}
+
 func TestUserPathNotificationFailureRetainsRollbackOwnership(t *testing.T) {
 	if runtime.GOOS != "windows" || testing.Short() {
 		t.Skip("requires Windows registry and PowerShell")
@@ -42,9 +75,9 @@ func TestUserPathNotificationFailureRetainsRollbackOwnership(t *testing.T) {
 					t.Fatal("unsafe registry script")
 				}
 				if failure == "Add-Type" {
-					script = strings.ReplaceAll(script, "Add-Type -TypeDefinition", "throw 'injected Add-Type failure'; Add-Type -TypeDefinition")
+					script = mustReplacePathTestScript(t, script, "Add-Type -TypeDefinition", "throw 'injected Add-Type failure'; Add-Type -TypeDefinition")
 				} else {
-					script = strings.ReplaceAll(script, `[void][GentleAIPathNotification]::SendMessageTimeout`, `throw 'injected notification failure'; [void][GentleAIPathNotification]::SendMessageTimeout`)
+					script = mustReplacePathTestScript(t, script, `[void][GentleAIPathNotification]::SendMessageTimeout`, `throw 'injected notification failure'; [void][GentleAIPathNotification]::SendMessageTimeout`)
 				}
 				setup, want, output := "", raw, ""
 				if calls == 1 {
@@ -138,7 +171,7 @@ func TestUserPathPreservesRegistryValue(t *testing.T) {
 						check = `if ($fixture.GetValueNames() -contains 'Path') { throw 'absent Path was created' }`
 					}
 					if noRemoval {
-						script = strings.ReplaceAll(script, "Add-Type -TypeDefinition", "$global:notificationInvoked = $true; throw 'notification invoked'; Add-Type -TypeDefinition")
+						script = mustReplacePathTestScript(t, script, "Add-Type -TypeDefinition", "$global:notificationInvoked = $true; throw 'notification invoked'; Add-Type -TypeDefinition")
 						check += `; if ($global:notificationInvoked) { throw 'no-op notified' }`
 					}
 					wrapped := fmt.Sprintf(`$ErrorActionPreference = 'Stop'; $fixture = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('%s'); try { %s & { %s }; $actual = $fixture.GetValue('Path', $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames); %s } finally { $fixture.Close(); [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree('%s') }`, key, setup, script, check, key)
