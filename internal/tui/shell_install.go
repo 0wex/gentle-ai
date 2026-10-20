@@ -95,13 +95,17 @@ func (m Model) beginShellInstall() (tea.Model, tea.Cmd) {
 }
 
 type shellManageState struct {
-	install     shellinstaller.UserShellInstall
-	config      shellExperienceConfig
-	preferences []screens.ShellManageChange
-	components  []screens.ShellManageChange
-	cursor      int
-	applied     bool
-	err         error
+	install      shellinstaller.UserShellInstall
+	config       shellExperienceConfig
+	preferences  []screens.ShellManageChange
+	components   []screens.ShellManageChange
+	cursor       int
+	applied      bool
+	err          error
+	confirm      bool
+	uninstalled  bool
+	backup       string
+	uninstallErr error
 }
 
 func manageDisplay(value, fallback string) string {
@@ -175,6 +179,20 @@ func manageChanges(current, selected shellinstaller.UserExperience, inPlace bool
 	return preferences, components
 }
 
+func manageActions(manage *shellManageState) []string {
+	if manage.uninstalled || manage.applied {
+		return []string{"Back"}
+	}
+	var actions []string
+	if len(manage.preferences) > 0 {
+		actions = append(actions, "Apply preferences")
+	}
+	if manage.install.Mode == "separate" {
+		actions = append(actions, "Uninstall this installation")
+	}
+	return append(actions, "Back")
+}
+
 func (m Model) updateShellManage(msg tea.Msg) (tea.Model, tea.Cmd) {
 	key, ok := msg.(tea.KeyMsg)
 	if !ok {
@@ -184,19 +202,46 @@ func (m Model) updateShellManage(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if manage == nil {
 		return m, nil
 	}
-	if manage.applied {
+	backToMenu := func() (tea.Model, tea.Cmd) {
+		m.shellManage = nil
+		m.shellExperience, m.shellInstallModel = nil, nil
+		m.shellInstallSelection = cli.ShellInstallSelection{}
+		m.setScreen(ScreenWelcome)
+		return m, nil
+	}
+	if manage.uninstalled {
 		if key.String() == "enter" || key.String() == "esc" || key.String() == "ctrl+c" {
-			m.shellManage = nil
-			m.shellExperience, m.shellInstallModel = nil, nil
-			m.shellInstallSelection = cli.ShellInstallSelection{}
-			m.setScreen(ScreenWelcome)
+			return backToMenu()
 		}
 		return m, nil
 	}
-	last := 0
-	if len(manage.preferences) > 0 {
-		last = 1
+	if manage.confirm {
+		switch key.String() {
+		case "j", "down":
+			manage.cursor = min(1, manage.cursor+1)
+		case "k", "up":
+			manage.cursor = max(0, manage.cursor-1)
+		case "esc", "ctrl+c":
+			manage.confirm, manage.uninstallErr, manage.cursor = false, nil, 0
+		case "enter":
+			if manage.cursor == 1 {
+				manage.confirm, manage.uninstallErr, manage.cursor = false, nil, 0
+				return m, nil
+			}
+			home, err := os.UserHomeDir()
+			if err == nil {
+				manage.backup, err = shellinstaller.UninstallUserShellInstall(home, manage.install)
+			}
+			if err != nil {
+				manage.uninstallErr = err
+				return m, nil
+			}
+			manage.uninstalled = true
+		}
+		return m, nil
 	}
+	actions := manageActions(manage)
+	last := len(actions) - 1
 	switch key.String() {
 	case "j", "down":
 		manage.cursor = min(last, manage.cursor+1)
@@ -206,15 +251,19 @@ func (m Model) updateShellManage(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.shellExperience, m.shellManage = &manage.config, nil
 		return m, nil
 	case "enter":
-		if manage.cursor == 1 || len(manage.preferences) == 0 {
+		switch actions[min(max(0, manage.cursor), last)] {
+		case "Apply preferences":
+			if err := shellinstaller.ApplyUserExperiencePreferences(manage.install, manage.config.profile); err != nil {
+				manage.err = err
+				return m, nil
+			}
+			manage.applied, manage.err = true, nil
+		case "Uninstall this installation":
+			manage.confirm, manage.cursor = true, 0
+		default:
 			m.shellExperience, m.shellManage = &manage.config, nil
 			return m, nil
 		}
-		if err := shellinstaller.ApplyUserExperiencePreferences(manage.install, manage.config.profile); err != nil {
-			manage.err = err
-			return m, nil
-		}
-		manage.applied, manage.err = true, nil
 	}
 	return m, nil
 }

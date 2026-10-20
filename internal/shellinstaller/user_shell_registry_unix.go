@@ -99,6 +99,33 @@ func RecordUserShellInstall(home string, install UserShellInstall) error {
 	return os.Rename(temporary, userShellRegistryPath(home))
 }
 
+// RemoveUserShellInstall drops one target from discovery bookkeeping. It does
+// not touch the installation tree.
+func RemoveUserShellInstall(home, target string) error {
+	if home == "" || !filepath.IsAbs(home) || !privateHierarchyPath(target) {
+		return errors.New("registry requires an absolute home and target")
+	}
+	installs := ReadUserShellInstalls(home)
+	filtered := installs[:0]
+	for _, install := range installs {
+		if install.Target != target {
+			filtered = append(filtered, install)
+		}
+	}
+	if len(filtered) == len(installs) {
+		return nil
+	}
+	data, err := json.MarshalIndent(userShellRegistry{Schema: userShellRegistrySchema, Installs: filtered}, "", "  ")
+	if err != nil {
+		return err
+	}
+	temporary := userShellRegistryPath(home) + ".new"
+	if err := os.WriteFile(temporary, append(data, '\n'), 0600); err != nil {
+		return err
+	}
+	return os.Rename(temporary, userShellRegistryPath(home))
+}
+
 // DiscoverUserShellInstalls lists valid previous installs from the registry and
 // the conventional root. Backups of replaced installs are never reported.
 func DiscoverUserShellInstalls(home string) []UserShellInstall {

@@ -14,7 +14,7 @@ type ShellManageChange struct {
 }
 
 // RenderShellManage summarizes the selected deltas before applying anything.
-func RenderShellManage(target, mode string, preferences, components []ShellManageChange, applied bool, applyErr string, cursor, width, height int) string {
+func RenderShellManage(target, mode string, preferences, components []ShellManageChange, applied bool, applyErr string, actions []string, cursor, width, height int) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
@@ -56,11 +56,6 @@ func RenderShellManage(target, mode string, preferences, components []ShellManag
 		lines = append(lines, "", detectedSubtleStyle.Render("Enter: back to menu"))
 		return strings.Join(lines, "\n")
 	}
-	actions := []string{}
-	if len(preferences) > 0 {
-		actions = append(actions, "Apply preferences")
-	}
-	actions = append(actions, "Back")
 	for index, action := range actions {
 		marker, style := "   ", detectedValueStyle
 		if index == cursor {
@@ -77,6 +72,37 @@ func RenderShellManage(target, mode string, preferences, components []ShellManag
 			lines[index] = line[:width]
 		}
 	}
+	return strings.Join(lines, "\n")
+}
+
+// RenderShellUninstall asks for explicit confirmation and preserves the tree.
+func RenderShellUninstall(target, mode string, uninstalled bool, backup, applyErr string, cursor, width, height int) string {
+	if width <= 0 || height <= 0 {
+		return ""
+	}
+	kind, launcher := shellManageInstallKind(mode)
+	lines := []string{
+		styles.TitleStyle.Render("Uninstall installation"),
+		detectedSubtleStyle.Render(shellDetectedTarget(target)),
+		detectedLabelStyle.Render("TYPE") + detectedValueStyle.Render(kind) + detectedSubtleStyle.Render("  ·  opens with "+launcher),
+		"",
+	}
+	if uninstalled {
+		lines = append(lines, styles.SuccessStyle.Render("Installation uninstalled."), detectedSubtleStyle.Render("Backup: "+backup), "", detectedSubtleStyle.Render("Enter: back to menu"))
+		return strings.Join(lines, "\n")
+	}
+	lines = append(lines, "This moves the target to a timestamped backup and removes it from detection.", "Your personal Pi and projects are untouched.", "")
+	if applyErr != "" {
+		lines = append(lines, styles.ErrorStyle.Render(applyErr), "")
+	}
+	for index, action := range []string{"Uninstall (keep backup)", "Back"} {
+		marker, style := "   ", detectedValueStyle
+		if index == cursor {
+			marker, style = " ▸ ", detectedAccentStyle
+		}
+		lines = append(lines, marker+style.Render(action))
+	}
+	lines = append(lines, "", detectedSubtleStyle.Render("j/k: navigate  •  enter: select  •  esc: back"))
 	return strings.Join(lines, "\n")
 }
 

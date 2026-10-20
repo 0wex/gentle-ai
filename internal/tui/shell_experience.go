@@ -325,12 +325,19 @@ func (m Model) shellInstallView() string {
 		return screens.RenderShellDetectedList(entries, m.shellDetectedCursor, m.Width, m.Height)
 	}
 	if m.shellManage != nil {
-		return screens.RenderShellManage(m.shellManage.install.Target, m.shellManage.install.Mode, m.shellManage.preferences, m.shellManage.components, m.shellManage.applied, func() string {
-			if m.shellManage.err != nil {
-				return m.shellManage.err.Error()
+		manage := m.shellManage
+		if manage.confirm || manage.uninstalled {
+			errText := ""
+			if manage.uninstallErr != nil {
+				errText = manage.uninstallErr.Error()
 			}
-			return ""
-		}(), m.shellManage.cursor, m.Width, m.Height)
+			return screens.RenderShellUninstall(manage.install.Target, manage.install.Mode, manage.uninstalled, manage.backup, errText, manage.cursor, m.Width, m.Height)
+		}
+		errText := ""
+		if manage.err != nil {
+			errText = manage.err.Error()
+		}
+		return screens.RenderShellManage(manage.install.Target, manage.install.Mode, manage.preferences, manage.components, manage.applied, errText, manageActions(manage), manage.cursor, m.Width, m.Height)
 	}
 	if m.shellInstallRun != nil {
 		steps := make([]screens.ShellInstallStep, len(m.shellInstallRun.steps))

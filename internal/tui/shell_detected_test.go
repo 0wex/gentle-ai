@@ -100,9 +100,48 @@ func TestShellManageNoChangesIdentifiesInstallKind(t *testing.T) {
 	if strings.Contains(view, "Apply preferences") {
 		t.Fatalf("empty summary offers Apply:\n%s", view)
 	}
-	agentView := screens.RenderShellManage("/home/test/install", "agent", nil, nil, false, "", 0, 100, 30)
+	agentView := screens.RenderShellManage("/home/test/install", "agent", nil, nil, false, "", []string{"Uninstall this installation", "Back"}, 0, 100, 30)
 	if !strings.Contains(agentView, "On my existing Pi") || !strings.Contains(agentView, "opens with pi") {
 		t.Fatalf("agent summary does not identify its launcher:\n%s", agentView)
+	}
+}
+
+func TestShellUninstallSeparateKeepsBackup(t *testing.T) {
+	home, target := managedInstallFixture(t)
+	if err := shellinstaller.RecordUserShellInstall(home, shellinstaller.UserShellInstall{Target: target, Mode: "separate", Channel: "stable"}); err != nil {
+		t.Fatal(err)
+	}
+	m := NewModel(system.DetectionResult{}, "detected").WithShellInstaller()
+	m.Width, m.Height = 120, 35
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter}) // Manage.
+	m = next.(Model)
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if view := m.View(); !strings.Contains(view, "Uninstall this installation") {
+		t.Fatalf("managed install hides uninstall:\n%s", view)
+	}
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // Uninstall.
+	if !m.shellManage.confirm || !strings.Contains(m.View(), "Uninstall (keep backup)") {
+		t.Fatalf("uninstall confirmation is missing:\n%s", m.View())
+	}
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.shellManage == nil || !m.shellManage.uninstalled || m.shellManage.backup == "" {
+		t.Fatalf("uninstall did not complete: %+v", m.shellManage)
+	}
+	if _, err := os.Lstat(target); !os.IsNotExist(err) {
+		t.Fatalf("uninstall left the active target: %v", err)
+	}
+	if _, err := os.Stat(m.shellManage.backup); err != nil {
+		t.Fatalf("uninstall backup is missing: %v", err)
+	}
+	if got := shellinstaller.DiscoverUserShellInstalls(home); len(got) != 0 {
+		t.Fatalf("uninstall left registry discovery: %+v", got)
+	}
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.Screen != ScreenWelcome {
+		t.Fatalf("uninstall did not return to Welcome: %v", m.Screen)
 	}
 }
 
