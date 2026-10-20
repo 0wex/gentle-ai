@@ -99,7 +99,7 @@ func shellExperienceEntries(p shellinstaller.UserExperience, targets ...ShellExp
 	addToggle(ShellExperienceContext7, "Recommended", "Context7", "Current library docs through MCP", p.Context7)
 	for _, choice := range [][3]string{
 		{"stable", "Stable", "Stock SDK source; native installer and pins remain unchanged. Backspace inherits the stock default."},
-		{"main-preview", "Main preview", "SDK Main + stock provider, not installed health. Linux amd64 fresh Separate only; native installer and pins remain stock."},
+		{"main-preview", "Main preview", "SDK Main + stock provider. Works with On my existing Pi or Separate installs; native installer and pins remain stock. Linux amd64 is qualified today; Windows and macOS support is being completed."},
 	} {
 		add(ShellExperienceEntry{Control: ShellExperienceSDK, Category: "SDK source", Kind: "radio", Label: choice[1], Description: choice[2], Choice: choice[0], Value: shellSDKSourceLabel(&p), Current: p.SDKSource == choice[0] || p.SDKSource == "" && choice[0] == "stable"})
 	}

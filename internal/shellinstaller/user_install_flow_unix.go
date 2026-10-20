@@ -49,7 +49,7 @@ func userValidateInstall(req UserInstallRequest) error {
 		switch req.Mode {
 		case "shared":
 			if req.Experience.SDKSource == "main-preview" {
-				return experienceError("Main preview requires a Separate installation; choose Stable to install over your Pi")
+				return experienceError("Main preview is not available with the retained Shared prefix; use On my existing Pi or Separate")
 			}
 		case "agent":
 			// Every selection is staged privately; the agent is only the settings home.

@@ -115,7 +115,7 @@ func TestUserSharedDefaultsRefuseMain(t *testing.T) {
 	profile := sharedDefaultsProfile()
 	profile.SDKSource = "main-preview"
 	req := UserInstallRequest{Destination: root, Mode: "shared", SharedPrefix: prefix, SharedAgent: agent, Experience: &profile}
-	if err := userValidateInstall(req); err == nil || !strings.Contains(err.Error(), "Main preview requires a Separate") {
+	if err := userValidateInstall(req); err == nil || !strings.Contains(err.Error(), "Main preview is not available with the retained Shared prefix") {
 		t.Fatalf("shared Main preview was not refused precisely: %v", err)
 	}
 }

@@ -59,7 +59,7 @@ func userQualifiedLegacyExperience(profile *UserExperience) bool {
 
 func userValidateMainExperience(profile *UserExperience) error {
 	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
-		return experienceError("SDK Main + stock provider requires Linux amd64 Separate")
+		return experienceError("SDK Main + stock provider is qualified on Linux amd64 today; Windows and macOS support is being completed")
 	}
 	return nil
 }

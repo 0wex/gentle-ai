@@ -50,7 +50,7 @@ func shellReadyLines(req shellinstaller.UserInstallRequest, preview string, widt
 		"Project overrides remain; no automatic indexing/GGA hooks.",
 	}
 	if req.Experience != nil && req.Experience.SDKSource == "main-preview" {
-		logical = append(logical, "SDK Main + stock provider: Linux amd64 fresh Separate only.",
+		logical = append(logical, "SDK Main + stock provider: On my existing Pi or Separate install.",
 			"Main installer is inert DATA; stock native/pins remain.",
 			"Source + selected SDK: "+filepath.Join(req.Destination, "runtime"))
 	}
@@ -155,7 +155,7 @@ func shellSDKSourceLabel(p *shellinstaller.UserExperience) string {
 		return "SDK source: stock"
 	}
 	if p.SDKSource == "main-preview" {
-		return "SDK Main + stock provider (Linux amd64 fresh Separate only)"
+		return "SDK Main + stock provider (Pi or Separate)"
 	}
 	return "SDK source: stock (" + p.SDKSource + ")"
 }

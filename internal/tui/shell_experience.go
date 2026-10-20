@@ -401,7 +401,7 @@ func (m Model) shellExperienceNavigation(key tea.KeyMsg) (Model, bool) {
 // This visible choice gate never grants worker or physical-selection authority.
 func shellMainPlatformError() error {
 	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
-		return errors.New("SDK Main + stock provider requires Linux amd64 fresh Separate")
+		return errors.New("SDK Main + stock provider is qualified on Linux amd64 today; Windows and macOS support is being completed")
 	}
 	return nil
 }

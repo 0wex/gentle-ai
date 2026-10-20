@@ -77,7 +77,7 @@ func TestShellConfigVideoCurrentValueIsNotFocusOrRecommendation(t *testing.T) {
 	}
 	profile.SDKSource = "stable"
 	panel = shellConfigVideoPanel(t, profile, ShellExperienceSDK, "main-preview")
-	for _, want := range []string{"CURRENT VALUE\nSDK source: stock (stable)\n", "SDK Main + stock provider", "Linux amd64 fresh Separate", "WHEN TO USE MAIN PREVIEW"} {
+	for _, want := range []string{"CURRENT VALUE\nSDK source: stock (stable)\n", "SDK Main + stock provider", "On my existing Pi or Separate", "WHEN TO USE MAIN PREVIEW"} {
 		if !strings.Contains(panel, want) {
 			t.Fatalf("SDK focus lost current value or qualification %q:\n%s", want, panel)
 		}

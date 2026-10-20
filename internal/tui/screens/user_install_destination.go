@@ -34,7 +34,7 @@ func RenderUserInstallDestination(req shellinstaller.UserInstallRequest, field i
 		}
 		left = append(left, renderShellExperienceConfigLine(style, prefix+label+": "+values[i], leftWidth))
 	}
-	detail := "Choose a new target under a private owned parent. Separate installs Gentle-Shell in the target; Shared reuses your existing Pi prefix and agent and writes Context7 into its mcp.json after the recovery preimages exist. Main preview requires Separate. Editing applies no preferences. " + "Personal Pi and retained project overrides remain unchanged."
+	detail := "Choose a new target under a private owned parent. Separate installs Gentle-Shell in the target; Shared reuses your existing Pi prefix and agent and writes Context7 into its mcp.json after the recovery preimages exist. Main preview works with Separate or On my existing Pi; the retained Shared prefix keeps Stable. Editing applies no preferences. " + "Personal Pi and retained project overrides remain unchanged."
 	if req.Experience != nil {
 		detail += " Persona: " + req.Experience.Persona + ". Background subagents: " + req.Experience.BackgroundSubagents + "."
 	}

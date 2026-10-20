@@ -31,12 +31,12 @@ func shellExperienceRecommendation(entry ShellExperienceEntry) (string, string) 
 			return "On my existing Pi", "Reuses the detected agent's settings and MCP with a private prefix; every selection is staged privately and the Pi prefix is never written."
 		}
 		if entry.Choice == "shared" {
-			return "Separate install", "Reuse a detected Pi only when you want the defaults applied over it; Main needs Separate."
+			return "Separate install", "Reuse a detected Pi prefix only when you want the defaults applied over it; Main is available with On my existing Pi or Separate, not the retained Shared prefix."
 		}
 		return "Separate install", "Keeps your personal Pi untouched and installs its own prefix, agent and launchers."
 	case ShellExperienceSDK:
 		if entry.Choice == "main-preview" {
-			return "Stable", "Use SDK Main only on a qualified Linux amd64 fresh Separate install; provider and native pins stay stock."
+			return "Stable", "Choose Main for On my existing Pi or a Separate install; provider and native pins stay stock. Linux amd64 is qualified today; Windows and macOS support is being completed."
 		}
 		return "Stable", "Keep the stock SDK source, provider and native pins."
 	case ShellExperienceGGA:
