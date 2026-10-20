@@ -15,8 +15,12 @@ func userValidateGGASelection(choice, provider string) error {
 		}
 		return nil
 	}
-	if provider == "" || len(provider) > 64 || strings.Trim(provider, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_./:-") != "" {
-		return experienceError("GGA ON requires an explicit bounded documented provider")
+	if provider == "" {
+		// Optional at selection time; the user configures it later in GGA.
+		return nil
+	}
+	if len(provider) > 64 || strings.Trim(provider, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_./:-") != "" {
+		return experienceError("GGA provider must be a bounded documented value")
 	}
 	base, model, inline := strings.Cut(provider, ":")
 	if inline && model == "" {

@@ -58,8 +58,8 @@ func TestUserExperienceSelectionRefusesUnsupportedProfileBeforeEffects(t *testin
 		t.Fatalf("qualified GGA profile was refused: %q, %v", token, err)
 	}
 	profile.GGAProvider = ""
-	if token, err := InspectUserInstall(req); err == nil || token != "" {
-		t.Fatalf("unprovided GGA profile was silently admitted: %q, %v", token, err)
+	if token, err := InspectUserInstall(req); err != nil || token == "" {
+		t.Fatalf("unprovided GGA profile was refused: %q, %v", token, err)
 	}
 	if _, err := os.Lstat(target); !os.IsNotExist(err) {
 		t.Fatalf("profile refusal changed destination: %v", err)

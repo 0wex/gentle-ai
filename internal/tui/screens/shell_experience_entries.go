@@ -92,7 +92,7 @@ func shellExperienceEntries(p shellinstaller.UserExperience) []ShellExperienceEn
 		if provider == "" {
 			provider = "not selected"
 		}
-		add(ShellExperienceEntry{Control: ShellExperienceProvider, Category: "Optional workflows", Kind: "text", Label: "GGA provider (type explicitly)", Description: "Type the provider explicitly; it is never inferred from Pi configuration.", Value: provider})
+		add(ShellExperienceEntry{Control: ShellExperienceProvider, Category: "Optional workflows", Kind: "text", Label: "GGA provider (type explicitly)", Description: "Optional: type a provider here or leave it empty for GGA to configure it later. Never inferred from Pi.", Value: provider})
 	}
 	add(ShellExperienceEntry{Control: ShellExperienceContinue, Category: "Actions", Kind: "action", Label: "Continue", Description: "Continue with this Gentle-Shell profile. Installation still requires physical confirmation."})
 	add(ShellExperienceEntry{Control: ShellExperienceCancel, Category: "Actions", Kind: "action", Label: "Cancel", Description: "Cancel configuration without applying changes."})

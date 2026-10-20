@@ -42,7 +42,7 @@ func TestUserGGAExperienceExplicitSelection(t *testing.T) {
 func TestUserGGAExperienceInvalidSelection(t *testing.T) {
 	const prefix = `{"persona":"unmanaged","background_subagents":"off",`
 	for _, tail := range []string{
-		`"gga":"on"}`, `"gga":"on","gga_provider":"pi"}`, `"gga":"off","gga_provider":"codex"}`,
+		`"gga":"on","gga_provider":"pi"}`, `"gga":"off","gga_provider":"codex"}`,
 		`"gga_provider":"codex"}`, `"gga":""}`, `"gga":null}`, `"gga":true}`, `"gga":17}`,
 		`"gga":[]}`, `"gga":{}}`, `"gga":"ON"}`, `"gga":"inherit"}`,
 		`"gga":"on","gga":"off","gga_provider":"codex"}`,

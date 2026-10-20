@@ -44,8 +44,8 @@ func TestUserMainDefaultsAdmission(t *testing.T) {
 	}
 	unprovided := withGGA
 	unprovided.GGAProvider = ""
-	if err := userExperienceSupported(&unprovided); err == nil {
-		t.Fatal("GGA ON without a provider was admitted")
+	if err := userExperienceSupported(&unprovided); err != nil {
+		t.Fatalf("GGA ON without a provider was refused: %v", err)
 	}
 	// The PNPM publication route has no Main producer; that refusal must stay.
 	err := userValidateStageExperience(&profile)

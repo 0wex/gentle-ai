@@ -28,10 +28,6 @@ func TestUserStrictTDDExperienceCodec(t *testing.T) {
 			if err := userExperienceSupported(&profile); err != nil {
 				t.Fatalf("qualified Main + Strict TDD was refused: %v", err)
 			}
-			profile.GGA = "on" // missing the required provider stays refused by validation
-			if err := userExperienceSupported(&profile); err == nil || !strings.Contains(err.Error(), "GGA") {
-				t.Fatal("codec granted an unqualified GGA combination")
-			}
 		})
 	}
 	on, _ := DecodeUserExperience(`{` + fields + `,"strict_tdd":"on"}`)

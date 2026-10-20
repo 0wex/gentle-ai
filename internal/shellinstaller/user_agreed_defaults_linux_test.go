@@ -62,7 +62,7 @@ func TestUserAgreedDefaultsReachInspection(t *testing.T) {
 			}
 			_, err := InspectUserInstall(selection)
 			switch scenario {
-			case "main-combination", "gga-on-with-provider":
+			case "main-combination", "gga-on-with-provider", "gga-without-provider":
 				if err != nil {
 					t.Fatalf("qualified selection refused (%s): %v", scenario, err)
 				}

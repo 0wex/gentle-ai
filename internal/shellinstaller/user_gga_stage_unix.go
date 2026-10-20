@@ -23,6 +23,10 @@ func userStageGGA(ctx context.Context, root, mode, choice, provider string) erro
 	if choice == "off" {
 		return nil
 	}
+	if provider == "" {
+		// GGA prints its own provider setup when none was chosen here.
+		return nil
+	}
 	if ctx == nil {
 		return privateError("canceled", context.Canceled)
 	}

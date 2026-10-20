@@ -15,7 +15,7 @@ func TestShellGGAONReachesDestination(t *testing.T) {
 		t.Run("sdk-"+sdk, func(t *testing.T) {
 			m := openAgreedConfiguration(t)
 			profile := m.shellExperience.profile
-			profile.SDKSource, profile.GGA, profile.GGAProvider = sdk, "on", "codex"
+			profile.SDKSource, profile.GGA = sdk, "on"
 			m.shellExperience.profile = profile
 			next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnd})
 			m = next.(Model)
@@ -29,7 +29,7 @@ func TestShellGGAONReachesDestination(t *testing.T) {
 				t.Fatal("GGA ON dropped the request")
 			}
 			got := *state.Request.Experience
-			if got.GGA != "on" || got.GGAProvider != "codex" || got.SDKSource != sdk || got.GlobalRDD != "on" || got.CodeGraph != "on" {
+			if got.GGA != "on" || got.GGAProvider != "" || got.SDKSource != sdk || got.GlobalRDD != "on" || got.CodeGraph != "on" {
 				t.Fatalf("GGA selection or stock parity was lost: %+v", got)
 			}
 			if state.Request.Confirmation != "" || m.ShellInstallSelection().Confirmed {

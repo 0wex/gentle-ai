@@ -31,7 +31,7 @@ func shellExperienceRecommendation(entry ShellExperienceEntry) (string, string) 
 	case ShellExperienceGGA:
 		return "OFF", "Opt in only with an explicit provider; no automatic hooks or provider inference."
 	case ShellExperienceProvider:
-		return "Explicit choice", "Type your provider; it is never inferred from Pi configuration."
+		return "Explicit choice", "Type your provider if you want; leave it empty and GGA configures it later. It is never inferred from Pi."
 	default:
 		return "", ""
 	}
