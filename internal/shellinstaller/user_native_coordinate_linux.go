@@ -38,7 +38,7 @@ func userNativeFreshRequest(args []string) (UserInstallRequest, bool, error) {
 	}
 	// SDK Main + stock retains its existing authenticated Main worker.
 	// Keep the original profile and token; never clear its SDK selector.
-	if req.Experience != nil && req.Experience.SDKSource == "main-preview" {
+	if req.Experience != nil && (req.Experience.SDKSource == "main-preview" || req.Experience.GGA == "on") {
 		return req, false, nil
 	}
 	return req, true, userValidateStageExperience(req.Experience)

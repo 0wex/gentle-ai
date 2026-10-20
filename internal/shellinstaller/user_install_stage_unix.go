@@ -78,8 +78,13 @@ func userPrepareInstallStage(ctx context.Context, root, mode string, profile *Us
 	if profile == nil {
 		return nil
 	}
-	if userQualifiedPrivateChoices(profile) {
-		return userStagePrivateChoices(ctx, root, profile)
+	if userQualifiedPrivateChoices(profile) || userQualifiedLegacyExperience(profile) {
+		if err := userStagePrivateChoices(ctx, root, profile); err != nil {
+			return err
+		}
+		// The legacy GGA installer still receives its explicit provider through
+		// its own private config stage; nothing else about GGA is managed here.
+		return userStageGGA(ctx, root, mode, profile.GGA, profile.GGAProvider)
 	}
 	if err := userStageContext7(ctx, root, mode, profile.Context7); err != nil {
 		return err

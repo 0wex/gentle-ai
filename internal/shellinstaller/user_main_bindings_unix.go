@@ -57,7 +57,7 @@ func userVerifyInstalledGlobal(ctx context.Context, root string, manifest userMa
 	if manifest.MainSDK == nil {
 		return userVerifyGlobal(ctx, root, manifest.Prefix, manifest.Agent, manifest.Prefix, root, manifest.Mode)
 	}
-	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" || manifest.Mode != "separate" || manifest.Destination != root || manifest.Prefix != filepath.Join(root, "prefix") || manifest.Agent != filepath.Join(root, "agent") || manifest.GGA {
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" || manifest.Mode != "separate" || manifest.Destination != root || manifest.Prefix != filepath.Join(root, "prefix") || manifest.Agent != filepath.Join(root, "agent") {
 		return experienceError("Main SDK manifest requires qualified Linux amd64 Separate bindings")
 	}
 	return userVerifyMainBindingsAction(ctx, root, root, *manifest.MainSDK, "verify-main-sdk-selected")

@@ -71,7 +71,7 @@ func TestShellExperienceSDKSourceHandoff(t *testing.T) {
 	}
 }
 
-func TestShellExperienceSDKSourcePreservesConflicts(t *testing.T) {
+func TestShellExperienceSDKSourcePreservesGGAChoice(t *testing.T) {
 	m := experienceFocus(t, experienceInherited(t), screens.ShellExperienceTDD, "")
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // explicit Strict TDD on
 	m = sdkSourceRow(t, m)
@@ -82,18 +82,22 @@ func TestShellExperienceSDKSourcePreservesConflicts(t *testing.T) {
 		t.Fatal("explicit preference locked the Main channel")
 	}
 	m = experienceFocus(t, m, screens.ShellExperienceGGA, "")
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // explicit GGA on, refused for both channels
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // explicit GGA on
+	m = experienceFocus(t, m, screens.ShellExperienceProvider, "")
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("codex")})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	if m.shellExperience == nil || m.shellExperience.err == nil || !strings.Contains(m.shellExperience.err.Error(), "GGA") {
-		t.Fatal("GGA without a qualified consumer was not named on continue")
+	if m.shellExperience != nil {
+		t.Fatalf("GGA+Main did not reach the installer route: %v", m.shellExperience.err)
 	}
-	if m.shellExperience.profile.StrictTDD != "on" || m.shellExperience.profile.GGA != "on" || m.shellExperience.profile.SDKSource != "main-preview" {
-		t.Fatal("main refusal cleared explicit choices")
+	state, _ := cli.ShellInstallPresentationOf(m.shellInstallModel)
+	got := state.Request.Experience
+	if got == nil || got.SDKSource != "main-preview" || got.GGA != "on" || got.GGAProvider != "codex" || got.StrictTDD != "on" {
+		t.Fatalf("explicit choices were dropped: %+v", got)
 	}
 }
 
-func TestShellExperienceSDKSourceEditingConflictAndClear(t *testing.T) {
+func TestShellExperienceSDKSourceEditingKeepsGGA(t *testing.T) {
 	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
 		return // Main is not an offered choice on these platforms.
 	}
@@ -103,10 +107,8 @@ func TestShellExperienceSDKSourceEditingConflictAndClear(t *testing.T) {
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	m = experienceFocus(t, m, screens.ShellExperienceGGA, "")
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	if m.shellExperience == nil || m.shellExperience.err == nil || m.shellExperience.profile.SDKSource != "main-preview" || m.shellExperience.profile.GGA != "on" {
-		t.Fatal("editing Main combination silently changes selections or advances")
+	if m.shellExperience.profile.SDKSource != "main-preview" || m.shellExperience.profile.GGA != "on" {
+		t.Fatal("selecting GGA changed unrelated choices")
 	}
 	m = sdkSourceRow(t, m)
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyBackspace})

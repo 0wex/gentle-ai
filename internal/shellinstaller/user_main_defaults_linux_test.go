@@ -25,22 +25,27 @@ func TestUserMainDefaultsAdmission(t *testing.T) {
 	if err := userExperienceSupported(&profile); err != nil {
 		t.Fatalf("qualified Main defaults refused: %v", err)
 	}
-	// Every preference that the stock path consumes also works with Main;
-	// only GGA ON keeps the stock path's own refusal.
-	for _, blocked := range []struct {
-		name, want string
-		apply      func(*UserExperience)
-	}{
-		{"gga", "GGA", func(p *UserExperience) { p.GGA = "on" }},
-	} {
-		t.Run(blocked.name, func(t *testing.T) {
-			refused := profile
-			blocked.apply(&refused)
-			err := userExperienceSupported(&refused)
-			if err == nil || !strings.Contains(err.Error(), blocked.want) {
-				t.Fatalf("unsupported Main combination was admitted: %v", err)
-			}
-		})
+	// Every preference that the stock path consumes also works with Main, and
+	// GGA ON is delegated to the legacy installer that owns it.
+	withGGA := profile
+	withGGA.GGA, withGGA.GGAProvider = "on", "codex"
+	if err := userExperienceSupported(&withGGA); err != nil {
+		t.Fatalf("qualified GGA selection was refused: %v", err)
+	}
+	stock := profile
+	stock.SDKSource = ""
+	if err := userExperienceSupported(&stock); err != nil {
+		t.Fatalf("qualified stock selection was refused: %v", err)
+	}
+	stockGGA := stock
+	stockGGA.GGA, stockGGA.GGAProvider = "on", "codex"
+	if err := userExperienceSupported(&stockGGA); err != nil {
+		t.Fatalf("stock GGA selection was refused: %v", err)
+	}
+	unprovided := withGGA
+	unprovided.GGAProvider = ""
+	if err := userExperienceSupported(&unprovided); err == nil {
+		t.Fatal("GGA ON without a provider was admitted")
 	}
 	// The PNPM publication route has no Main producer; that refusal must stay.
 	err := userValidateStageExperience(&profile)

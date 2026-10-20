@@ -106,7 +106,7 @@ func TestShellExperienceConfigureDestinationReady(t *testing.T) {
 	}
 }
 
-func TestShellExperiencePreservesUnsupportedChoicesAndCancel(t *testing.T) {
+func TestShellExperiencePreservesGGAChoiceAndCancel(t *testing.T) {
 	m := experienceFocus(t, experienceStart(t), screens.ShellExperienceGGA, "")
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // OFF → inherit.
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // Inherit → ON is still unqualified.
@@ -114,15 +114,12 @@ func TestShellExperiencePreservesUnsupportedChoicesAndCancel(t *testing.T) {
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("codex")})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	if m.shellExperience == nil || m.shellExperience.err == nil || !strings.Contains(m.shellExperience.err.Error(), "GGA ON") {
-		t.Fatal("unsupported choice was dropped or admitted")
-	}
-	if m.shellExperience.profile.GGA != "on" || m.shellExperience.profile.GGAProvider != "codex" {
-		t.Fatal("unsupported choice was cleared")
+	if m.shellExperience != nil {
+		t.Fatalf("GGA selection did not reach the installer route: %v", m.shellExperience.err)
 	}
 	state, _ := cli.ShellInstallPresentationOf(m.shellInstallModel)
-	if state.Review || state.Request.Confirmation != "" {
-		t.Fatal("GGA refusal forged consent or advanced")
+	if state.Review || state.Request.Confirmation != "" || state.Request.Experience.GGA != "on" || state.Request.Experience.GGAProvider != "codex" {
+		t.Fatal("GGA selection was dropped or forged consent")
 	}
 	for _, key := range []tea.KeyType{tea.KeyEsc, tea.KeyCtrlC} {
 		cancel := experienceStart(t)

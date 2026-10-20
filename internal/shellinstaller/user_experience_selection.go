@@ -50,12 +50,16 @@ func userQualifiedPrivateChoices(profile *UserExperience) bool {
 	return userQualifiedStockExperience(profile) || userQualifiedMainExperience(profile)
 }
 
+// The legacy authenticated worker acquires and installs GGA with its own setup
+// instructions, so GGA ON keeps the same private writers on Linux amd64. The
+// stock PNPM publication route still has no GGA producer and keeps refusing it.
+func userQualifiedLegacyExperience(profile *UserExperience) bool {
+	return profile != nil && runtime.GOOS == "linux" && runtime.GOARCH == "amd64"
+}
+
 func userValidateMainExperience(profile *UserExperience) error {
 	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
 		return experienceError("SDK Main + stock provider requires Linux amd64 Separate")
-	}
-	if profile.GGA == "on" {
-		return experienceError("Main preview does not support GGA; turn it off or choose Stable")
 	}
 	return nil
 }
@@ -72,7 +76,7 @@ func userExperienceSupported(profile *UserExperience) error {
 	if profile.SDKSource == "main-preview" {
 		return userValidateMainExperience(profile)
 	}
-	if (profile.GlobalRDD != "" || profile.Context7 != "" || profile.StrictTDD != "" || profile.GGA != "" || profile.CodeGraph != "") && !userQualifiedPrivateChoices(profile) {
+	if (profile.GlobalRDD != "" || profile.Context7 != "" || profile.StrictTDD != "" || profile.GGA != "" || profile.CodeGraph != "") && !userQualifiedStockExperience(profile) && !userQualifiedLegacyExperience(profile) {
 		return experienceError("selected additional experience preferences require a compatible installed runtime")
 	}
 	return nil
