@@ -22,7 +22,7 @@ func experienceFocus(t *testing.T, m Model, control screens.ShellExperienceContr
 	if m.shellExperience == nil {
 		t.Fatal("configuration is not active")
 	}
-	targets := screens.ShellInstallTargetEntries(m.shellExperience.mode, m.shellExperience.piFound)
+	targets := screens.ShellInstallTargetEntries(m.shellExperience.mode, m.shellExperience.piFound, m.shellExperience.existing)
 	for _, entry := range screens.ShellExperienceOptions(m.shellExperience.profile, targets...) {
 		if entry.Control == control && (choice == "" || entry.Choice == choice) {
 			m = experienceKey(m, tea.KeyMsg{Type: tea.KeyHome})

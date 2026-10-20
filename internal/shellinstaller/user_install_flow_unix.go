@@ -65,14 +65,22 @@ func userValidateInstall(req UserInstallRequest) error {
 		return err
 	}
 	fresh := true
+	reconfigure := req.Experience != nil && userReconfigureTarget() == req.Destination
 	if err := privateDestination(req.Destination); err != nil {
-		if req.Experience != nil {
+		if req.Experience != nil && !reconfigure {
 			return experienceError("explicit experience requires a new empty target; existing preferences are preserved")
 		}
 		fresh = false
-		manifest, readErr := userReadManifest(context.Background(), req.Destination)
-		if readErr != nil || manifest.Mode != req.Mode || (req.Mode == "shared" && (manifest.Prefix != req.SharedPrefix || manifest.Agent != req.SharedAgent)) {
-			return err
+		if reconfigure {
+			manifest, readErr := userReadInstallationManifest(req.Destination)
+			if readErr != nil || manifest.Mode != req.Mode || (req.Mode == "shared" && (manifest.Prefix != req.SharedPrefix || manifest.Agent != req.SharedAgent)) {
+				return err
+			}
+		} else {
+			manifest, readErr := userReadManifest(context.Background(), req.Destination)
+			if readErr != nil || manifest.Mode != req.Mode || (req.Mode == "shared" && (manifest.Prefix != req.SharedPrefix || manifest.Agent != req.SharedAgent)) {
+				return err
+			}
 		}
 	}
 	if req.Mode == "separate" {
@@ -303,6 +311,19 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 // userPublishManifest is the shared publication boundary. A renamed destination
 // is retained on sync/readback failure; success requires final physical readback.
 func userPublishManifest(ctx context.Context, root, prefix, agent string, manifest userManifest) (result UserInstallResult, err error) {
+	backup, replaced, err := userBeginShellReplacement(manifest.Destination)
+	if err != nil {
+		return result, err
+	}
+	switched := false
+	if replaced {
+		manifest.Replaced = backup
+		defer func() {
+			if err != nil && !switched {
+				err = errors.Join(err, userRestoreShellReplacement(manifest.Destination, backup))
+			}
+		}()
+	}
 	data, err := json.Marshal(manifest)
 	if err != nil {
 		return result, err
@@ -328,12 +349,14 @@ func userPublishManifest(ctx context.Context, root, prefix, agent string, manife
 	if err = userRenameNoReplace(root, manifest.Destination); err != nil {
 		return result, err
 	}
+	switched = true
 	if err = userDirectorySync(filepath.Dir(manifest.Destination)); err != nil {
 		return result, privateError("uncertain", err)
 	}
 	if _, err = userReadManifest(ctx, manifest.Destination); err != nil {
 		return result, privateError("uncertain", err)
 	}
+	userRecordPublishedShell(manifest)
 	return UserInstallResult{manifest.Destination, manifest.Prefix, manifest.Agent, "ComponentInstalled"}, nil
 }
 

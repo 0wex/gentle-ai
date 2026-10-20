@@ -21,6 +21,7 @@ type userManifest struct {
 	GGA                                      bool                  `json:"gga,omitempty"`
 	CodeGraph                                bool                  `json:"codegraph,omitempty"`
 	MainSDK                                  *userSnapshotArtifact `json:"main_sdk,omitempty"`
+	Replaced                                 string                `json:"replaced,omitempty"`
 }
 
 const userSchema = "gentle-shell-user-install/v1"

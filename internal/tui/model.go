@@ -637,6 +637,7 @@ const (
 
 type Model struct {
 	shellExperience       *shellExperienceConfig
+	shellReconfigure      string
 	shellReadyOffset      int
 	shellReadyCursor      int
 	shellInstallEnabled   bool

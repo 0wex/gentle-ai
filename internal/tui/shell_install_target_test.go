@@ -88,3 +88,66 @@ func TestShellInstallTargetRefusesSharedMain(t *testing.T) {
 		t.Fatalf("Shared Main preview was not refused precisely: %v", m.shellExperience.err)
 	}
 }
+
+func existingInstallHome(t *testing.T) (home, target string) {
+	t.Helper()
+	t.Setenv("NPM_CONFIG_PREFIX", "")
+	home = t.TempDir()
+	if err := os.Chmod(home, 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+	target = filepath.Join(home, ".gentle-shell")
+	manifest := `{"Schema":"gentle-shell-user-install/v1","Destination":"` + target + `","Prefix":"` + target + `/prefix","Agent":"` + target + `/agent","Mode":"separate","codegraph":true,"main_sdk":{"URL":"x"}}`
+	for path, data := range map[string]string{
+		"installation.json":          manifest,
+		"config/persona.json":        `{"mode":"neutral"}`,
+		"config/strict-tdd.json":     `{"policy":"on"}`,
+		"home/.gentle-ai/state.json": `{"rdd_mode":"off"}`,
+		"agent/mcp.json":             `{"mcpServers":{"context7":{"enabled":true}}}`,
+	} {
+		full := filepath.Join(target, path)
+		if err := os.MkdirAll(filepath.Dir(full), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(full, []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return home, target
+}
+
+func TestShellConfigureExistingPrefillsAndKeepsTarget(t *testing.T) {
+	_, target := existingInstallHome(t)
+	defer os.Unsetenv("GENTLE_AI_RECONFIGURE_TARGET")
+	m := NewModel(system.DetectionResult{}, "configure-existing-test").WithShellInstaller()
+	m.Width, m.Height = 209, 61
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Model)
+	m = experienceFocus(t, m, screens.ShellExperienceInstallTarget, "existing")
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Model)
+	if m.shellExperience.reconfigure != true || m.shellExperience.target != target || m.shellExperience.mode != "separate" {
+		t.Fatalf("existing install was not selected: %+v", m.shellExperience)
+	}
+	profile := m.shellExperience.profile
+	if profile.Persona != "neutral" || profile.StrictTDD != "on" || profile.GlobalRDD != "off" || profile.CodeGraph != "on" || profile.Context7 != "on" || profile.SDKSource != "main-preview" {
+		t.Fatalf("existing selections were not prefilled: %+v", profile)
+	}
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnd})
+	m = next.(Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Model)
+	state, ok := cli.ShellInstallPresentationOf(m.shellInstallModel)
+	if !ok || state.Request.Destination != target || state.Request.Mode != "separate" {
+		t.Fatalf("reconfigure target was not fixed: %+v", state.Request)
+	}
+	if os.Getenv("GENTLE_AI_RECONFIGURE_TARGET") != target {
+		t.Fatal("reconfigure intent was not published for inspection")
+	}
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+	state, _ = cli.ShellInstallPresentationOf(m.shellInstallModel)
+	if state.Request.Destination != target {
+		t.Fatalf("existing target became editable: %q", state.Request.Destination)
+	}
+}

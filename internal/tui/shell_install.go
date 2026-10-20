@@ -3,6 +3,7 @@ package tui
 import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/cli"
+	"os"
 )
 
 // WithShellInstaller opts into selection within this existing TUI program.
@@ -49,6 +50,9 @@ func (m Model) updateShellInstall(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if state.Field >= 2 && (key.Type == tea.KeyRunes || key.Type == tea.KeyBackspace) {
 				return m, nil // Detected Shared paths are read-only.
 			}
+			if m.shellReconfigure != "" && state.Field == 0 && (key.Type == tea.KeyRunes || key.Type == tea.KeyBackspace) {
+				return m, nil // The existing install target is fixed.
+			}
 		}
 	}
 	m.shellInstallModel, _ = m.shellInstallModel.Update(msg)
@@ -57,6 +61,8 @@ func (m Model) updateShellInstall(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.shellReadyCursor, m.shellReadyOffset = 0, 0
 	}
 	if key, ok := msg.(tea.KeyMsg); ok && (key.Type == tea.KeyEsc || key.Type == tea.KeyCtrlC) {
+		m.shellReconfigure = ""
+		_ = os.Unsetenv("GENTLE_AI_RECONFIGURE_TARGET")
 		m.shellInstallSelection = cli.ShellInstallSelection{}
 		m.shellInstallModel = nil
 		m.shellReadyCursor, m.shellReadyOffset = 0, 0
@@ -70,6 +76,14 @@ func (m Model) updateShellInstall(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) finishShellInstallSelection(selection cli.ShellInstallSelection, err error) (tea.Model, tea.Cmd) {
 	if err == nil && selection.Confirmed {
 		m.shellInstallSelection = selection
+		if home, homeErr := os.UserHomeDir(); homeErr == nil {
+			_ = os.Setenv("GENTLE_AI_SHELL_REGISTRY_HOME", home)
+		}
+		if m.shellReconfigure != "" {
+			_ = os.Setenv("GENTLE_AI_RECONFIGURE_TARGET", m.shellReconfigure)
+		} else {
+			_ = os.Unsetenv("GENTLE_AI_RECONFIGURE_TARGET")
+		}
 		return m, tea.Quit
 	}
 	// This child performs synchronous selection only. Its sole command is

@@ -43,16 +43,22 @@ func shellExperienceCategories() []string {
 // ShellInstallTargetEntries projects the install-target choice. It is not part
 // of UserExperience, so the transport DTO stays unchanged; the caller owns the
 // selection and the detected Pi data.
-func ShellInstallTargetEntries(mode string, piFound bool) []ShellExperienceEntry {
+func ShellInstallTargetEntries(mode string, piFound bool, existing []shellinstaller.UserShellInstall) []ShellExperienceEntry {
 	piDescription := "Reuse the single detected Pi prefix and agent; Context7 is written into its mcp.json."
 	if !piFound {
 		piDescription = "No single npm-style Pi install was detected; fix that Pi install or choose Separate."
 	}
 	sharedValue, separateValue := "On my existing Pi", "Separate install (Gentle-Shell)"
-	return []ShellExperienceEntry{
+	entries := []ShellExperienceEntry{
 		{Control: ShellExperienceInstallTarget, Category: "Install target", Kind: "radio", Label: sharedValue, Description: piDescription, Choice: "shared", Value: sharedValue, Current: mode == "shared"},
-		{Control: ShellExperienceInstallTarget, Category: "Install target", Kind: "radio", Label: separateValue, Description: "Own target: private prefix, agent, runtime and launchers; your personal Pi is untouched.", Choice: "separate", Value: separateValue, Current: mode != "shared"},
+		{Control: ShellExperienceInstallTarget, Category: "Install target", Kind: "radio", Label: separateValue, Description: "Own target: private prefix, agent, runtime and launchers; your personal Pi is untouched.", Choice: "separate", Value: separateValue, Current: mode == "separate"},
 	}
+	if len(existing) == 1 {
+		install := existing[0]
+		description := install.Target + " (" + install.Mode + ", " + install.Channel + "). Applying it replaces only this target; the previous tree is retained."
+		entries = append(entries, ShellExperienceEntry{Control: ShellExperienceInstallTarget, Category: "Install target", Kind: "radio", Label: "Configure existing Gentle-Shell", Description: description, Choice: "existing", Value: "Configure existing Gentle-Shell", Current: mode == "existing"})
+	}
+	return entries
 }
 
 func shellExperienceEntries(p shellinstaller.UserExperience, targets ...ShellExperienceEntry) []ShellExperienceEntry {

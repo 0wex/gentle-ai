@@ -24,6 +24,9 @@ func shellExperienceRecommendation(entry ShellExperienceEntry) (string, string) 
 	case ShellExperienceContext7:
 		return "ON", "Use current library references through MCP."
 	case ShellExperienceInstallTarget:
+		if entry.Choice == "existing" {
+			return "Configure existing", "Prefills this install's selections; continuing replaces only its target and keeps the previous tree."
+		}
 		if entry.Choice == "shared" {
 			return "Separate install", "Reuse a detected Pi only when you want the defaults applied over it; Main needs Separate."
 		}

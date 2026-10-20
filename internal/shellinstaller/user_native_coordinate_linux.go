@@ -27,10 +27,15 @@ func userNativeFreshRequest(args []string) (UserInstallRequest, bool, error) {
 	if err != nil {
 		return req, true, err
 	}
-	if _, err = os.Lstat(req.Destination); err == nil {
+	reconfigure := req.Experience != nil && userReconfigureTarget() == req.Destination
+	if !reconfigure {
+		if _, err = os.Lstat(req.Destination); err == nil {
+			return req, false, nil
+		} else if !os.IsNotExist(err) {
+			return req, true, err
+		}
+	} else if _, err = os.Lstat(req.Destination); err != nil {
 		return req, false, nil
-	} else if !os.IsNotExist(err) {
-		return req, true, err
 	}
 	token, err := InspectUserInstall(req)
 	if err != nil || token != req.Confirmation {
