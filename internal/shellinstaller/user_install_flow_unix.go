@@ -52,9 +52,7 @@ func userValidateInstall(req UserInstallRequest) error {
 				return experienceError("Main preview requires a Separate installation; choose Stable to install over your Pi")
 			}
 		case "agent":
-			if req.Experience.SDKSource == "main-preview" || req.Experience.GGA == "on" {
-				return experienceError("using an existing Pi agent supports stock Stable without GGA; choose Separate for Main or GGA")
-			}
+			// Every selection is staged privately; the agent is only the settings home.
 		default:
 			return experienceError("explicit experience requires a fresh Separate, Shared or agent-reuse runtime")
 		}
@@ -245,6 +243,12 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	if req.Mode == "shared" {
 		prefix, agent, finalPrefix, finalAgent = req.SharedPrefix, req.SharedAgent, req.SharedPrefix, req.SharedAgent
 	}
+	if req.Mode == "agent" {
+		agent, finalAgent = req.SharedAgent, req.SharedAgent
+		if err = userSnapshotOwnedAgentSettings(ctx, agent, root); err != nil {
+			return result, fmt.Errorf("agent settings preimage: %w", err)
+		}
+	}
 	// Acquire and verify pinned fd/rg inside the private stage before any
 	// selected Shared object changes; binding into AGENT/bin comes later.
 	if err = userToolsAcquire(ctx, root); err != nil {
@@ -293,7 +297,12 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 			return result, fmt.Errorf("shared Context7 staging: %w", err)
 		}
 	}
-	mainSDK, err := userInstallMainSDK(ctx, root, req.Destination, req.Experience)
+	if req.Mode == "agent" && req.Experience != nil {
+		if err = userStageOwnedAgentContext7(ctx, agent, req.Experience.Context7, root); err != nil {
+			return result, fmt.Errorf("agent Context7: %w", err)
+		}
+	}
+	mainSDK, err := userInstallMainSDK(ctx, root, req.Destination, prefix, agent, req.Experience)
 	if err != nil {
 		return result, fmt.Errorf("Main SDK + stock provider: %w", err)
 	}
@@ -712,23 +721,23 @@ func userReadManifest(ctx context.Context, root string) (userManifest, error) {
 		return manifest, err
 	}
 	data, err := os.ReadFile(path)
-	if err != nil || len(data) > 4096 || json.Unmarshal(data, &manifest) != nil || manifest.Schema != userSchema || manifest.Destination != root || (manifest.Mode != "separate" && manifest.Mode != "shared") {
+	if err != nil || len(data) > 4096 || json.Unmarshal(data, &manifest) != nil || manifest.Schema != userSchema || manifest.Destination != root || (manifest.Mode != "separate" && manifest.Mode != "shared" && manifest.Mode != "agent") {
 		return manifest, privateError("refused", err)
 	}
 	if manifest.PNPM != nil {
 		return userReadPNPMManifest(ctx, root, manifest)
 	}
 	if manifest.CodeGraph {
-		if manifest.Mode != "separate" && manifest.Mode != "shared" {
-			return manifest, privateError("refused", errors.New("CodeGraph requires a Separate or Shared manifest"))
+		if manifest.Mode != "separate" && manifest.Mode != "shared" && manifest.Mode != "agent" {
+			return manifest, privateError("refused", errors.New("CodeGraph requires a Separate, Shared or agent manifest"))
 		}
 		if err := userCodeGraphReadback(ctx, root); err != nil {
 			return manifest, fmt.Errorf("CodeGraph retained integrity: %w", err)
 		}
 	}
 	if manifest.GGA {
-		if manifest.Mode != "separate" && manifest.Mode != "shared" {
-			return manifest, privateError("refused", errors.New("GGA requires a Separate or Shared manifest"))
+		if manifest.Mode != "separate" && manifest.Mode != "shared" && manifest.Mode != "agent" {
+			return manifest, privateError("refused", errors.New("GGA requires a Separate, Shared or agent manifest"))
 		}
 		if err := userGGAReadback(ctx, root); err != nil {
 			return manifest, fmt.Errorf("GGA retained integrity: %w", err)
@@ -772,7 +781,7 @@ func userLaunchCommand(ctx context.Context, root string, manifest userManifest, 
 	cmd.Env = append(userEnvironment(root, manifest.Prefix, manifest.Agent), "GIT_OPTIONAL_LOCKS=0")
 	// Only a validated Separate manifest selects this owned optional payload.
 	// Installation/provisioning environments do not inherit this activation.
-	if manifest.GGA && (manifest.Mode == "separate" || manifest.Mode == "shared") {
+	if manifest.GGA && (manifest.Mode == "separate" || manifest.Mode == "shared" || manifest.Mode == "agent") {
 		if strings.ContainsRune(root, os.PathListSeparator) {
 			cmd.Err = privateError("refused", errors.New("private GGA launch root cannot contain a PATH separator"))
 			return cmd

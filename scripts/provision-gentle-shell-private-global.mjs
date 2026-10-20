@@ -57,7 +57,7 @@ function writeExclusive(absolute, bytes, permissions = 0o600) {
 for (const value of [root, prefix, agent, finalPrefix, finalRoot]) {
   if (typeof value !== 'string' || !/^\/[A-Za-z0-9_./-]+$/.test(value) || path.resolve(value) !== value) reject('unsafe selection');
 }
-if (process.argv.length !== (requestedAction === 'restore' ? 10 : 9) || !['separate', 'shared'].includes(mode) || !['install', 'verify', 'restore', 'prepare-prior', ...mainActions].includes(requestedAction) || uid === 0) reject('arguments or UID');
+if (process.argv.length !== (requestedAction === 'restore' ? 10 : 9) || !['separate', 'shared', 'agent'].includes(mode) || !['install', 'verify', 'restore', 'prepare-prior', ...mainActions].includes(requestedAction) || uid === 0) reject('arguments or UID');
 physical(root, true);
 const state = path.join(root, 'state');
 physical(state, true);
@@ -199,7 +199,7 @@ if (action === 'restore') {
     if (check.error || check.signal || check.status !== 0) reject('fixture prior requires verified existing installation');
   }
   const prior = preparing || (fs.existsSync(priorGraph) && JSON.parse(read(path.join(modules, '@earendil-works/pi-coding-agent/package.json'))).version === '0.99.2');
-  if (mainActions.includes(action) && (mode !== 'separate' || prior)) reject('Main preflight requires modern Separate stock');
+  if (mainActions.includes(action) && ((mode !== 'separate' && mode !== 'agent') || prior)) reject('Main preflight requires modern Separate or agent stock');
   if (prior) source = path.join(root, 'runtime/prior');
   const graphPath = prior ? priorGraph : path.join(state, 'global-graph.json');
   const lockBytes = read(path.join(root, 'user-locks', prior ? 'prior' : 'modern', 'package-lock.json'));
@@ -329,11 +329,11 @@ if (action === 'restore') {
   const mainPackageRoot = path.join(finalRoot, 'runtime/main-sdk');
   let selectedAgentIdentity;
   if (selectingSDK || verifyingSelectedSDK) {
-    if (process.platform !== 'linux' || process.arch !== 'x64' || mode !== 'separate' || prefix !== path.join(root, 'prefix') || agent !== path.join(root, 'agent') || finalPrefix !== path.join(finalRoot, 'prefix')) reject('Main SDK selection requires Linux amd64 private Separate');
+    if (process.platform !== 'linux' || process.arch !== 'x64' || (mode !== 'separate' && mode !== 'agent') || prefix !== path.join(root, 'prefix') || (mode === 'separate' && agent !== path.join(root, 'agent')) || (mode === 'agent' && !path.isAbsolute(agent)) || finalPrefix !== path.join(finalRoot, 'prefix')) reject('Main SDK selection requires Linux amd64 Separate or agent reuse');
     selectedAgentIdentity = physical(agent, true);
-    if ((selectedAgentIdentity.mode & 0o7777) !== 0o700) reject('Main SDK agent custody');
+    if (mode === 'agent' ? (selectedAgentIdentity.mode & 0o022) !== 0 : (selectedAgentIdentity.mode & 0o7777) !== 0o700) reject('Main SDK agent custody');
     const info = physical(settingsPath);
-    if (info.nlink !== 1 || (info.mode & 0o7777) !== 0o600) reject('Main SDK settings custody');
+    if (info.nlink !== 1 || (mode === 'agent' ? (info.mode & 0o022) !== 0 : (info.mode & 0o7777) !== 0o600)) reject('Main SDK settings custody');
     const stockDeclarations = settings.packages?.filter(entry => (typeof entry === 'string' ? entry : entry?.source) === packageRoot) ?? [];
     const mainDeclarations = settings.packages?.filter(entry => (typeof entry === 'string' ? entry : entry?.source) === mainPackageRoot) ?? [];
     if (selectingSDK) {
@@ -347,7 +347,7 @@ if (action === 'restore') {
       const value = typeof entry === 'string' ? entry : entry?.source;
       if (typeof value !== 'string' || value.startsWith('npm:gentle-pi') || value === packageRoot) reject('foreign Gentle declaration');
     }
-    if (mode === 'separate') {
+    if (mode === 'separate' || mode === 'agent') {
       absent(prefix);
       fs.mkdirSync(prefix, { mode: 0o700 });
     }

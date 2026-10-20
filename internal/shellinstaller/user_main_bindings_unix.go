@@ -6,15 +6,20 @@ import (
 	"context"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 // The real worker owns this action; qualification aliases remain in tests.
-func userVerifyMainBindingsAction(ctx context.Context, root, finalRoot string, artifact userSnapshotArtifact, action string) error {
+func userVerifyMainBindingsAction(ctx context.Context, root, finalRoot, prefix, agent string, artifact userSnapshotArtifact, action string) error {
 	if err := userCompareMainSource(ctx, root, artifact); err != nil {
 		return err
 	}
-	if err := userVerifyGlobalAction(ctx, root, filepath.Join(root, "prefix"), filepath.Join(root, "agent"),
-		filepath.Join(finalRoot, "prefix"), finalRoot, "separate", action); err != nil {
+	mode := "separate"
+	if agent != filepath.Join(root, "agent") {
+		mode = "agent"
+	}
+	if err := userVerifyGlobalAction(ctx, root, prefix, agent,
+		filepath.Join(finalRoot, "prefix"), finalRoot, mode, action); err != nil {
 		return err
 	}
 	return userCompareMainSource(ctx, root, artifact)
@@ -22,7 +27,7 @@ func userVerifyMainBindingsAction(ctx context.Context, root, finalRoot string, a
 
 // The confirmed worker owns acquisition and partial-stage cleanup. Stock stays
 // installed: only the private SDK declaration changes after authenticated DATA.
-func userInstallMainSDK(ctx context.Context, root, finalRoot string, profile *UserExperience) (*userSnapshotArtifact, error) {
+func userInstallMainSDK(ctx context.Context, root, finalRoot, prefix, agent string, profile *UserExperience) (*userSnapshotArtifact, error) {
 	if profile == nil || profile.SDKSource != "main-preview" {
 		return nil, nil
 	}
@@ -36,19 +41,19 @@ func userInstallMainSDK(ctx context.Context, root, finalRoot string, profile *Us
 	if err := userStageMainSource(ctx, root, artifact); err != nil {
 		return nil, err
 	}
-	if err := userComposeMainSDK(ctx, root, finalRoot, artifact); err != nil {
+	if err := userComposeMainSDK(ctx, root, finalRoot, prefix, agent, artifact); err != nil {
 		return nil, err
 	}
 	return &artifact, nil
 }
 
-func userComposeMainSDK(ctx context.Context, root, finalRoot string, artifact userSnapshotArtifact) error {
+func userComposeMainSDK(ctx context.Context, root, finalRoot, prefix, agent string, artifact userSnapshotArtifact) error {
 	for _, action := range []string{"materialize-main-sdk-source", "materialize-main-sdk-runtime", "select-main-sdk-package"} {
-		if err := userVerifyMainBindingsAction(ctx, root, finalRoot, artifact, action); err != nil {
+		if err := userVerifyMainBindingsAction(ctx, root, finalRoot, prefix, agent, artifact, action); err != nil {
 			return err
 		}
 	}
-	return userVerifyMainBindingsAction(ctx, root, finalRoot, artifact, "verify-main-sdk-selected")
+	return userVerifyMainBindingsAction(ctx, root, finalRoot, prefix, agent, artifact, "verify-main-sdk-selected")
 }
 
 // Historical nil metadata keeps the exact ordinary stock verifier. A selected
@@ -57,8 +62,14 @@ func userVerifyInstalledGlobal(ctx context.Context, root string, manifest userMa
 	if manifest.MainSDK == nil {
 		return userVerifyGlobal(ctx, root, manifest.Prefix, manifest.Agent, manifest.Prefix, root, manifest.Mode)
 	}
-	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" || manifest.Mode != "separate" || manifest.Destination != root || manifest.Prefix != filepath.Join(root, "prefix") || manifest.Agent != filepath.Join(root, "agent") {
-		return experienceError("Main SDK manifest requires qualified Linux amd64 Separate bindings")
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" || (manifest.Mode != "separate" && manifest.Mode != "agent") || manifest.Destination != root || manifest.Prefix != filepath.Join(root, "prefix") {
+		return experienceError("Main SDK manifest requires qualified Linux amd64 Separate or agent bindings")
 	}
-	return userVerifyMainBindingsAction(ctx, root, root, *manifest.MainSDK, "verify-main-sdk-selected")
+	if manifest.Mode == "separate" && manifest.Agent != filepath.Join(root, "agent") {
+		return experienceError("Main SDK manifest requires qualified Linux amd64 Separate or agent bindings")
+	}
+	if manifest.Mode == "agent" && (manifest.Agent == "" || !privateHierarchyPath(manifest.Agent) || strings.HasPrefix(manifest.Agent, root+"/")) {
+		return experienceError("Main SDK manifest requires a qualified external agent")
+	}
+	return userVerifyMainBindingsAction(ctx, root, root, manifest.Prefix, manifest.Agent, *manifest.MainSDK, "verify-main-sdk-selected")
 }

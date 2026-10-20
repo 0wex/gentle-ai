@@ -157,8 +157,12 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 					} else {
 						config.mode, config.choice = "shared", "shared"
 					}
-				} else if entry.Choice == "agent" && shellAgentUsable(config.agent) {
-					config.mode, config.choice, config.prefix = "agent", "agent", ""
+				} else if entry.Choice == "agent" {
+					if !shellAgentUsable(config.agent) {
+						config.err = errors.New("No Pi agent was detected; choose Separate install")
+					} else {
+						config.mode, config.choice, config.prefix = "agent", "agent", ""
+					}
 				} else if entry.Choice == "existing" && len(config.existing) == 1 {
 					install := config.existing[0]
 					profile, loadErr := shellinstaller.LoadUserShellExperience(install)
@@ -193,12 +197,6 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				if config.err == nil {
 					state, _ := cli.ShellInstallPresentationOf(m.shellInstallModel)
-					if config.mode == "agent" && (config.profile.SDKSource == "main-preview" || config.profile.GGA == "on") {
-						config.err = errors.New("using an existing Pi agent supports stock Stable without GGA; choose Separate for Main or GGA")
-					}
-					if config.err != nil {
-						break
-					}
 					state.Request.Mode = config.mode
 					if config.mode == "shared" {
 						state.Request.SharedPrefix, state.Request.SharedAgent = config.prefix, config.agent

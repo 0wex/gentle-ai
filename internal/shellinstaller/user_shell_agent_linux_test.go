@@ -34,10 +34,16 @@ func TestUserValidateAgentReuse(t *testing.T) {
 	}
 	main := profile
 	main.SDKSource = "main-preview"
-	refused := req
-	refused.Experience = &main
-	if err := userValidateInstall(refused); err == nil || !strings.Contains(err.Error(), "stock Stable") {
-		t.Fatalf("Main was admitted for agent reuse: %v", err)
+	allowed := req
+	allowed.Experience = &main
+	if err := userValidateInstall(allowed); err != nil {
+		t.Fatalf("Main was refused for agent reuse: %v", err)
+	}
+	gga := profile
+	gga.GGA, gga.GGAProvider = "on", "codex"
+	allowed.Experience = &gga
+	if err := userValidateInstall(allowed); err != nil {
+		t.Fatalf("GGA was refused for agent reuse: %v", err)
 	}
 	withPrefix := req
 	withPrefix.SharedPrefix = filepath.Join(filepath.Dir(agent), "prefix")

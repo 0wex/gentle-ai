@@ -19,8 +19,8 @@ func userPrepareInstallStage(ctx context.Context, root, mode string, profile *Us
 	if err := ctx.Err(); err != nil {
 		return privateError("canceled", err)
 	}
-	if mode != "separate" && mode != "shared" {
-		return experienceError("installation stage requires separate or shared mode")
+	if mode != "separate" && mode != "shared" && mode != "agent" {
+		return experienceError("installation stage requires separate, shared or agent mode")
 	}
 	if err := userValidateStagePreferences(profile); err != nil {
 		return err
@@ -29,8 +29,8 @@ func userPrepareInstallStage(ctx context.Context, root, mode string, profile *Us
 		if err := userExperienceSupported(profile); err != nil {
 			return err
 		}
-		if mode != "separate" {
-			return experienceError("Main SDK requires a fresh Separate stage")
+		if mode == "shared" {
+			return experienceError("Main SDK requires a Separate or agent stage")
 		}
 	}
 	if profile != nil && profile.CodeGraph != "" && (runtime.GOOS != "linux" || runtime.GOARCH != "amd64") {

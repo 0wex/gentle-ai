@@ -45,7 +45,7 @@ func userStagePrivateChoices(ctx context.Context, root, mode string, profile *Us
 			return err
 		}
 	}
-	if profile.Context7 == "" || mode == "shared" {
+	if profile.Context7 == "" || mode == "shared" || mode == "agent" {
 		// Shared Context7 is merged into the existing agent after its recovery
 		// preimages exist; the private stage root agent is not used there.
 		return nil

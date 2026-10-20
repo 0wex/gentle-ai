@@ -20,7 +20,7 @@ func userNativeFreshRequest(args []string) (UserInstallRequest, bool, error) {
 	if err != nil {
 		return req, false, err
 	}
-	if req.Mode != "separate" && req.Mode != "agent" {
+	if req.Mode != "separate" {
 		return req, false, nil
 	}
 	req, err = userCanonicalRequest(req)

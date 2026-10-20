@@ -100,3 +100,31 @@ func userStageOwnedAgentContext7(ctx context.Context, agent, choice, stage strin
 	}
 	return nil
 }
+
+// userSnapshotOwnedAgentSettings retains the operator agent's settings inside
+// the target before the legacy provisioning writes its stock declaration.
+func userSnapshotOwnedAgentSettings(ctx context.Context, agent, root string) error {
+	if ctx == nil || ctx.Err() != nil {
+		return privateError("canceled", context.Canceled)
+	}
+	if _, err := userOwnedIdentity(agent); err != nil {
+		return err
+	}
+	path := filepath.Join(agent, "settings.json")
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil || len(data) > 1<<20 {
+		return privateError("preimage", err)
+	}
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0022 != 0 || info.Sys().(*syscall.Stat_t).Nlink != 1 || info.Sys().(*syscall.Stat_t).Uid != uint32(os.Getuid()) {
+		return privateError("preimage", err)
+	}
+	backup := filepath.Join(root, "state/agent.preimage")
+	if err := os.MkdirAll(backup, 0700); err != nil {
+		return err
+	}
+	return userToolWrite(filepath.Join(backup, "settings.json"), data, 0600)
+}
