@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/gentleman-programming/gentle-ai/v4/internal/cli"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/system"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/tui/screens"
 )
@@ -74,9 +73,9 @@ func TestShellAgentReuseOption(t *testing.T) {
 	m = next.(Model)
 	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = next.(Model)
-	state, ok := cli.ShellInstallPresentationOf(m.shellInstallModel)
-	if !ok || state.Request.Mode != "agent" || state.Request.SharedAgent != agent || state.Request.SharedPrefix != "" {
-		t.Fatalf("agent reuse request differs: %+v", state.Request)
+	request := m.shellPlanRequest
+	if m.shellPlan == nil || request.Mode != "agent" || request.SharedAgent != agent || request.SharedPrefix != "" {
+		t.Fatalf("agent reuse request differs: %+v", request)
 	}
 	// Main preview is part of the same selections now.
 	restrictedAgentHome(t)
@@ -94,9 +93,8 @@ func TestShellAgentReuseOption(t *testing.T) {
 	if main.shellExperience != nil {
 		t.Fatalf("Main was not admitted for agent reuse: %v", main.shellExperience.err)
 	}
-	state, _ = cli.ShellInstallPresentationOf(main.shellInstallModel)
-	if state.Request.Experience == nil || state.Request.Experience.SDKSource != "main-preview" {
-		t.Fatalf("Main selection was dropped: %+v", state.Request.Experience)
+	if main.shellPlan == nil || main.shellPlanRequest.Experience == nil || main.shellPlanRequest.Experience.SDKSource != "main-preview" {
+		t.Fatalf("Main selection was dropped: %+v", main.shellPlanRequest.Experience)
 	}
 }
 

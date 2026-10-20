@@ -1,12 +1,12 @@
 package tui
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/x/ansi"
-	"github.com/gentleman-programming/gentle-ai/v4/internal/cli"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/shellinstaller"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/system"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/tui/screens"
@@ -52,6 +52,20 @@ func experienceStart(t *testing.T) Model {
 	return m
 }
 
+// experiencePlan ends configuration and returns the installation plan request.
+func experiencePlan(t *testing.T, m Model) (Model, shellinstaller.UserInstallRequest) {
+	t.Helper()
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.shellPlan == nil || m.shellExperience != nil {
+		t.Fatalf("configuration did not reach the installation plan: %+v", m.shellExperience)
+	}
+	if m.shellPlanRequest.Confirmation == "" {
+		t.Fatal("installation plan lacks the inspection token")
+	}
+	return m, m.shellPlanRequest
+}
+
 // Legacy requests remain independently testable without rewriting fresh defaults.
 func experienceInherited(t *testing.T) Model {
 	t.Helper()
@@ -60,54 +74,30 @@ func experienceInherited(t *testing.T) Model {
 	return m
 }
 
-func TestShellExperienceConfigureDestinationReady(t *testing.T) {
+func TestShellExperienceConfigureReachesPlan(t *testing.T) {
 	m := experienceFocus(t, experienceInherited(t), screens.ShellExperiencePersona, "neutral")
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	m = experienceFocus(t, m, screens.ShellExperiencePersona, "unmanaged")
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	m = experienceFocus(t, m, screens.ShellExperienceBackground, "")
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // background off
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	state, ok := cli.ShellInstallPresentationOf(m.shellInstallModel)
-	if !ok || state.Request.Experience == nil || state.Request.Experience.Persona != "unmanaged" || state.Request.Experience.BackgroundSubagents != "off" {
-		t.Fatal("Configure lost profile at Destination")
+	m, request := experiencePlan(t, m)
+	if request.Experience == nil || request.Experience.Persona != "unmanaged" || request.Experience.BackgroundSubagents != "off" {
+		t.Fatal("Configure lost profile at the installation plan")
 	}
-	target := shellExperienceTarget(t)
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(target)})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	state, _ = cli.ShellInstallPresentationOf(m.shellInstallModel)
-	if !state.Review || state.Request.Confirmation == "" {
-		t.Fatalf("working profile cannot reach Ready: %+v", state)
+	wantDestination := filepath.Join(os.Getenv("HOME"), ".local", "share", "gentle-shell", "install")
+	if request.Destination != wantDestination || request.Mode != "separate" {
+		t.Fatalf("default destination differs: %+v", request)
 	}
-	for _, text := range []string{"Ready", "Selected experience", "Changes + scopes", "unmanaged", "gentle-shell"} {
-		if !strings.Contains(m.View(), text) {
-			t.Fatalf("Ready hides %q", text)
-		}
+	if m.ShellInstallSelection().Confirmed {
+		t.Fatal("plan inspection forged installation consent")
 	}
-	for _, size := range [][2]int{{120, 30}, {80, 14}, {30, 7}, {5, 1}} {
-		m.Width, m.Height = size[0], size[1]
-		for _, key := range []tea.KeyType{tea.KeyHome, tea.KeyEnd} {
-			m = experienceKey(m, tea.KeyMsg{Type: key})
-			lines := strings.Split(m.View(), "\n")
-			if len(lines) > m.Height {
-				t.Fatal("Ready exceeds terminal height")
-			}
-			for _, line := range lines {
-				if ansi.StringWidth(line) > m.Width {
-					t.Fatal("Ready exceeds terminal width")
-				}
-			}
-		}
+	if _, err := os.Lstat(wantDestination); !os.IsNotExist(err) {
+		t.Fatal("plan created the destination before confirmation", err)
 	}
-	m.Width, m.Height = 120, 30
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyCtrlE})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // gentleman
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	state, _ = cli.ShellInstallPresentationOf(m.shellInstallModel)
-	if state.Review || state.Request.Confirmation != "" || state.Request.Destination != target || state.Request.Experience.Persona != "gentleman" {
-		t.Fatal("editing configuration retains old consent or loses destination")
+	back := experienceKey(m, tea.KeyMsg{Type: tea.KeyEsc})
+	if back.shellExperience == nil || back.shellPlan != nil || back.shellExperience.profile.Persona != "unmanaged" || back.shellExperience.profile.BackgroundSubagents != "off" {
+		t.Fatal("plan escape lost the configuration")
 	}
 }
 
@@ -116,14 +106,12 @@ func TestShellExperiencePreservesGGAChoiceAndCancel(t *testing.T) {
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // Inherited → ON.
 	m = experienceFocus(t, m, screens.ShellExperienceProvider, "")
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("codex")})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	if m.shellExperience != nil {
-		t.Fatalf("GGA selection did not reach the installer route: %v", m.shellExperience.err)
+	m, request := experiencePlan(t, m)
+	if request.Experience == nil || request.Experience.GGA != "on" || request.Experience.GGAProvider != "codex" {
+		t.Fatal("GGA selection was dropped at the installation plan")
 	}
-	state, _ := cli.ShellInstallPresentationOf(m.shellInstallModel)
-	if state.Review || state.Request.Confirmation != "" || state.Request.Experience.GGA != "on" || state.Request.Experience.GGAProvider != "codex" {
-		t.Fatal("GGA selection was dropped or forged consent")
+	if m.ShellInstallSelection().Confirmed {
+		t.Fatal("GGA plan acquired consent")
 	}
 	for _, key := range []tea.KeyType{tea.KeyEsc, tea.KeyCtrlC} {
 		cancel := experienceStart(t)

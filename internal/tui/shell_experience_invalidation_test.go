@@ -3,10 +3,11 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/gentleman-programming/gentle-ai/v4/internal/cli"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/system"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/tui/screens"
 )
 
@@ -24,25 +25,26 @@ func shellExperienceTarget(t *testing.T) string {
 
 func TestShellExperienceEditingImmediatelyInvalidatesInspection(t *testing.T) {
 	m := experienceInherited(t)
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	target := shellExperienceTarget(t)
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(target)})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	before, ok := cli.ShellInstallPresentationOf(m.shellInstallModel)
-	if !ok || !before.Review || before.Request.Confirmation == "" || before.Request.Experience == nil {
-		t.Fatalf("fixture did not reach physical review: %+v", before)
+	m, before := experiencePlan(t, m)
+	destination := before.Destination
+	if destination == "" || before.Experience == nil {
+		t.Fatalf("plan lacks the inspected selection: %+v", before)
 	}
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyCtrlE})
-	after, ok := cli.ShellInstallPresentationOf(m.shellInstallModel)
-	if !ok || m.shellExperience == nil || after.Review || after.Request.Confirmation != "" || m.ShellInstallSelection().Confirmed {
-		t.Fatalf("entering Configure retained an inspected selection: %+v", after)
+	back := experienceKey(m, tea.KeyMsg{Type: tea.KeyEsc})
+	if back.shellExperience == nil || back.shellPlan != nil {
+		t.Fatal("plan escape did not return to Configure")
 	}
-	if after.Request.Destination != target || after.Request.Mode != before.Request.Mode || after.Request.Experience == nil || *after.Request.Experience != *before.Request.Experience {
-		t.Fatal("editing discarded the selected destination, mode or complete profile")
+	back = experienceFocus(t, back, screens.ShellExperiencePersona, "neutral")
+	back = experienceKey(back, tea.KeyMsg{Type: tea.KeyEnter})
+	back, after := experiencePlan(t, back)
+	if after.Confirmation == before.Confirmation {
+		t.Fatal("re-entering the plan reused the inspected selection")
 	}
-	if _, err := os.Lstat(target); !os.IsNotExist(err) {
-		t.Fatal("entering Configure created a destination", err)
+	if after.Destination != destination || after.Experience == nil || after.Experience.Persona != "neutral" {
+		t.Fatalf("editing lost destination or profile: %+v", after)
+	}
+	if _, err := os.Lstat(destination); !os.IsNotExist(err) {
+		t.Fatal("plan created the destination", err)
 	}
 }
 
@@ -88,29 +90,33 @@ func TestShellExperienceEditingDoesNotEraseExplicitProvider(t *testing.T) {
 }
 
 func TestShellExperienceNonPrivateParentRefusesBeforeConsent(t *testing.T) {
-	m := experienceStart(t)
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	target := shellExperienceTarget(t)
-	parent := filepath.Dir(target)
-	if err := os.Chmod(parent, 0755); err != nil {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	base := filepath.Join(home, ".local", "share", "gentle-shell")
+	if err := os.MkdirAll(base, 0755); err != nil {
 		t.Fatal(err)
 	}
-	before, err := os.Stat(parent)
+	if err := os.Chmod(base, 0755); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(base)
 	if err != nil {
 		t.Fatal(err)
 	}
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(target)})
+	m := NewModel(system.DetectionResult{}, "dev").WithShellInstaller()
+	m.Width, m.Height = 120, 30
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Model)
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	state, ok := cli.ShellInstallPresentationOf(m.shellInstallModel)
-	if !ok || state.Error == nil || state.Review || state.Request.Confirmation != "" || m.ShellInstallSelection().Confirmed {
-		t.Fatalf("nonprivate destination parent acquired consent: %+v", state)
+	if m.shellPlan != nil || m.shellExperience == nil || m.shellExperience.err == nil || m.shellPlanRequest.Confirmation != "" {
+		t.Fatalf("nonprivate default parent acquired inspection or consent: %+v", m.shellExperience)
 	}
-	if _, err := os.Lstat(target); !os.IsNotExist(err) {
-		t.Fatal("refusal created a destination", err)
+	if !strings.Contains(m.shellExperience.err.Error(), "private") && !strings.Contains(m.shellExperience.err.Error(), "refused") {
+		t.Fatalf("refusal is not explicit: %v", m.shellExperience.err)
 	}
-	after, err := os.Stat(parent)
+	after, err := os.Stat(base)
 	if err != nil || !os.SameFile(before, after) || before.Mode() != after.Mode() || !before.ModTime().Equal(after.ModTime()) {
-		t.Fatal("refusal changed the destination parent", err)
+		t.Fatal("refusal changed the default parent", err)
 	}
 }

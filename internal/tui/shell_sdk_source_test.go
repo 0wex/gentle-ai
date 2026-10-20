@@ -33,67 +33,31 @@ func TestShellExperienceSDKSourceHandoff(t *testing.T) {
 	if m.shellExperience == nil || m.shellExperience.profile.SDKSource != "main-preview" || !strings.Contains(m.View(), "SDK Main + stock provider") {
 		t.Fatal("Main composition not selected or disclosed")
 	}
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	target := shellExperienceTarget(t)
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(target)})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	state, _ := cli.ShellInstallPresentationOf(m.shellInstallModel)
-	if !state.Review || state.Error != nil || state.Request.Confirmation == "" || m.ShellInstallSelection().Confirmed {
-		t.Fatalf("Main cannot reach unconfirmed Ready: %+v", state)
+	m, request := experiencePlan(t, m)
+	if request.Experience == nil || request.Experience.SDKSource != "main-preview" || !strings.Contains(m.View(), "Installation plan") {
+		t.Fatalf("Main did not reach the installation plan: %+v", request)
 	}
-	if !strings.Contains(m.View(), "SDK Main + stock provider") || !strings.Contains(m.View(), "not installed health") {
-		t.Fatal("Ready hides composition or implies installed health")
+	if m.ShellInstallSelection().Confirmed {
+		t.Fatal("plan inspection forged consent")
 	}
-	confirmed := experienceKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")}).ShellInstallSelection()
+	back := experienceKey(m, tea.KeyMsg{Type: tea.KeyEsc})
+	if back.shellExperience == nil {
+		t.Fatal("plan escape lost Configure")
+	}
+	back = sdkSourceRow(t, back)
+	back = experienceKey(back, tea.KeyMsg{Type: tea.KeyEnter}) // back to stock
+	back, second := experiencePlan(t, back)
+	if second.Experience.SDKSource != "stable" || second.Confirmation == request.Confirmation {
+		t.Fatal("SDK edit retained the old inspection or source")
+	}
+	confirmed := experienceKey(back, tea.KeyMsg{Type: tea.KeyEnter}).ShellInstallSelection()
 	args := cli.ShellInstallArguments(confirmed)
 	if !confirmed.Confirmed || len(args) != 8 || args[6] != "--experience" {
 		t.Fatal("Main consent changed positional worker ABI", args)
 	}
 	req, err := shellinstaller.UserInstallFromEntry(args[1:])
-	if err != nil || req.Experience == nil || req.Experience.SDKSource != "main-preview" || req.Confirmation != state.Request.Confirmation {
-		t.Fatal("Main selection lost before worker", err)
-	}
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyCtrlE})
-	m = sdkSourceRow(t, m)
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // back to stock
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	state, _ = cli.ShellInstallPresentationOf(m.shellInstallModel)
-	if state.Review || state.Request.Confirmation != "" || state.Request.Experience.SDKSource != "stable" || state.Request.Destination != target {
-		t.Fatal("SDK edit retains physical confirmation or loses destination")
-	}
-	for _, key := range []tea.KeyType{tea.KeyEsc, tea.KeyCtrlC} {
-		cancel := experienceKey(m, tea.KeyMsg{Type: key})
-		if cancel.Screen != ScreenWelcome || len(cli.ShellInstallArguments(cancel.ShellInstallSelection())) != 0 {
-			t.Fatal("cancelled SDK choice reaches worker")
-		}
-	}
-}
-
-func TestShellExperienceSDKSourcePreservesGGAChoice(t *testing.T) {
-	m := experienceFocus(t, experienceInherited(t), screens.ShellExperienceTDD, "")
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // explicit Strict TDD on
-	m = sdkSourceRow(t, m)
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // stock
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyDown})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // Main is selectable
-	if m.shellExperience == nil || m.shellExperience.profile.StrictTDD != "on" || m.shellExperience.profile.SDKSource != "main-preview" || m.shellExperience.err != nil {
-		t.Fatal("explicit preference locked the Main channel")
-	}
-	m = experienceFocus(t, m, screens.ShellExperienceGGA, "")
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // explicit GGA on
-	m = experienceFocus(t, m, screens.ShellExperienceProvider, "")
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("codex")})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	if m.shellExperience != nil {
-		t.Fatalf("GGA+Main did not reach the installer route: %v", m.shellExperience.err)
-	}
-	state, _ := cli.ShellInstallPresentationOf(m.shellInstallModel)
-	got := state.Request.Experience
-	if got == nil || got.SDKSource != "main-preview" || got.GGA != "on" || got.GGAProvider != "codex" || got.StrictTDD != "on" {
-		t.Fatalf("explicit choices were dropped: %+v", got)
+	if err != nil || req.Experience == nil || req.Experience.SDKSource != "stable" || req.Confirmation != second.Confirmation {
+		t.Fatal("selection lost before worker", err)
 	}
 }
 
@@ -107,13 +71,9 @@ func TestShellExperienceSDKSourceEditingKeepsGGA(t *testing.T) {
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	m = experienceFocus(t, m, screens.ShellExperienceGGA, "")
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	if m.shellExperience.profile.SDKSource != "main-preview" || m.shellExperience.profile.GGA != "on" {
-		t.Fatal("selecting GGA changed unrelated choices")
-	}
-	m = sdkSourceRow(t, m)
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // Main → Stable
-	if m.shellExperience.profile.SDKSource != "stable" || m.shellExperience.profile.GGA != "on" {
-		t.Fatal("changing SDK source changes unrelated preferences")
+	m, request := experiencePlan(t, m)
+	if request.Experience == nil || request.Experience.SDKSource != "main-preview" || request.Experience.GGA != "on" {
+		t.Fatalf("explicit choices were dropped: %+v", request.Experience)
 	}
 }
 

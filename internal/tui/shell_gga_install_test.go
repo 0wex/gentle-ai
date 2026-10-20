@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/gentleman-programming/gentle-ai/v4/internal/cli"
 )
 
 // GGA ON is installed by the existing native installer path, which owns its
@@ -21,19 +20,19 @@ func TestShellGGAONReachesDestination(t *testing.T) {
 			m = next.(Model)
 			next, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 			m = next.(Model)
-			if cmd != nil || m.shellExperience != nil {
-				t.Fatalf("GGA ON was blocked before the installer route: %+v", m.shellExperience)
+			if cmd != nil || m.shellPlan == nil {
+				t.Fatalf("GGA ON did not reach the installation plan: %+v", m.shellExperience)
 			}
-			state, ok := cli.ShellInstallPresentationOf(m.shellInstallModel)
-			if !ok || state.Request.Experience == nil {
+			request := m.shellPlanRequest
+			if request.Experience == nil {
 				t.Fatal("GGA ON dropped the request")
 			}
-			got := *state.Request.Experience
+			got := *request.Experience
 			if got.GGA != "on" || got.GGAProvider != "" || got.SDKSource != sdk || got.GlobalRDD != "on" || got.CodeGraph != "on" {
 				t.Fatalf("GGA selection or stock parity was lost: %+v", got)
 			}
-			if state.Request.Confirmation != "" || m.ShellInstallSelection().Confirmed {
-				t.Fatal("GGA selection forged consent")
+			if request.Confirmation == "" || m.ShellInstallSelection().Confirmed {
+				t.Fatal("GGA plan lacks inspection or forged consent")
 			}
 		})
 	}

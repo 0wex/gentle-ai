@@ -189,6 +189,7 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	if req, err = userCanonicalRequest(req); err != nil {
 		return result, err
 	}
+	userShellStep(1, 5, "Selection and target validated")
 	confirmation, err := InspectUserInstall(req)
 	if err != nil || req.Confirmation != confirmation {
 		return result, privateError("refused", errors.Join(err, errors.New("physical selection confirmation differs")))
@@ -227,6 +228,7 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	if err = userPrepareInstallStage(ctx, root, req.Mode, req.Experience); err != nil {
 		return result, err
 	}
+	userShellStep(2, 5, "Private stage and preferences prepared")
 	if err = userBootstrap(ctx, root, workspace); err != nil {
 		return result, fmt.Errorf("runtime acquisition: %w", err)
 	}
@@ -302,6 +304,7 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 			return result, fmt.Errorf("agent Context7: %w", err)
 		}
 	}
+	userShellStep(3, 5, "Runtime and pinned suppliers installed")
 	mainSDK, err := userInstallMainSDK(ctx, root, req.Destination, prefix, agent, req.Experience)
 	if err != nil {
 		return result, fmt.Errorf("Main SDK + stock provider: %w", err)
@@ -330,7 +333,12 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	if err != nil {
 		return result, err
 	}
-	return userPublishManifest(ctx, root, prefix, agent, manifest)
+	userShellStep(4, 5, "Optional runtimes and SDK channel applied")
+	result, err = userPublishManifest(ctx, root, prefix, agent, manifest)
+	if err == nil {
+		userShellStep(5, 5, "Published, verified and registered")
+	}
+	return result, err
 }
 
 // userPublishManifest is the shared publication boundary. A renamed destination

@@ -3,6 +3,7 @@ package tui
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -37,6 +38,28 @@ func shellDetectPi() (string, string, bool, string) {
 		note = detection.Detail
 	}
 	return detection.Prefix, detection.Agent, detection.Found, note
+}
+
+// shellDefaultDestination keeps the operator out of path editing. The parent is
+// created private 0700; an existing install refuses a blind overwrite.
+func shellDefaultDestination() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	base := filepath.Join(home, ".local", "share", "gentle-shell")
+	if err := os.MkdirAll(base, 0700); err != nil {
+		return "", err
+	}
+	info, err := os.Lstat(base)
+	if err != nil || !info.IsDir() || info.Mode().Perm() != 0700 {
+		return "", errors.New("default install parent is not a private 0700 directory: " + base)
+	}
+	destination := filepath.Join(base, "install")
+	if _, err := os.Lstat(destination); err == nil {
+		return "", errors.New("Gentle-Shell is already installed at " + destination + "; remove it before reinstalling")
+	}
+	return destination, nil
 }
 
 func shellAgentUsable(path string) bool {
@@ -192,32 +215,42 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if config.err == nil && config.profile.SDKSource == "main-preview" {
 					config.err = shellMainSDKChoiceError(config.profile)
 				}
-				if config.err == nil && config.mode == "shared" && config.profile.SDKSource == "main-preview" {
-					config.err = errors.New("Main preview requires a Separate install; choose Stable or Separate")
-				}
 				if config.err == nil {
-					state, _ := cli.ShellInstallPresentationOf(m.shellInstallModel)
-					state.Request.Mode = config.mode
-					if config.mode == "shared" {
-						state.Request.SharedPrefix, state.Request.SharedAgent = config.prefix, config.agent
-					} else if config.mode == "agent" {
-						state.Request.SharedPrefix, state.Request.SharedAgent = "", config.agent
+					destination, destErr := shellDefaultDestination()
+					if destErr != nil {
+						config.err = destErr
 					} else {
-						state.Request.SharedPrefix, state.Request.SharedAgent = "", ""
+						state, _ := cli.ShellInstallPresentationOf(m.shellInstallModel)
+						request := state.Request
+						request.Destination = destination
+						request.Mode = config.mode
+						if config.mode == "shared" {
+							request.SharedPrefix, request.SharedAgent = config.prefix, config.agent
+						} else if config.mode == "agent" {
+							request.SharedPrefix, request.SharedAgent = "", config.agent
+						} else {
+							request.SharedPrefix, request.SharedAgent = "", ""
+						}
+						request.Experience = &config.profile
+						token, inspectErr := shellinstaller.InspectUserInstall(request)
+						if inspectErr != nil {
+							config.err = inspectErr
+						} else {
+							request.Confirmation = token
+							m.shellPlanRequest = request
+							m.shellPlanConfig = &config
+							m.shellPlan = []string{
+								"Validate the selection and target",
+								"Prepare the private stage and preferences",
+								"Install the runtime and pinned suppliers",
+								"Apply optional runtimes and the SDK channel",
+								"Publish, verify and register the installation",
+							}
+							m.shellExperience = nil
+							m.shellInstallModel, _ = m.shellInstallModel.Update(tea.WindowSizeMsg{Width: m.Width, Height: m.Height})
+							return m, nil
+						}
 					}
-					if config.reconfigure {
-						state.Request.Destination = config.target
-						m.shellReconfigure = config.target
-						_ = os.Setenv("GENTLE_AI_RECONFIGURE_TARGET", config.target)
-					} else {
-						m.shellReconfigure = ""
-						_ = os.Unsetenv("GENTLE_AI_RECONFIGURE_TARGET")
-					}
-					state.Request.Experience = &config.profile
-					m.shellInstallModel = cli.NewShellInstallModelWithRequest(nil, state.Request)
-					m.shellInstallModel, _ = m.shellInstallModel.Update(tea.WindowSizeMsg{Width: m.Width, Height: m.Height})
-					m.shellExperience, m.shellReadyOffset, m.shellReadyCursor = nil, 0, 0
-					return m, nil
 				}
 			case screens.ShellExperienceCancel:
 				return m.configureShellExperience(tea.KeyMsg{Type: tea.KeyEsc})
@@ -237,6 +270,9 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) shellInstallView() string {
+	if m.shellPlan != nil {
+		return screens.RenderShellPlan(m.shellPlan, m.Width, m.Height)
+	}
 	if m.shellExperience != nil {
 		reuseAgent := ""
 		if shellAgentUsable(m.shellExperience.agent) {

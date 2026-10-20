@@ -113,7 +113,7 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 			}
 			setupMockHome(t, home)
 			t.Setenv("GENTLE_AI_NO_ANIMATION", "1")
-			target := filepath.Join(home, "qtarget")
+			target := filepath.Join(home, ".local", "share", "gentle-shell", "install")
 			var originalConfirmation string
 			readerDone, parentDone := make(chan struct{}), make(chan struct{})
 			oldIn, oldOut := os.Stdin, os.Stdout
@@ -239,26 +239,11 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 				waitFor("SDK Main + stock provider")
 			}
 			send("\x1b[F\r")
-			waitFor("Target:")
-			if !strings.HasSuffix(scenario, "target") {
-				send(target + "\r")
-				waitFor("Ready — review before installation")
-				waitFor(">Install Gentle-Shell")
-				waitFor("About: Install Gentle-Shell")
-				waitFor("[0/")
-				mu.Lock()
-				output.Reset()
-				mu.Unlock()
-				send("j")
-				waitFor("About: Back")
-				mu.Lock()
-				output.Reset()
-				mu.Unlock()
-				send("k")
-				waitFor("About: Install Gentle-Shell")
-			}
+			waitFor("Installation plan")
+			waitFor("5. Publish, verify and register the installation")
 			if strings.HasSuffix(scenario, "edit") {
 				profile := shellPTYExperience(scenario)
+				var err error
 				originalConfirmation, err = shellinstaller.InspectUserInstall(shellinstaller.UserInstallRequest{
 					Destination: target, Mode: "separate", Experience: &profile,
 				})
@@ -268,10 +253,10 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 				mu.Lock()
 				output.Reset()
 				mu.Unlock()
-				send("\x05")
+				send("\x1b") // The plan goes back to configuration without consent.
 				waitFor("Configure Gentle-Shell experience")
-				send("\x1b[B\r\x1b[F\r")
-				waitFor("Target:")
+				send("\x1b[H\x1b[B\r\x1b[F\r")
+				waitFor("Installation plan")
 				if _, err := os.Lstat(target); !os.IsNotExist(err) {
 					t.Fatal("editing published before physical confirmation", err)
 				}
@@ -280,42 +265,22 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 					t.Fatal("editing ended the terminal owner before confirmation", err)
 				default:
 				}
-				mu.Lock()
-				output.Reset()
-				mu.Unlock()
-				send("\r")
-				waitFor("Ready — review before installation")
-				waitFor("neutral") // Observe the changed profile before clearing differential repaint bytes.
-				waitFor(">Install Gentle-Shell")
-				waitFor("About: Install Gentle-Shell")
-				waitFor("[0/")
-				mu.Lock()
-				output.Reset()
-				mu.Unlock()
-				send("j")
-				waitFor("About: Back")
-				mu.Lock()
-				output.Reset()
-				mu.Unlock()
-				send("k")
-				waitFor("About: Install Gentle-Shell")
 			}
 			if strings.HasPrefix(scenario, "confirm") {
-				if scenario == "confirm" {
-					send("\r") // Focused Install uses the existing physical y path.
-				} else {
-					send("y") // Retain legacy y confirmation controls too.
-				}
+				send("\r")
 			} else {
 				mu.Lock()
 				output.Reset()
 				mu.Unlock()
 				if strings.HasPrefix(scenario, "ctrl-c") {
 					send("\x03")
+					waitFor("Install Gentle-Shell, our own agent")
 				} else {
 					send("\x1b")
+					waitFor("Configure Gentle-Shell experience")
+					send("\x1b")
+					waitFor("Install Gentle-Shell, our own agent")
 				}
-				waitFor("Install Gentle-Shell, our own agent")
 				send("q")
 			}
 			select {

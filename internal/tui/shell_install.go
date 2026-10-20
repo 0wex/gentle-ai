@@ -3,6 +3,7 @@ package tui
 import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/cli"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/shellinstaller"
 	"os"
 )
 
@@ -18,6 +19,28 @@ func (m Model) ShellInstallSelection() cli.ShellInstallSelection {
 }
 
 func (m Model) updateShellInstall(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.shellPlan != nil {
+		key, ok := msg.(tea.KeyMsg)
+		if !ok {
+			return m, nil
+		}
+		switch key.Type {
+		case tea.KeyEnter:
+			_ = os.Setenv("GENTLE_AI_SHELL_STEPS", "1")
+			return m.finishShellInstallSelection(cli.ShellInstallSelection{Request: m.shellPlanRequest, Confirmed: true}, nil)
+		case tea.KeyEsc:
+			m.shellExperience, m.shellPlanConfig = m.shellPlanConfig, nil
+			m.shellPlan, m.shellPlanRequest = nil, shellinstaller.UserInstallRequest{}
+			return m, nil
+		case tea.KeyCtrlC:
+			m.shellPlan, m.shellPlanConfig, m.shellExperience = nil, nil, nil
+			m.shellPlanRequest, m.shellInstallModel = shellinstaller.UserInstallRequest{}, nil
+			_ = os.Unsetenv("GENTLE_AI_RECONFIGURE_TARGET")
+			m.setScreen(ScreenWelcome)
+			return m, nil
+		}
+		return m, nil
+	}
 	if m.shellExperience != nil {
 		return m.configureShellExperience(msg)
 	}

@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/gentleman-programming/gentle-ai/v4/internal/cli"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/shellinstaller"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/system"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/tui/screens"
@@ -60,12 +59,12 @@ func TestShellMainChannelIsSelectable(t *testing.T) {
 	if cmd != nil || m.shellExperience != nil {
 		t.Fatalf("Main lost the stock preference parity: %+v", m.shellExperience)
 	}
-	state, ok := cli.ShellInstallPresentationOf(m.shellInstallModel)
-	if !ok || state.Request.Experience == nil || state.Request.Experience.SDKSource != "main-preview" || state.Request.Experience.CodeGraph != "on" {
-		t.Fatalf("Main request dropped a qualified preference: %+v", state.Request.Experience)
+	request := m.shellPlanRequest
+	if m.shellPlan == nil || request.Experience == nil || request.Experience.SDKSource != "main-preview" || request.Experience.CodeGraph != "on" {
+		t.Fatalf("Main request dropped a qualified preference: %+v", request.Experience)
 	}
-	if state.Request.Confirmation != "" || m.ShellInstallSelection().Confirmed {
-		t.Fatal("Main channel reused or forged consent")
+	if request.Confirmation == "" || m.ShellInstallSelection().Confirmed {
+		t.Fatal("Main plan lacks inspection or forged consent")
 	}
 }
 
@@ -84,19 +83,19 @@ func TestShellMainAcceptsQualifiedSelections(t *testing.T) {
 	if cmd != nil {
 		t.Fatal("Continue started a worker")
 	}
-	state, ok := cli.ShellInstallPresentationOf(m.shellInstallModel)
-	if !ok || m.shellExperience != nil {
-		t.Fatalf("qualified Main configuration did not continue: %v", state)
+	request := m.shellPlanRequest
+	if m.shellPlan == nil || m.shellExperience != nil {
+		t.Fatalf("qualified Main configuration did not continue: %+v", request)
 	}
 	want := shellinstaller.UserExperience{
 		Persona: "gentleman", BackgroundSubagents: "on", StrictTDD: "on",
 		GlobalRDD: "on", Context7: "on", CodeGraph: "on", GGA: "off",
 		SDKSource: "main-preview",
 	}
-	if state.Request.Experience == nil || *state.Request.Experience != want {
-		t.Fatalf("Main request dropped selections: %+v", state.Request.Experience)
+	if request.Experience == nil || *request.Experience != want {
+		t.Fatalf("Main request dropped selections: %+v", request.Experience)
 	}
-	if state.Request.Confirmation != "" || m.ShellInstallSelection().Confirmed {
-		t.Fatal("Main channel reused or forged consent")
+	if request.Confirmation == "" || m.ShellInstallSelection().Confirmed {
+		t.Fatal("Main plan lacks inspection or forged consent")
 	}
 }

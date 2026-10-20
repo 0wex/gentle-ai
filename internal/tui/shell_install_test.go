@@ -34,11 +34,13 @@ func TestShellInstallerWelcomeOptIn(t *testing.T) {
 	m = final.(Model)
 	final, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = final.(Model)
+	if m.shellPlan == nil || m.shellPlanRequest.Confirmation == "" || m.ShellInstallSelection().Confirmed {
+		t.Fatalf("welcome did not reach the unconfirmed installation plan: %+v", m.shellPlanRequest)
+	}
 	final, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
 	m = final.(Model)
-	selection, err := cli.ShellInstallOutcome(m.shellInstallModel)
-	if err != nil || cmd != nil || selection.Request.Destination != "q" || selection.Confirmed {
-		t.Fatalf("parent consumed selector input: %+v, %v", selection, err)
+	if cmd != nil || m.ShellInstallSelection().Confirmed || m.shellPlan == nil {
+		t.Fatal("parent consumed plan input or forged consent")
 	}
 }
 

@@ -30,6 +30,7 @@ import (
 	"github.com/gentleman-programming/gentle-ai/v4/internal/pipeline"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/planner"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/reviewtransaction"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/shellinstaller"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/state"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/statecoord"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/system"
@@ -638,6 +639,9 @@ const (
 type Model struct {
 	shellExperience       *shellExperienceConfig
 	shellReconfigure      string
+	shellPlan             []string
+	shellPlanConfig       *shellExperienceConfig
+	shellPlanRequest      shellinstaller.UserInstallRequest
 	shellReadyOffset      int
 	shellReadyCursor      int
 	shellInstallEnabled   bool
