@@ -27,6 +27,9 @@ func shellExperienceRecommendation(entry ShellExperienceEntry) (string, string) 
 		if entry.Choice == "existing" {
 			return "Configure existing", "Prefills this install's selections; continuing replaces only its target and keeps the previous tree."
 		}
+		if entry.Choice == "agent" {
+			return "Use my existing Pi agent", "Reuses the detected agent's settings and MCP with a private prefix; stock Stable only, Main and GGA need Separate."
+		}
 		if entry.Choice == "shared" {
 			return "Separate install", "Reuse a detected Pi only when you want the defaults applied over it; Main needs Separate."
 		}

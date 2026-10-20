@@ -24,7 +24,14 @@ func PublishNativePNPMInstallationWithExperience(ctx context.Context, source, st
 
 // Prepared archives are acquired by the capped coordinator before production.
 // Missing or unrequested library DATA never turns a valid DTO into admission.
-func userPublishNativePNPMPrepared(ctx context.Context, source, stage, destination string, location NativeInstallationLocation, profile *UserExperience, archives [][]byte) (result UserInstallResult, err error) {
+func userPublishNativePNPMPrepared(ctx context.Context, source, stage, destination string, location NativeInstallationLocation, profile *UserExperience, archives [][]byte, modeAgent ...string) (result UserInstallResult, err error) {
+	mode, agent := "separate", ""
+	if len(modeAgent) == 2 {
+		mode, agent = modeAgent[0], modeAgent[1]
+	}
+	if mode == "agent" && (agent == "" || !privateHierarchyPath(agent)) {
+		return result, privateError("refused", errors.New("agent reuse requires one absolute existing agent"))
+	}
 	if err = userValidateStageExperience(profile); err != nil {
 		return result, err
 	}
@@ -69,14 +76,25 @@ func userPublishNativePNPMPrepared(ctx context.Context, source, stage, destinati
 		return result, err
 	}
 	prefix, agent := filepath.Join(stage, "pnpm"), filepath.Join(stage, "agent")
+	if mode == "agent" && profile != nil {
+		if err = userStageOwnedAgentContext7(ctx, agent, profile.Context7, stage); err != nil {
+			return result, privateError("refused", err)
+		}
+	}
 	manifest := userManifest{
-		Schema: userSchema, Destination: destination, Mode: "separate",
+		Schema: userSchema, Destination: destination, Mode: mode,
 		Prefix: filepath.Join(destination, "pnpm"), Agent: filepath.Join(destination, "agent"), SupervisorSHA: supervisorSHA, CodeGraph: codegraph,
 		PNPM: &userPNPMManifest{PackageRoot: strings.TrimSuffix(staged.Installation.ShellCLI, "/bin/gentle-shell.mjs"), ShellVersion: location.ShellVersion, PeerVersion: location.PiVersion, CodeSeal: staged.CodeSeal},
 	}
-	manifest.PrefixIdentity, err = userIdentity(prefix)
-	if err == nil {
+	if mode == "agent" {
+		manifest.Agent = agent
+		manifest.AgentIdentity, err = userOwnedIdentity(agent)
+	} else {
 		manifest.AgentIdentity, err = userIdentity(agent)
+	}
+	manifest.PrefixIdentity = ""
+	if err == nil {
+		manifest.PrefixIdentity, err = userIdentity(prefix)
 	}
 	if err != nil {
 		return result, err

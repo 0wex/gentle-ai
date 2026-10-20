@@ -39,6 +39,11 @@ func shellDetectPi() (string, string, bool, string) {
 	return detection.Prefix, detection.Agent, detection.Found, note
 }
 
+func shellAgentUsable(path string) bool {
+	info, err := os.Lstat(path)
+	return err == nil && info.IsDir()
+}
+
 func shellDiscoverInstalls() []shellinstaller.UserShellInstall {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -87,7 +92,11 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	config := *m.shellExperience
 	config.err = nil
-	targets := screens.ShellInstallTargetEntries(config.choice, config.piFound, config.piNote, config.existing)
+	reuseAgent := ""
+	if shellAgentUsable(config.agent) {
+		reuseAgent = config.agent
+	}
+	targets := screens.ShellInstallTargetEntries(config.choice, config.piFound, config.piNote, reuseAgent, config.existing)
 	options := screens.ShellExperienceOptions(config.profile, targets...)
 	config.cursor = min(max(0, config.cursor), len(options)-1)
 	entry := options[config.cursor]
@@ -148,6 +157,8 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 					} else {
 						config.mode, config.choice = "shared", "shared"
 					}
+				} else if entry.Choice == "agent" && shellAgentUsable(config.agent) {
+					config.mode, config.choice, config.prefix = "agent", "agent", ""
 				} else if entry.Choice == "existing" && len(config.existing) == 1 {
 					install := config.existing[0]
 					profile, loadErr := shellinstaller.LoadUserShellExperience(install)
@@ -182,9 +193,17 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				if config.err == nil {
 					state, _ := cli.ShellInstallPresentationOf(m.shellInstallModel)
+					if config.mode == "agent" && (config.profile.SDKSource == "main-preview" || config.profile.GGA == "on") {
+						config.err = errors.New("using an existing Pi agent supports stock Stable without GGA; choose Separate for Main or GGA")
+					}
+					if config.err != nil {
+						break
+					}
 					state.Request.Mode = config.mode
 					if config.mode == "shared" {
 						state.Request.SharedPrefix, state.Request.SharedAgent = config.prefix, config.agent
+					} else if config.mode == "agent" {
+						state.Request.SharedPrefix, state.Request.SharedAgent = "", config.agent
 					} else {
 						state.Request.SharedPrefix, state.Request.SharedAgent = "", ""
 					}
@@ -221,7 +240,11 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) shellInstallView() string {
 	if m.shellExperience != nil {
-		targets := screens.ShellInstallTargetEntries(m.shellExperience.choice, m.shellExperience.piFound, m.shellExperience.piNote, m.shellExperience.existing)
+		reuseAgent := ""
+		if shellAgentUsable(m.shellExperience.agent) {
+			reuseAgent = m.shellExperience.agent
+		}
+		targets := screens.ShellInstallTargetEntries(m.shellExperience.choice, m.shellExperience.piFound, m.shellExperience.piNote, reuseAgent, m.shellExperience.existing)
 		return screens.RenderShellExperience(m.shellExperience.profile, m.shellExperience.cursor, m.shellExperience.err, m.Width, m.Height, targets...)
 	}
 	state, ok := cli.ShellInstallPresentationOf(m.shellInstallModel)

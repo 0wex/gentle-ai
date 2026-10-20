@@ -85,7 +85,7 @@ func TestShellInstallTargetRefusesSharedMain(t *testing.T) {
 	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = next.(Model)
 	if m.shellExperience == nil || m.shellExperience.err == nil || !strings.Contains(m.shellExperience.err.Error(), "Separate") {
-		t.Fatalf("Shared Main preview was not refused precisely: %v", m.shellExperience.err)
+		t.Fatalf("Shared Main preview was not refused precisely: %v", m.shellExperience)
 	}
 }
 
@@ -149,5 +149,69 @@ func TestShellConfigureExistingPrefillsAndKeepsTarget(t *testing.T) {
 	state, _ = cli.ShellInstallPresentationOf(m.shellInstallModel)
 	if state.Request.Destination != target {
 		t.Fatalf("existing target became editable: %q", state.Request.Destination)
+	}
+}
+
+func restrictedAgentHome(t *testing.T) string {
+	t.Helper()
+	t.Setenv("NPM_CONFIG_PREFIX", "")
+	home := t.TempDir()
+	if err := os.Chmod(home, 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+	agent := filepath.Join(home, ".pi", "agent")
+	if err := os.MkdirAll(agent, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(agent, 0755); err != nil {
+		t.Fatal(err)
+	}
+	prefix := filepath.Join(home, ".npm-global")
+	bundle := filepath.Join(prefix, "lib/node_modules/@earendil-works/pi-coding-agent/dist/bundle")
+	if err := os.MkdirAll(bundle, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(bundle, "cli.js"), []byte("stock cli"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(prefix, 0755); err != nil {
+		t.Fatal(err)
+	}
+	return agent
+}
+
+func TestShellAgentReuseOption(t *testing.T) {
+	agent := restrictedAgentHome(t)
+	m := openTargetConfiguration(t)
+	m = experienceFocus(t, m, screens.ShellExperienceInstallTarget, "agent")
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Model)
+	if m.shellExperience.mode != "agent" || m.shellExperience.choice != "agent" {
+		t.Fatalf("agent reuse was not selected: %+v", m.shellExperience)
+	}
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnd})
+	m = next.(Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Model)
+	state, ok := cli.ShellInstallPresentationOf(m.shellInstallModel)
+	if !ok || state.Request.Mode != "agent" || state.Request.SharedAgent != agent || state.Request.SharedPrefix != "" {
+		t.Fatalf("agent reuse request differs: %+v", state.Request)
+	}
+	// Main preview is refused for agent reuse on a fresh editor state.
+	restrictedAgentHome(t)
+	main := openTargetConfiguration(t)
+	main = experienceFocus(t, main, screens.ShellExperienceInstallTarget, "agent")
+	next, _ = main.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	main = next.(Model)
+	profile := main.shellExperience.profile
+	profile.SDKSource = "main-preview"
+	main.shellExperience.profile = profile
+	next, _ = main.Update(tea.KeyMsg{Type: tea.KeyEnd})
+	main = next.(Model)
+	next, _ = main.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	main = next.(Model)
+	if main.shellExperience == nil || main.shellExperience.err == nil || !strings.Contains(main.shellExperience.err.Error(), "stock Stable") {
+		t.Fatalf("Main was admitted for agent reuse: %v", main.shellExperience)
 	}
 }

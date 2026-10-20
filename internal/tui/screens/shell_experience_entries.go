@@ -43,7 +43,7 @@ func shellExperienceCategories() []string {
 // ShellInstallTargetEntries projects the install-target choice. It is not part
 // of UserExperience, so the transport DTO stays unchanged; the caller owns the
 // selection and the detected Pi data.
-func ShellInstallTargetEntries(mode string, piFound bool, piNote string, existing []shellinstaller.UserShellInstall) []ShellExperienceEntry {
+func ShellInstallTargetEntries(mode string, piFound bool, piNote string, agent string, existing []shellinstaller.UserShellInstall) []ShellExperienceEntry {
 	piDescription := "Reuse the single detected Pi prefix and agent; Context7 is written into its mcp.json."
 	if !piFound {
 		piDescription = "No single npm-style Pi install was detected; fix that Pi install or choose Separate."
@@ -55,6 +55,9 @@ func ShellInstallTargetEntries(mode string, piFound bool, piNote string, existin
 	entries := []ShellExperienceEntry{
 		{Control: ShellExperienceInstallTarget, Category: "Install target", Kind: "radio", Label: sharedValue, Description: piDescription, Choice: "shared", Value: sharedValue, Current: mode == "shared"},
 		{Control: ShellExperienceInstallTarget, Category: "Install target", Kind: "radio", Label: separateValue, Description: "Own target: private prefix, agent, runtime and launchers; your personal Pi is untouched.", Choice: "separate", Value: separateValue, Current: mode == "separate"},
+	}
+	if agent != "" {
+		entries = append(entries, ShellExperienceEntry{Control: ShellExperienceInstallTarget, Category: "Install target", Kind: "radio", Label: "Use my existing Pi agent", Description: "Install privately but reuse " + agent + " for settings and MCP; its prefix (for example Homebrew) is never written.", Choice: "agent", Value: "Use my existing Pi agent", Current: mode == "agent"})
 	}
 	if len(existing) == 1 {
 		install := existing[0]

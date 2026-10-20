@@ -14,7 +14,13 @@ import (
 func userReadPNPMManifest(ctx context.Context, root string, manifest userManifest) (userManifest, error) {
 	fail := func(err error) (userManifest, error) { return manifest, privateError("readback", err) }
 	p := manifest.PNPM
-	if p == nil || manifest.Mode != "separate" || manifest.Prefix != filepath.Join(root, "pnpm") || manifest.Agent != filepath.Join(root, "agent") || manifest.NodeSHA != "" || manifest.MainSDK != nil || manifest.GGA {
+	if p == nil || (manifest.Mode != "separate" && manifest.Mode != "agent") || manifest.Prefix != filepath.Join(root, "pnpm") || manifest.NodeSHA != "" || manifest.MainSDK != nil || manifest.GGA {
+		return fail(nil)
+	}
+	if manifest.Mode == "separate" && manifest.Agent != filepath.Join(root, "agent") {
+		return fail(nil)
+	}
+	if manifest.Mode == "agent" && (!privateHierarchyPath(manifest.Agent) || strings.HasPrefix(manifest.Agent, root+"/")) {
 		return fail(nil)
 	}
 	if !filepath.IsLocal(p.PackageRoot) || filepath.Clean(p.PackageRoot) != p.PackageRoot || !strings.HasPrefix(p.PackageRoot, "pnpm/") || p.ShellVersion != "4.0.0" || p.PeerVersion != "1.2.0" {
@@ -27,7 +33,11 @@ func userReadPNPMManifest(ctx context.Context, root string, manifest userManifes
 		}
 	}
 	for path, expected := range map[string]string{manifest.Prefix: manifest.PrefixIdentity, manifest.Agent: manifest.AgentIdentity} {
-		actual, err := userIdentity(path)
+		identity := userIdentity
+		if path == manifest.Agent && manifest.Mode == "agent" {
+			identity = userOwnedIdentity
+		}
+		actual, err := identity(path)
 		if err != nil || actual != expected {
 			return fail(err)
 		}

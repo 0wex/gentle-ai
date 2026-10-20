@@ -46,18 +46,24 @@ func userValidateInstall(req UserInstallRequest) error {
 		return err
 	}
 	if req.Experience != nil && req.Mode != "separate" {
-		if req.Mode != "shared" {
-			return experienceError("explicit experience requires a fresh Separate or Shared runtime")
-		}
-		if req.Experience.SDKSource == "main-preview" {
-			return experienceError("Main preview requires a Separate installation; choose Stable to install over your Pi")
+		switch req.Mode {
+		case "shared":
+			if req.Experience.SDKSource == "main-preview" {
+				return experienceError("Main preview requires a Separate installation; choose Stable to install over your Pi")
+			}
+		case "agent":
+			if req.Experience.SDKSource == "main-preview" || req.Experience.GGA == "on" {
+				return experienceError("using an existing Pi agent supports stock Stable without GGA; choose Separate for Main or GGA")
+			}
+		default:
+			return experienceError("explicit experience requires a fresh Separate, Shared or agent-reuse runtime")
 		}
 	}
 	req, err := userCanonicalRequest(req)
 	if err != nil {
 		return err
 	}
-	if !userSelectionPath(req.Destination) || (req.Mode != "separate" && req.Mode != "shared") {
+	if !userSelectionPath(req.Destination) || (req.Mode != "separate" && req.Mode != "shared" && req.Mode != "agent") {
 		return privateError("refused", errors.New("choose separate or shared mode and a canonical absolute target using only ASCII letters, digits, /, _, . or -"))
 	}
 	parent, err := privateDirectory(filepath.Dir(req.Destination))
@@ -86,6 +92,12 @@ func userValidateInstall(req UserInstallRequest) error {
 	if req.Mode == "separate" {
 		if req.SharedPrefix != "" || req.SharedAgent != "" {
 			return privateError("refused", errors.New("separate mode cannot select shared paths"))
+		}
+		return nil
+	}
+	if req.Mode == "agent" {
+		if req.SharedPrefix != "" || req.SharedAgent == "" || !privateHierarchyPath(req.SharedAgent) || userPathsOverlap(req.SharedAgent, req.Destination) {
+			return privateError("refused", errors.New("agent reuse requires one absolute existing agent disjoint from the target"))
 		}
 		return nil
 	}
@@ -137,10 +149,14 @@ func userInspectInstall(req UserInstallRequest) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if req.Mode == "shared" {
+	if req.Mode == "shared" || req.Mode == "agent" {
+		paths := []string{req.SharedPrefix, req.SharedAgent}
+		if req.Mode == "agent" {
+			paths = []string{req.SharedAgent}
+		}
 		var stamps []string
 		for pass := 0; pass < 2; pass++ {
-			for index, path := range []string{req.SharedPrefix, req.SharedAgent} {
+			for index, path := range paths {
 				stamp, inspectErr := userTreeStamp(path)
 				if inspectErr != nil {
 					return "", inspectErr

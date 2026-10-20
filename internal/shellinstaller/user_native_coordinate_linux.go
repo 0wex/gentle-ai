@@ -20,7 +20,7 @@ func userNativeFreshRequest(args []string) (UserInstallRequest, bool, error) {
 	if err != nil {
 		return req, false, err
 	}
-	if req.Mode != "separate" {
+	if req.Mode != "separate" && req.Mode != "agent" {
 		return req, false, nil
 	}
 	req, err = userCanonicalRequest(req)
@@ -142,7 +142,7 @@ func userNativeCoordinate(ctx context.Context, self string, args []string, stdin
 	if err != nil {
 		return err
 	}
-	installed, err := userPublishNativePNPMPrepared(ctx, root, stage, req.Destination, *location, req.Experience, codegraph)
+	installed, err := userPublishNativePNPMPrepared(ctx, root, stage, req.Destination, *location, req.Experience, codegraph, req.Mode, req.SharedAgent)
 	if err != nil {
 		return err
 	}
