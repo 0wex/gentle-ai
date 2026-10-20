@@ -20,7 +20,7 @@ import (
 // Generated producer preferences may already contain unrelated state. Merge only
 // the reviewed keys in the unpublished copy, never an environment-selected home.
 func userStagePrivateChoices(ctx context.Context, root string, profile *UserExperience) error {
-	if profile == nil || !userQualifiedStockExperience(profile) {
+	if profile == nil || !userQualifiedPrivateChoices(profile) {
 		return nil
 	}
 	if profile.GlobalRDD != "" {

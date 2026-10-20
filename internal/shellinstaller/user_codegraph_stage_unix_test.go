@@ -23,9 +23,14 @@ func TestUserCodeGraphStageRefusesBeforeEffects(t *testing.T) {
 				root := filepath.Join(parent, "stage")
 				var refusal error
 				if mode == "separate" && runtime.GOOS == "linux" && runtime.GOARCH == "amd64" {
-					// Qualified Separate now has paired positive coverage; the generic
-					// writer must still reject the same selection without effects.
-					files, err := userStageExperienceFiles(&profile)
+					// Qualified Separate has paired positive coverage; an unsupported
+					// Main+CodeGraph combination keeps the generic refusal.
+					if files, err := userStageExperienceFiles(&profile); err != nil || len(files) == 0 {
+						t.Fatal("qualified profile lost generic staging", files, err)
+					}
+					refused := profile
+					refused.SDKSource, refused.CodeGraph = "main-preview", "on"
+					files, err := userStageExperienceFiles(&refused)
 					if files != nil {
 						t.Fatal("generic CodeGraph refusal returned staged files", files)
 					}
@@ -33,7 +38,13 @@ func TestUserCodeGraphStageRefusesBeforeEffects(t *testing.T) {
 				} else {
 					refusal = userPrepareInstallStage(context.Background(), root, mode, &profile)
 				}
-				if refusal == nil || !strings.Contains(refusal.Error(), "CodeGraph") {
+				want := "CodeGraph"
+				if mode == "separate" && runtime.GOOS == "linux" && runtime.GOARCH == "amd64" {
+					// The stock PNPM stage has no Main producer, so it names Main
+					// first on the unsupported combination.
+					want = "Main SDK"
+				}
+				if refusal == nil || !strings.Contains(refusal.Error(), want) {
 					t.Fatal("unqualified CodeGraph stage was admitted", refusal)
 				}
 				entries, err := os.ReadDir(parent)

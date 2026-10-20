@@ -24,9 +24,13 @@ func TestUserStrictTDDExperienceCodec(t *testing.T) {
 			if err != nil || json.Unmarshal(data, &identity) != nil || len(identity) != 4 || identity[3] != raw {
 				t.Fatalf("confirmation did not bind Strict TDD: %s: %v", data, err)
 			}
-			profile.SDKSource = "main-preview" // Canonical bytes do not qualify an unsupported SDK combination.
-			if err := userExperienceSupported(&profile); err == nil {
-				t.Fatal("codec granted public support")
+			profile.SDKSource = "main-preview"
+			if err := userExperienceSupported(&profile); err != nil {
+				t.Fatalf("qualified Main + Strict TDD was refused: %v", err)
+			}
+			profile.CodeGraph = "on"
+			if err := userExperienceSupported(&profile); err == nil || !strings.Contains(err.Error(), "CodeGraph") {
+				t.Fatal("codec granted an unsupported Main combination")
 			}
 		})
 	}

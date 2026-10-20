@@ -77,12 +77,12 @@ func TestUserContext7ExperienceRefusesUnsupportedStage(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		profile.SDKSource = "main-preview" // MCP plus Main still lacks a qualified consumer.
+		profile.SDKSource = "main-preview" // MCP plus Main is served by its own worker, not the stock PNPM stage.
+		if err := userExperienceSupported(&profile); err != nil {
+			t.Fatalf("qualified Main Context7 was refused: %v", err)
+		}
 		if files, err := userStageExperienceFiles(&profile); err == nil || files != nil || !strings.Contains(err.Error(), "Main SDK") {
 			t.Fatalf("unsupported MCP staging silently accepted: %v, %v", files, err)
-		}
-		if err := userExperienceSupported(&profile); err == nil {
-			t.Fatal("codec granted public installer support")
 		}
 		identity := []string{"destination", "mode", "identity"}
 		data, err := userExperienceConfirmationData(identity, &profile)

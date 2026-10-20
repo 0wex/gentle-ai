@@ -155,7 +155,9 @@ func TestUserStageExperienceRejectsExplicitRDD(t *testing.T) {
 	profile := UserExperience{Persona: "gentleman", BackgroundSubagents: "on"}
 	profile.GlobalRDD = "off"
 	profile.SDKSource = "main-preview"
-	if err := userStageExperience(context.Background(), "missing", &profile); err == nil || !strings.Contains(err.Error(), "RDD") {
+	// The stock PNPM publication route has no Main producer, so the profile is
+	// refused before any path is touched; Main itself is served by its worker.
+	if err := userStageExperience(context.Background(), "missing", &profile); err == nil || !strings.Contains(err.Error(), "Main SDK requires its authenticated runtime producer") {
 		t.Fatalf("explicit RDD was dropped or touched paths before refusal: %v", err)
 	}
 }

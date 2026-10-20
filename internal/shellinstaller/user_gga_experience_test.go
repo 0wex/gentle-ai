@@ -84,10 +84,15 @@ func TestUserGGAExperienceHistoricalAndRefusal(t *testing.T) {
 		{Persona: "unmanaged", BackgroundSubagents: "off", GGA: "on", GGAProvider: "codex"},
 	} {
 		refusal := "GGA"
+		mainAdmitted := false
 		if profile.GGA == "off" {
-			profile.SDKSource, refusal = "main-preview", "Main SDK"
+			// Main keeps GGA out of its qualified set but is served by its own
+			// worker; the stock PNPM stage below still has no Main producer.
+			profile.SDKSource, refusal, mainAdmitted = "main-preview", "Main SDK", true
 		}
-		if err := userExperienceSupported(&profile); err == nil {
+		if err := userExperienceSupported(&profile); mainAdmitted && err != nil {
+			t.Fatalf("qualified Main without GGA was refused: %v", err)
+		} else if !mainAdmitted && err == nil {
 			t.Fatal("transport granted public installation")
 		}
 		if files, err := userStageExperienceFiles(&profile); err == nil || files != nil || !strings.Contains(err.Error(), refusal) {

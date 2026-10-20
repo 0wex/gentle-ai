@@ -83,8 +83,12 @@ func TestUserCodeGraphExperienceHistoricalAndRefusal(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		profile.SDKSource = "main-preview" // This explicit optional/SDK combination remains unqualified.
-		if err := userExperienceSupported(&profile); err == nil {
+		profile.SDKSource = "main-preview" // CodeGraph stays outside the Main worker's qualified set.
+		if choice == "off" {
+			if err := userExperienceSupported(&profile); err != nil {
+				t.Fatalf("qualified Main without CodeGraph was refused: %v", err)
+			}
+		} else if err := userExperienceSupported(&profile); err == nil || !strings.Contains(err.Error(), "CodeGraph") {
 			t.Fatal("transport granted public installation")
 		}
 		if files, err := userStageExperienceFiles(&profile); err == nil || files != nil || !strings.Contains(err.Error(), "Main SDK") {

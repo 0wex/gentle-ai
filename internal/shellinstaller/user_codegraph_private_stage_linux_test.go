@@ -55,11 +55,19 @@ func TestUserCodeGraphPrivateSeparateStage(t *testing.T) {
 							t.Fatal("ON failed before the real producer cancellation boundary", err)
 						}
 					}
-					if files, err := userStageExperienceFiles(&profile); err == nil || files != nil || !strings.Contains(err.Error(), "CodeGraph") {
-						t.Fatal("private admission opened the generic writer", files, err)
+					if files, err := userStageExperienceFiles(&profile); err != nil || len(files) == 0 {
+						t.Fatal("qualified stock profile lost the generic writer", files, err)
 					}
-					if err := userExperienceSupported(&profile); err == nil {
-						t.Fatal("private preparation opened unqualified public installation")
+					if err := userExperienceSupported(&profile); err != nil {
+						t.Fatalf("qualified stock profile was refused: %v", err)
+					}
+					refused := profile
+					refused.SDKSource, refused.CodeGraph = "main-preview", "on"
+					if files, err := userStageExperienceFiles(&refused); err == nil || files != nil || !strings.Contains(err.Error(), "Main SDK") {
+						t.Fatal("unsupported Main CodeGraph opened the generic writer", files, err)
+					}
+					if err := userExperienceSupported(&refused); err == nil || !strings.Contains(err.Error(), "CodeGraph") {
+						t.Fatal("private preparation opened unqualified public installation", err)
 					}
 					after, err := userTreeStamp(root)
 					if err != nil || after != stamp {

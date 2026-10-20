@@ -78,7 +78,7 @@ func userPrepareInstallStage(ctx context.Context, root, mode string, profile *Us
 	if profile == nil {
 		return nil
 	}
-	if userQualifiedStockExperience(profile) {
+	if userQualifiedPrivateChoices(profile) {
 		return userStagePrivateChoices(ctx, root, profile)
 	}
 	if err := userStageContext7(ctx, root, mode, profile.Context7); err != nil {

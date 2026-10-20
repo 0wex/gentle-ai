@@ -77,9 +77,19 @@ func TestShellExperienceSDKSourcePreservesConflicts(t *testing.T) {
 	m = sdkSourceRow(t, m)
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // stock
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyDown})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // Main refusal
-	if m.shellExperience == nil || m.shellExperience.profile.StrictTDD != "on" || m.shellExperience.profile.SDKSource != "stable" || m.shellExperience.err == nil {
-		t.Fatal("Main silently clears unsupported preferences")
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // Main is selectable
+	if m.shellExperience == nil || m.shellExperience.profile.StrictTDD != "on" || m.shellExperience.profile.SDKSource != "main-preview" || m.shellExperience.err != nil {
+		t.Fatal("explicit preference locked the Main channel")
+	}
+	m = experienceFocus(t, m, screens.ShellExperienceCodeGraph, "")
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // explicit CodeGraph on
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.shellExperience == nil || m.shellExperience.err == nil || !strings.Contains(m.shellExperience.err.Error(), "CodeGraph") {
+		t.Fatal("unsupported Main CodeGraph combination was not named on continue")
+	}
+	if m.shellExperience.profile.StrictTDD != "on" || m.shellExperience.profile.CodeGraph != "on" || m.shellExperience.profile.SDKSource != "main-preview" {
+		t.Fatal("main refusal cleared explicit choices")
 	}
 }
 
@@ -91,16 +101,16 @@ func TestShellExperienceSDKSourceEditingConflictAndClear(t *testing.T) {
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyDown})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	m = experienceFocus(t, m, screens.ShellExperienceTDD, "")
+	m = experienceFocus(t, m, screens.ShellExperienceCodeGraph, "")
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	if m.shellExperience == nil || m.shellExperience.err == nil || m.shellExperience.profile.SDKSource != "main-preview" || m.shellExperience.profile.StrictTDD != "on" {
+	if m.shellExperience == nil || m.shellExperience.err == nil || m.shellExperience.profile.SDKSource != "main-preview" || m.shellExperience.profile.CodeGraph != "on" {
 		t.Fatal("editing Main combination silently changes selections or advances")
 	}
 	m = sdkSourceRow(t, m)
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyBackspace})
-	if m.shellExperience.profile.SDKSource != "" || m.shellExperience.profile.StrictTDD != "on" {
+	if m.shellExperience.profile.SDKSource != "" || m.shellExperience.profile.CodeGraph != "on" {
 		t.Fatal("clearing SDK source changes unrelated preferences")
 	}
 }

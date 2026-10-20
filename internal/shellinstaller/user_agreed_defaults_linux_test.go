@@ -13,13 +13,24 @@ import (
 	"time"
 )
 
+// testing.TempDir creates its numbered directory with the process umask, so a
+// strict private parent must be normalized before staging.
+func agreedStageParent(t *testing.T) string {
+	t.Helper()
+	parent := t.TempDir()
+	if err := os.Chmod(parent, 0700); err != nil {
+		t.Fatal(err)
+	}
+	return parent
+}
+
 func agreedDefaultsProfile() UserExperience {
 	return UserExperience{Persona: "gentleman", BackgroundSubagents: "on", StrictTDD: "on", GlobalRDD: "on", CodeGraph: "on", Context7: "on", GGA: "off"}
 }
 
 func TestUserAgreedDefaultsReachInspection(t *testing.T) {
 	profile := agreedDefaultsProfile()
-	parent := t.TempDir()
+	parent := agreedStageParent(t)
 	before, err := userTreeStamp(parent)
 	if err != nil {
 		t.Fatal(err)
@@ -58,7 +69,7 @@ func TestUserAgreedDefaultsReachInspection(t *testing.T) {
 
 func TestUserAgreedDefaultsKeepProducerUnprofiled(t *testing.T) {
 	profile := agreedDefaultsProfile()
-	root := filepath.Join(t.TempDir(), "producer")
+	root := filepath.Join(agreedStageParent(t), "producer")
 	if err := userPrepareNativeProducer(context.Background(), root, &profile); err != nil {
 		t.Fatalf("agreed defaults cannot prepare the native producer: %v", err)
 	}
@@ -72,7 +83,7 @@ func TestUserAgreedDefaultsKeepProducerUnprofiled(t *testing.T) {
 
 func TestUserAgreedDefaultsPrivateConsumers(t *testing.T) {
 	ctx := context.Background()
-	root := filepath.Join(t.TempDir(), "stage")
+	root := filepath.Join(agreedStageParent(t), "stage")
 	if err := userPrepareInstallStage(ctx, root, "separate", nil); err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +150,7 @@ func TestUserAgreedDefaultsUnsafeStateRefuses(t *testing.T) {
 	for _, scenario := range []string{"malformed", "unknown-mode", "bad-cutoff", "duplicate", "case-alias", "symlink", "hardlink"} {
 		t.Run(scenario, func(t *testing.T) {
 			ctx := context.Background()
-			root := filepath.Join(t.TempDir(), "stage")
+			root := filepath.Join(agreedStageParent(t), "stage")
 			if err := userPrepareInstallStage(ctx, root, "separate", nil); err != nil {
 				t.Fatal(err)
 			}
@@ -185,7 +196,11 @@ func TestUserAgreedDefaultsUnsafeMCPRefuses(t *testing.T) {
 		`{"mcpServers":{"context7":{"url":"https://mcp.context7.com/mcp","enabled":true,"Enabled":false}}}`,
 	} {
 		t.Run(fmt.Sprintf("case-%d", index), func(t *testing.T) {
-			root := filepath.Join(t.TempDir(), "stage")
+			parent := t.TempDir()
+			if err := os.Chmod(parent, 0700); err != nil { // testing.TempDir uses the process umask.
+				t.Fatal(err)
+			}
+			root := filepath.Join(parent, "stage")
 			if err := userPrepareInstallStage(context.Background(), root, "separate", nil); err != nil {
 				t.Fatal(err)
 			}

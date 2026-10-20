@@ -37,6 +37,32 @@ func userQualifiedStockExperience(profile *UserExperience) bool {
 		profile.SDKSource != "main-preview" && profile.GGA != "on"
 }
 
+// Main preview delivers the same private preference consumers through the
+// legacy authenticated Main worker. CodeGraph and GGA ON have no qualified
+// Main binding; both keep their explicit refusal instead of being dropped.
+func userQualifiedMainExperience(profile *UserExperience) bool {
+	return profile != nil && runtime.GOOS == "linux" && runtime.GOARCH == "amd64" &&
+		profile.SDKSource == "main-preview" && profile.CodeGraph != "on" && profile.GGA != "on"
+}
+
+// Both qualified distributions share the canonical private writers.
+func userQualifiedPrivateChoices(profile *UserExperience) bool {
+	return userQualifiedStockExperience(profile) || userQualifiedMainExperience(profile)
+}
+
+func userValidateMainExperience(profile *UserExperience) error {
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
+		return experienceError("SDK Main + stock provider requires Linux amd64 Separate")
+	}
+	if profile.CodeGraph == "on" {
+		return experienceError("Main preview does not support CodeGraph; turn it off or choose Stable")
+	}
+	if profile.GGA == "on" {
+		return experienceError("Main preview does not support GGA; turn it off or choose Stable")
+	}
+	return nil
+}
+
 // A valid DTO alone is not admission: unsupported distributions/combinations
 // retain their refusal, while the qualified route materializes every selection.
 func userExperienceSupported(profile *UserExperience) error {
@@ -46,10 +72,10 @@ func userExperienceSupported(profile *UserExperience) error {
 	if err := profile.Validate(); err != nil {
 		return err
 	}
-	if profile.SDKSource == "main-preview" && (runtime.GOOS != "linux" || runtime.GOARCH != "amd64") {
-		return experienceError("SDK Main + stock provider requires Linux amd64 Separate")
+	if profile.SDKSource == "main-preview" {
+		return userValidateMainExperience(profile)
 	}
-	if (profile.GlobalRDD != "" || profile.Context7 != "" || profile.StrictTDD != "" || profile.GGA != "" || profile.CodeGraph != "") && !userQualifiedStockExperience(profile) {
+	if (profile.GlobalRDD != "" || profile.Context7 != "" || profile.StrictTDD != "" || profile.GGA != "" || profile.CodeGraph != "") && !userQualifiedPrivateChoices(profile) {
 		return experienceError("selected additional experience preferences require a compatible installed runtime")
 	}
 	return nil

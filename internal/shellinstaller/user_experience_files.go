@@ -36,7 +36,7 @@ func userValidateStagePreferences(profile *UserExperience) error {
 	if err := profile.Validate(); err != nil {
 		return err
 	}
-	if profile.GlobalRDD != "" && !userQualifiedStockExperience(profile) {
+	if profile.GlobalRDD != "" && !userQualifiedPrivateChoices(profile) {
 		return experienceError("explicit global RDD requires a supported native distribution")
 	}
 	return nil

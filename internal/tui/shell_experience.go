@@ -102,8 +102,11 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			case screens.ShellExperienceProvider: // Typed explicitly, never inferred from Pi.
 			case screens.ShellExperienceSDK:
+				// The channel never consumes an optional preference. Only the
+				// platform qualification locks it; unsupported preference
+				// pairings are named when continuing.
 				if entry.Choice == "main-preview" {
-					config.err = shellMainSDKChoiceError(config.profile)
+					config.err = shellMainPlatformError()
 				}
 				if config.err == nil {
 					config.profile.SDKSource = entry.Choice
@@ -196,12 +199,22 @@ func (m Model) shellExperienceNavigation(key tea.KeyMsg) (Model, bool) {
 }
 
 // This visible choice gate never grants worker or physical-selection authority.
-func shellMainSDKChoiceError(p shellinstaller.UserExperience) error {
+func shellMainPlatformError() error {
 	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
 		return errors.New("SDK Main + stock provider requires Linux amd64 fresh Separate")
 	}
-	if p.StrictTDD != "" || p.GlobalRDD != "" || p.CodeGraph != "" || p.Context7 != "" || p.GGA != "" {
-		return errors.New("Main SDK combinations are not qualified; preserve or edit your explicit choices")
+	return nil
+}
+
+func shellMainSDKChoiceError(p shellinstaller.UserExperience) error {
+	if err := shellMainPlatformError(); err != nil {
+		return err
+	}
+	if p.CodeGraph == "on" {
+		return errors.New("Main preview does not support CodeGraph; turn it off or choose Stable")
+	}
+	if p.GGA == "on" {
+		return errors.New("Main preview does not support GGA; turn it off or choose Stable")
 	}
 	return nil
 }

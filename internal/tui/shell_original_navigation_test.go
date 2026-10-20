@@ -11,12 +11,11 @@ import (
 func TestShellOriginalOrdinaryWelcomeDispatch(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	for label, want := range map[string]Screen{
-		"Start installation":                ScreenDetection,
-		"Configure models":                  ScreenModelConfig,
-		"Create your own Agent (no agents)": ScreenWelcome,
-		"Manage backups":                    ScreenBackups,
-		"Receipt-Driven Development":        ScreenReviewMode,
-		"Managed uninstall":                 ScreenUninstallMode,
+		"Start installation":         ScreenDetection,
+		"Configure models":           ScreenModelConfig,
+		"Manage backups":             ScreenBackups,
+		"Receipt-Driven Development": ScreenReviewMode,
+		"Managed uninstall":          ScreenUninstallMode,
 	} {
 		t.Run(label, func(t *testing.T) {
 			m := NewModel(system.DetectionResult{}, "restore-ui-test").WithShellInstaller()
@@ -34,6 +33,29 @@ func TestShellOriginalOrdinaryWelcomeDispatch(t *testing.T) {
 				t.Fatalf("ordinary welcome row %q routed to %v, want %v", label, got.Screen, want)
 			}
 		})
+	}
+	// The agent row label follows the host's engine detection: an enabled host
+	// opens the builder, a host without engines keeps the row inert.
+	m := NewModel(system.DetectionResult{}, "restore-ui-test").WithShellInstaller()
+	hasEngines := m.hasAgentBuilderEngines()
+	label := "Create your own Agent"
+	if !hasEngines {
+		label = "Create your own Agent (no agents)"
+	}
+	for index, option := range screens.WelcomeOptionsWithShellInstaller(nil, false, hasEngines, true) {
+		if option == label {
+			m.Cursor = index
+		}
+	}
+	cursor := m.Cursor
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	got := next.(Model)
+	want := ScreenAgentBuilderEngine
+	if !hasEngines {
+		want = ScreenWelcome
+	}
+	if got.Screen != want || want == ScreenWelcome && got.Cursor != cursor {
+		t.Fatalf("agent row %q routed to %v, want %v", label, got.Screen, want)
 	}
 }
 
