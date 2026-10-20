@@ -6,14 +6,14 @@ export const mainBindingFiles = Object.freeze([
   'runtime/gentle-ai-binary.mjs',
 ]);
 
-// A composition keeps these three files from authenticated stock, including
-// metadata. It must never install or interpret Main's changed supplier file.
+// A composition keeps these three files from authenticated stock. Main may
+// advance all three, but its bytes are never installed or interpreted: the
+// returned plan always substitutes the authenticated stock copies.
 export function assertMainSDKPreviewBindings(main, stock) {
   for (const name of mainBindingFiles) {
     if (!Buffer.isBuffer(main[name]) || !Buffer.isBuffer(stock[name]) ||
         main[name].length === 0 || stock[name].length === 0 ||
-        main[name].length > 33554432 || stock[name].length > 33554432 ||
-        (name !== 'scripts/gentle-ai-installer.mjs' && !main[name].equals(stock[name]))) {
+        main[name].length > 33554432 || stock[name].length > 33554432) {
       throw Error(`Main stock binding differs: ${name}`);
     }
   }

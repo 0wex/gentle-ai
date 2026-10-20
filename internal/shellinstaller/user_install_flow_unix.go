@@ -729,8 +729,11 @@ func userVerifyGlobalAction(ctx context.Context, root, prefix, agent, finalPrefi
 	defer cancel()
 	cmd := exec.CommandContext(ctx, filepath.Join(root, "runtime/node/bin/node"), helper, root, prefix, agent, finalPrefix, finalRoot, mode, action)
 	cmd.Dir, cmd.Env = filepath.Join(root, "project"), userEnvironment(root, prefix, agent)
-	_, err := userOwnedRun(ctx, cmd, cancel)
-	return err
+	output, err := userOwnedRun(ctx, cmd, cancel)
+	if err != nil {
+		return fmt.Errorf("%w; bounded output: %s", err, output)
+	}
+	return nil
 }
 
 func userNativeReadback(ctx context.Context, root string) error {

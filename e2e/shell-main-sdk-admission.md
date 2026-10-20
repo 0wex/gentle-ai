@@ -10,8 +10,9 @@ as the fixed preservation plan; native/dependency pins remain unchanged.
 
 - `assertMainBindings` and ordinary stock `verify` stay unchanged: full Main still
   fails when either supplier differs from the authenticated original.
-- New `assertMainSDKPreviewBindings` requires exact stock package metadata and
-  resolver bytes. Main's installer must remain bounded source DATA, not a supplier
+- New `assertMainSDKPreviewBindings` preserves the authenticated stock
+  package metadata and resolver even when Main advances either file; Main's
+  copies are never installed or interpreted. Main's installer must remain bounded source DATA, not a supplier
   admitted for execution. The returned frozen plan preserves all three stock
   binding files; it never directs a caller to copy Main's changed installer.
 - New modern Separate-only `verify-main-sdk-source` runs every original stock
