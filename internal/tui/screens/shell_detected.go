@@ -2,6 +2,7 @@ package screens
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/tui/styles"
@@ -16,6 +17,45 @@ type ShellDetectedInstall struct {
 }
 
 var shellDetectedActions = []string{"Manage this installation", "Back"}
+
+// ShellDetectedEntry is one installation row in the multi-install selector.
+type ShellDetectedEntry struct {
+	Target, Mode, Channel string
+}
+
+// RenderShellDetectedList never guesses between installations: the operator
+// selects the target to manage.
+func RenderShellDetectedList(entries []ShellDetectedEntry, cursor, width, height int) string {
+	if width <= 0 || height <= 0 {
+		return ""
+	}
+	lines := []string{styles.TitleStyle.Render("Gentle-Shell installations detected"), "", "  Choose the installation to manage:", ""}
+	for index, entry := range entries {
+		marker := "  "
+		if index == cursor {
+			marker = "▸ "
+		}
+		lines = append(lines, fmt.Sprintf("  %s%s  ·  %s", marker, entry.Mode, entry.Channel), "      "+shellDetectedTarget(entry.Target))
+	}
+	lines = append(lines, "", styles.HelpStyle.Render("j/k: navigate • enter: manage selected • esc: back"))
+	if len(lines) > height {
+		lines = lines[:height]
+	}
+	for index, line := range lines {
+		if len(line) > width {
+			lines[index] = line[:width]
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+func shellDetectedTarget(path string) string {
+	home, err := os.UserHomeDir()
+	if err == nil && strings.HasPrefix(path, home+string(os.PathSeparator)) {
+		return "~" + strings.TrimPrefix(path, home)
+	}
+	return path
+}
 
 func shellDetectedValue(value string) string {
 	if value == "" {
@@ -34,7 +74,7 @@ func RenderShellDetected(install ShellDetectedInstall, cursor, width, height int
 		styles.TitleStyle.Render("Gentle-Shell detected"),
 		"",
 		"  Found a managed Gentle-Shell installation:",
-		"  " + install.Target,
+		"  " + shellDetectedTarget(install.Target),
 		"",
 		fmt.Sprintf("  Mode: %s    Channel: %s", install.Mode, install.Channel),
 		fmt.Sprintf("  Persona: %s    Background subagents: %s", shellDetectedValue(install.Persona), shellDetectedValue(install.Background)),

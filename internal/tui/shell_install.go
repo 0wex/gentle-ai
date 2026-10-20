@@ -98,16 +98,21 @@ func (m Model) updateShellDetected(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if !ok {
 		return m, nil
 	}
+	last := len(m.shellDetected) - 1
+	if len(m.shellDetected) == 1 {
+		// Single install: Manage is the focused action and Back is below it.
+		last = 1
+	}
 	switch key.String() {
 	case "j", "down":
-		m.shellDetectedCursor = min(1, m.shellDetectedCursor+1)
+		m.shellDetectedCursor = min(last, m.shellDetectedCursor+1)
 	case "k", "up":
 		m.shellDetectedCursor = max(0, m.shellDetectedCursor-1)
 	case "enter":
-		if m.shellDetectedCursor == 0 {
-			return m.manageDetectedInstall(), nil
+		if len(m.shellDetected) == 1 && m.shellDetectedCursor == 1 {
+			return m.leaveDetectedInstall(), nil
 		}
-		return m.leaveDetectedInstall(), nil
+		return m.manageDetectedInstall(), nil
 	case "esc", "x", "ctrl+c":
 		return m.leaveDetectedInstall(), nil
 	}
@@ -115,7 +120,7 @@ func (m Model) updateShellDetected(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) leaveDetectedInstall() Model {
-	m.shellDetected = nil
+	m.shellDetected, m.shellDetectedProfiles = nil, nil
 	m.shellExperience, m.shellInstallModel = nil, nil
 	m.shellDetectedCursor = 0
 	m.setScreen(ScreenWelcome)
@@ -123,15 +128,23 @@ func (m Model) leaveDetectedInstall() Model {
 }
 
 func (m Model) manageDetectedInstall() Model {
-	install := *m.shellDetected
+	if m.shellDetectedCursor < 0 || m.shellDetectedCursor >= len(m.shellDetected) {
+		return m.leaveDetectedInstall()
+	}
+	install := m.shellDetected[m.shellDetectedCursor]
+	profile := m.shellDetectedProfiles[m.shellDetectedCursor]
+	if loaded, err := shellinstaller.LoadUserShellExperience(install); err == nil {
+		profile = loaded
+	}
 	_, _, found, note := shellDetectPi()
 	m.shellExperience = &shellExperienceConfig{
-		profile: m.shellDetectedProfile, mode: install.Mode, choice: "existing",
+		profile: profile, mode: install.Mode, choice: "existing",
 		prefix: install.Prefix, agent: install.Agent, piFound: found, piNote: note,
 		existing: []shellinstaller.UserShellInstall{install}, reconfigure: true, target: install.Target,
 	}
-	m.shellInstallModel = cli.NewShellInstallModelWithExperience(nil, m.shellDetectedProfile)
-	m.shellDetected, m.shellDetectedCursor = nil, 0
+	m.shellInstallModel = cli.NewShellInstallModelWithExperience(nil, profile)
+	m.shellDetected, m.shellDetectedProfiles = nil, nil
+	m.shellDetectedCursor = 0
 	return m
 }
 
@@ -220,7 +233,7 @@ func (m Model) ShellInstallSelection() cli.ShellInstallSelection {
 }
 
 func (m Model) updateShellInstall(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if m.shellDetected != nil {
+	if len(m.shellDetected) > 0 {
 		return m.updateShellDetected(msg)
 	}
 	if m.shellInstallRun != nil {

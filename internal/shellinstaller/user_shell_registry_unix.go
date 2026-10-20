@@ -50,7 +50,7 @@ func ReadUserShellInstalls(home string) []UserShellInstall {
 	}
 	var installs []UserShellInstall
 	for _, install := range registry.Installs {
-		if privateHierarchyPath(install.Target) && (install.Mode == "separate" || install.Mode == "shared") && (install.Channel == "stable" || install.Channel == "main-preview") {
+		if privateHierarchyPath(install.Target) && (install.Mode == "separate" || install.Mode == "shared" || install.Mode == "agent") && (install.Channel == "stable" || install.Channel == "main-preview") {
 			installs = append(installs, install)
 		}
 	}
@@ -63,7 +63,7 @@ func RecordUserShellInstall(home string, install UserShellInstall) error {
 	if home == "" || !filepath.IsAbs(home) || !privateHierarchyPath(install.Target) {
 		return errors.New("registry requires an absolute home and target")
 	}
-	if install.Mode != "separate" && install.Mode != "shared" {
+	if install.Mode != "separate" && install.Mode != "shared" && install.Mode != "agent" {
 		return errors.New("registry mode is not canonical")
 	}
 	if install.Channel != "stable" && install.Channel != "main-preview" {
@@ -139,7 +139,7 @@ func userReadInstallationManifest(destination string) (userManifest, error) {
 	if err != nil || len(data) > 4096 {
 		return manifest, errors.New("installation manifest is unavailable")
 	}
-	if json.Unmarshal(data, &manifest) != nil || manifest.Schema != userSchema || manifest.Destination != destination || (manifest.Mode != "separate" && manifest.Mode != "shared") {
+	if json.Unmarshal(data, &manifest) != nil || manifest.Schema != userSchema || manifest.Destination != destination || (manifest.Mode != "separate" && manifest.Mode != "shared" && manifest.Mode != "agent") {
 		return manifest, errors.New("installation manifest is not canonical")
 	}
 	return manifest, nil

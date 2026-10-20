@@ -72,11 +72,7 @@ func shellDiscoverInstalls() []shellinstaller.UserShellInstall {
 	if err != nil {
 		return nil
 	}
-	installs := shellinstaller.DiscoverUserShellInstalls(home)
-	if len(installs) > 1 {
-		return nil // Ambiguous discovery never offers a choice.
-	}
-	return installs
+	return shellinstaller.DiscoverUserShellInstalls(home)
 }
 
 func (m *Model) beginShellExperience() {
@@ -88,12 +84,16 @@ func (m *Model) beginShellExperience() {
 	profile := shellWelcomeExperience()
 	prefix, agent, found, note := shellDetectPi()
 	installs := shellDiscoverInstalls()
-	if len(installs) == 1 {
-		if detected, err := shellinstaller.LoadUserShellExperience(installs[0]); err == nil {
-			m.shellDetected, m.shellDetectedProfile, m.shellDetectedCursor = &installs[0], detected, 0
-			m.shellExperience, m.shellInstallModel = nil, nil
-			return
+	if len(installs) > 0 {
+		profiles := make([]shellinstaller.UserExperience, len(installs))
+		for index := range installs {
+			if detected, err := shellinstaller.LoadUserShellExperience(installs[index]); err == nil {
+				profiles[index] = detected
+			}
 		}
+		m.shellDetected, m.shellDetectedProfiles, m.shellDetectedCursor = installs, profiles, 0
+		m.shellExperience, m.shellInstallModel = nil, nil
+		return
 	}
 	m.shellExperience = &shellExperienceConfig{profile: profile, mode: "separate", choice: "separate", prefix: prefix, agent: agent, piFound: found, piNote: note, existing: installs}
 	m.shellInstallModel = cli.NewShellInstallModelWithExperience(nil, profile)
@@ -287,10 +287,14 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func shellDetectedMode(mode string) string {
-	if mode == "shared" {
+	switch mode {
+	case "shared":
 		return "Shared Pi prefix"
+	case "agent":
+		return "On my existing Pi"
+	default:
+		return "Separate install"
 	}
-	return "Separate install"
 }
 
 func shellDetectedChannel(channel string) string {
@@ -301,13 +305,21 @@ func shellDetectedChannel(channel string) string {
 }
 
 func (m Model) shellInstallView() string {
-	if m.shellDetected != nil {
-		profile := m.shellDetectedProfile
+	if len(m.shellDetected) == 1 {
+		profile := m.shellDetectedProfiles[0]
+		install := m.shellDetected[0]
 		return screens.RenderShellDetected(screens.ShellDetectedInstall{
-			Target: m.shellDetected.Target, Mode: shellDetectedMode(m.shellDetected.Mode), Channel: shellDetectedChannel(m.shellDetected.Channel),
+			Target: install.Target, Mode: shellDetectedMode(install.Mode), Channel: shellDetectedChannel(install.Channel),
 			Persona: profile.Persona, Background: profile.BackgroundSubagents,
 			TDD: profile.StrictTDD, RDD: profile.GlobalRDD, CodeGraph: profile.CodeGraph, Context7: profile.Context7, GGA: profile.GGA,
 		}, m.shellDetectedCursor, m.Width, m.Height)
+	}
+	if len(m.shellDetected) > 1 {
+		entries := make([]screens.ShellDetectedEntry, len(m.shellDetected))
+		for index, install := range m.shellDetected {
+			entries[index] = screens.ShellDetectedEntry{Target: install.Target, Mode: shellDetectedMode(install.Mode), Channel: shellDetectedChannel(install.Channel)}
+		}
+		return screens.RenderShellDetectedList(entries, m.shellDetectedCursor, m.Width, m.Height)
 	}
 	if m.shellInstallRun != nil {
 		steps := make([]screens.ShellInstallStep, len(m.shellInstallRun.steps))

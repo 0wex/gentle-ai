@@ -638,8 +638,8 @@ const (
 
 type Model struct {
 	shellExperience       *shellExperienceConfig
-	shellDetected         *shellinstaller.UserShellInstall
-	shellDetectedProfile  shellinstaller.UserExperience
+	shellDetected         []shellinstaller.UserShellInstall
+	shellDetectedProfiles []shellinstaller.UserExperience
 	shellDetectedCursor   int
 	shellReconfigure      string
 	shellPlan             []string

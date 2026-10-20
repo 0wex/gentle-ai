@@ -35,6 +35,56 @@ func managedInstallFixture(t *testing.T) (string, string) {
 	return home, target
 }
 
+func addAgentInstall(t *testing.T, home string) string {
+	t.Helper()
+	target := filepath.Join(home, ".gentle-shell")
+	if err := os.MkdirAll(target, 0700); err != nil {
+		t.Fatal(err)
+	}
+	manifest := map[string]any{
+		"Schema": "gentle-shell-user-install/v1", "Destination": target,
+		"Prefix": filepath.Join(target, "prefix"), "Agent": filepath.Join(home, ".pi", "agent"),
+		"Mode": "agent", "SupervisorSHA": "sha", "NodeSHA": "sha",
+	}
+	data, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(target, "installation.json"), data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	return target
+}
+
+func TestShellMultipleInstallsRequireChoice(t *testing.T) {
+	home, _ := managedInstallFixture(t)
+	agent := addAgentInstall(t, home)
+	installs := shellinstaller.DiscoverUserShellInstalls(home)
+	if len(installs) != 2 {
+		t.Fatalf("both installations must be discovered: %+v", installs)
+	}
+	m := NewModel(system.DetectionResult{}, "detected").WithShellInstaller()
+	m.Width, m.Height = 120, 35
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Model)
+	view := m.View()
+	for _, want := range []string{"installations detected", "Separate install", "On my existing Pi", "~/.local/share/gentle-shell/install", "~/.gentle-shell"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("multi-install selector hides %q:\n%s", want, view)
+		}
+	}
+	if m.ShellInstallSelection().Confirmed {
+		t.Fatal("multi-install detection forged consent")
+	}
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = next.(Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Model)
+	if m.shellExperience == nil || m.shellExperience.target != agent || m.shellExperience.mode != "agent" {
+		t.Fatalf("selected install did not open Manage: %+v", m.shellExperience)
+	}
+}
+
 func TestShellDetectsManagedInstallAndManage(t *testing.T) {
 	_, target := managedInstallFixture(t)
 	got := shellinstaller.DiscoverUserShellInstalls(os.Getenv("HOME"))
@@ -50,7 +100,7 @@ func TestShellDetectsManagedInstallAndManage(t *testing.T) {
 	m.Width, m.Height = 120, 35
 	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = next.(Model)
-	if !strings.Contains(m.View(), "Found a managed Gentle-Shell installation") || !strings.Contains(m.View(), "Manage this installation") || !strings.Contains(m.View(), target) {
+	if !strings.Contains(m.View(), "Found a managed Gentle-Shell installation") || !strings.Contains(m.View(), "Manage this installation") || !strings.Contains(m.View(), "~/.local/share/gentle-shell/install") {
 		t.Fatalf("detection screen is incomplete:\n%s", m.View())
 	}
 	if m.ShellInstallSelection().Confirmed {
