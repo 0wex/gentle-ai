@@ -2,14 +2,174 @@ package cli
 
 import (
 	"bytes"
+	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/components/gga"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/model"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/pipeline"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/planner"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/system"
 )
+
+func ggaNoticeSharedPlan(t *testing.T, rt *installRuntime) pipeline.StagePlan {
+	t.Helper()
+	for _, step := range rt.stagePlan().Apply {
+		if step.ID() == "component:gga" {
+			return pipeline.StagePlan{Apply: []pipeline.Step{step}}
+		}
+	}
+	t.Fatal("real GGA apply step missing")
+	return pipeline.StagePlan{}
+}
+
+// Run the real shared component, including its output behavior. Discovery and
+// persistent PATH writes are stubbed; no external installer may execute.
+func TestTUIInstallGGAProviderNotices(t *testing.T) {
+	for _, fixture := range []struct{ name, config string }{
+		{"missing provider", ""},
+		{"dynamic provider", "PROVIDER=$(touch sentinel)\n"},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			home := t.TempDir()
+			for _, key := range []string{"HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME", "XDG_RUNTIME_DIR", "PI_CODING_AGENT_DIR", "TEMP", "TMP", "TMPDIR"} {
+				t.Setenv(key, home)
+			}
+			t.Setenv("PATH", t.TempDir())
+			path := gga.ConfigPath(home)
+			original := strings.ReplaceAll(fixture.config, "sentinel", "'"+filepath.ToSlash(filepath.Join(home, "sentinel"))+"'")
+			if original != "" {
+				if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, []byte(original), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			priorPlan, priorCommand := tuiInstallStagePlan, runCommand
+			priorAvailable := ggaAvailableCheck
+			priorAdd, priorFirst := addUserPath, ensureUserPathFirst
+			t.Cleanup(func() {
+				tuiInstallStagePlan, runCommand = priorPlan, priorCommand
+				ggaAvailableCheck = priorAvailable
+				addUserPath, ensureUserPathFirst = priorAdd, priorFirst
+			})
+			runCommand = func(string, ...string) error { return fmt.Errorf("unexpected external installer") }
+			ggaAvailableCheck = func(system.PlatformProfile) bool { return true }
+			addUserPath = func(string) error { return nil }
+			ensureUserPathFirst = func(string) error { return nil }
+			tuiInstallStagePlan = func(rt *installRuntime) pipeline.StagePlan {
+				return ggaNoticeSharedPlan(t, rt)
+			}
+			selection := model.Selection{Agents: []model.AgentID{model.AgentCursor}, Components: []model.ComponentID{model.ComponentGGA}}
+			resolved := planner.ResolvedPlan{Agents: selection.Agents, OrderedComponents: selection.Components}
+			for i := 0; i < 2; i++ {
+				// Capture stderr without pipe capacity/deadlock risks.
+				capture, err := os.Create(filepath.Join(t.TempDir(), "stderr"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				priorStderr := os.Stderr
+				func() {
+					os.Stderr = capture
+					defer func() {
+						os.Stderr = priorStderr
+						capture.Close()
+					}()
+					result, orchestrator, _ := ExecuteTUIInstallRecordingCodexServiceTier(home, selection, resolved, system.PlatformProfile{}, model.OpenCodeBackgroundAuto, model.PiBackgroundAuto, nil)
+					if orchestrator != nil {
+						defer orchestrator.Finish()
+					}
+					if result.Err != nil {
+						t.Fatalf("TUI install: %v", result.Err)
+					}
+					if len(result.ManualActions) != 1 || !strings.Contains(result.ManualActions[0], "GGA config unchanged:") || !strings.Contains(result.ManualActions[0], path) || !strings.Contains(result.ManualActions[0], "rerun gentle-ai sync") {
+						t.Errorf("TUI lost/duplicated GGA notice on run %d: %v", i, result.ManualActions)
+					}
+				}()
+				stderr, err := os.ReadFile(capture.Name())
+				if err != nil || len(stderr) != 0 {
+					t.Errorf("stray TUI stderr: %q (%v)", stderr, err)
+				}
+				got, err := os.ReadFile(path)
+				if original == "" {
+					if !os.IsNotExist(err) {
+						t.Fatalf("missing config created: %q (%v)", got, err)
+					}
+				} else if err != nil || string(got) != original {
+					t.Fatalf("dynamic config modified: %q (%v)", got, err)
+				}
+			}
+			if _, err := os.Stat(filepath.Join(home, "sentinel")); !os.IsNotExist(err) {
+				t.Fatal("dynamic fixture evaluated")
+			}
+		})
+	}
+}
+
+type ggaNoticeLaterFailureStep struct{}
+
+func (ggaNoticeLaterFailureStep) ID() string { return "test:later-failure" }
+func (ggaNoticeLaterFailureStep) Run() error { return fmt.Errorf("intentional later failure") }
+
+func TestCLIInstallGGAProviderNoticeAtWrapper(t *testing.T) {
+	for _, laterFailure := range []bool{false, true} {
+		t.Run(fmt.Sprintf("later_failure=%v", laterFailure), func(t *testing.T) {
+			home := t.TempDir()
+			for _, key := range []string{"HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME", "XDG_RUNTIME_DIR", "PI_CODING_AGENT_DIR", "TEMP", "TMP", "TMPDIR"} {
+				t.Setenv(key, home)
+			}
+			t.Setenv("PATH", t.TempDir())
+			priorPlan, priorCommand, priorHome := installStagePlan, runCommand, osUserHomeDir
+			priorAvailable, priorAdd, priorFirst := ggaAvailableCheck, addUserPath, ensureUserPathFirst
+			t.Cleanup(func() {
+				installStagePlan, runCommand, osUserHomeDir = priorPlan, priorCommand, priorHome
+				ggaAvailableCheck, addUserPath, ensureUserPathFirst = priorAvailable, priorAdd, priorFirst
+			})
+			osUserHomeDir = func() (string, error) { return home, nil }
+			ggaAvailableCheck = func(system.PlatformProfile) bool { return true }
+			runCommand = func(string, ...string) error { return fmt.Errorf("unexpected external installer") }
+			addUserPath = func(string) error { return nil }
+			ensureUserPathFirst = func(string) error { return nil }
+			installStagePlan = func(rt *installRuntime) pipeline.StagePlan {
+				plan := ggaNoticeSharedPlan(t, rt)
+				if laterFailure {
+					plan.Apply = append(plan.Apply, ggaNoticeLaterFailureStep{})
+				}
+				return plan
+			}
+			capture, err := os.Create(filepath.Join(t.TempDir(), "stderr"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			priorStderr := os.Stderr
+			func() {
+				os.Stderr = capture
+				defer func() { os.Stderr = priorStderr; capture.Close() }()
+				_, err = RunInstall([]string{"--agent", "cursor", "--component", "gga"}, system.DetectionResult{})
+			}()
+			if laterFailure {
+				if err == nil || !strings.Contains(err.Error(), "intentional later failure") {
+					t.Fatalf("later failure not exercised: %v", err)
+				}
+			} else if err != nil && !strings.Contains(err.Error(), "post-apply verification failed") {
+				t.Fatalf("pipeline did not reach verification: %v", err)
+			}
+			// Only GGA ran: missing unrelated Cursor assets may fail verification.
+			// Neither verification nor a later failure may hide/duplicate its notice.
+			stderr, readErr := os.ReadFile(capture.Name())
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			if strings.Count(string(stderr), "WARNING: GGA config unchanged:") != 1 || !strings.Contains(string(stderr), gga.ConfigPath(home)) || !strings.Contains(string(stderr), "rerun gentle-ai sync") {
+				t.Fatalf("CLI wrapper lost/duplicated GGA notice: %q", stderr)
+			}
+		})
+	}
+}
 
 func TestGGAProviderVerificationUsesActualSkip(t *testing.T) {
 	for _, agent := range []model.AgentID{model.AgentCursor, model.AgentClaudeCode} {
@@ -78,15 +238,17 @@ func TestGGAProviderVerificationUsesActualSkip(t *testing.T) {
 // installation output channel without persistent Windows PATH side effects.
 func TestGGAProviderInstallNotice(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("APPDATA", filepath.Join(home, "roaming"))
+	for _, key := range []string{"HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME", "PI_CODING_AGENT_DIR", "TEMP", "TMP", "TMPDIR"} {
+		t.Setenv(key, home)
+	}
 	for i := 0; i < 2; i++ {
 		res, err := gga.Inject(home, []model.AgentID{model.AgentCursor})
 		if err != nil {
 			t.Fatal(err)
 		}
 		var stderr bytes.Buffer
-		writeGGAProviderNotices(&stderr, res)
-		if !strings.Contains(stderr.String(), "WARNING: GGA config unchanged: no provider") || !strings.Contains(stderr.String(), gga.ConfigPath(home)) {
+		writeGGAProviderNotices(&stderr, res.Notices)
+		if strings.Count(stderr.String(), "WARNING: GGA config unchanged:") != 1 || !strings.Contains(stderr.String(), "WARNING: GGA config unchanged: no provider") || !strings.Contains(stderr.String(), gga.ConfigPath(home)) {
 			t.Fatalf("installation discarded notice: %q", stderr.String())
 		}
 	}

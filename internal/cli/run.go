@@ -296,6 +296,9 @@ func RunPreparedInstall(prepared PreparedInstall, detection system.DetectionResu
 
 	orchestrator := pipeline.NewOrchestrator(pipeline.DefaultRollbackPolicy())
 	result.Execution = orchestrator.Execute(stagePlan)
+	// Keep notices visible even if a later pipeline step failed. The shared
+	// component records them without writing to TUI stderr.
+	writeGGAProviderNotices(os.Stderr, runtime.state.ggaNotices)
 	if result.Execution.Err != nil {
 		return result, fmt.Errorf("execute install pipeline: %w", result.Execution.Err)
 	}
@@ -788,6 +791,7 @@ type runtimeState struct {
 	retiredSDDActions        []string
 	compatibilityTransaction compatibilityRefreshTransaction
 	ggaConfigCreationSkipped bool
+	ggaNotices               []string
 
 	// engramVersionResolved, engramVersion, and engramVersionErr cache the
 	// single `engram version` invocation performed by componentApplyStep.Run
@@ -808,6 +812,7 @@ type runtimeState struct {
 func (s *runtimeState) recordGGAInjection(result gga.InjectionResult) {
 	if s != nil {
 		s.ggaConfigCreationSkipped = result.ConfigCreationSkipped
+		s.ggaNotices = append([]string(nil), result.Notices...)
 	}
 }
 
@@ -3419,7 +3424,6 @@ func (s componentApplyStep) Run() error {
 			return fmt.Errorf("inject gga config: %w", err)
 		}
 		s.state.recordGGAInjection(res)
-		writeGGAProviderNotices(os.Stderr, res)
 		return nil
 	case model.ComponentTheme:
 		for _, adapter := range adapters {
@@ -3456,8 +3460,8 @@ func (s componentApplyStep) Run() error {
 
 // writeGGAProviderNotices keeps installation skips visible without treating
 // missing inference or conservative preservation as an installation failure.
-func writeGGAProviderNotices(w io.Writer, result gga.InjectionResult) {
-	for _, notice := range result.Notices {
+func writeGGAProviderNotices(w io.Writer, notices []string) {
+	for _, notice := range notices {
 		fmt.Fprintf(w, "WARNING: %s\n", notice)
 	}
 }
@@ -3548,6 +3552,7 @@ func executeTUIInstall(homeDir string, selection model.Selection, resolved plann
 	runtime.piBackgroundProjection = preparePiBackgroundProjection(homeDir, &piBackgroundResolution, containsAgent(resolved.Agents, model.AgentPi))
 	orchestrator := pipeline.NewOrchestrator(pipeline.DefaultRollbackPolicy(), pipeline.WithFailurePolicy(pipeline.ContinueOnError), pipeline.WithProgressFunc(onProgress), pipeline.WithTerminalCleanup(runtime.state.cleanupRollbackSnapshot))
 	result := orchestrator.Execute(tuiInstallStagePlan(runtime))
+	result.ManualActions = append(result.ManualActions, runtime.state.ggaNotices...)
 	if runtime.state.piCodeGraph != nil {
 		result.ManualActions = append(result.ManualActions, runtime.state.piCodeGraph.ManualActions...)
 	}

@@ -147,6 +147,9 @@ func Inject(homeDir string, agentIDs []model.AgentID) (InjectionResult, error) {
 	switch {
 	case !safe:
 		result.Notices = []string{fmt.Sprintf("GGA config unchanged: %s contains ambiguous, dynamic, duplicate or unsupported assignments. Set one literal PROVIDER assignment in a simple assignment-only config, then rerun gentle-ai sync; no shell was evaluated.", configPath)}
+	case word != "" && provider == "":
+		// No mapped selection owns regeneration of this existing config.
+		// Preserve all user settings and formatting; refresh the template below.
 	case word == "" && provider == "":
 		result.ConfigCreationSkipped = os.IsNotExist(err)
 		result.Notices = []string{fmt.Sprintf("GGA config unchanged: no provider is configured and selected agents have no known GGA mapping. Set a literal PROVIDER in %s or select a mapped agent, then rerun gentle-ai sync.", configPath)}

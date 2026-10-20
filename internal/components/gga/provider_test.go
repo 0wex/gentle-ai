@@ -40,6 +40,74 @@ func TestInjectProviderPreservation(t *testing.T) {
 	}
 }
 
+// Existing custom config is not managed when selection has no provider mapping.
+func TestInjectUnmappedPreservesWholeConfig(t *testing.T) {
+	for _, agents := range [][]model.AgentID{{model.AgentPi}, {model.AgentCursor}, {}} {
+		t.Run(strings.Join(agentNames(agents), "-"), func(t *testing.T) {
+			home := t.TempDir()
+			for _, key := range []string{"HOME", "USERPROFILE", "APPDATA", "LOCALAPPDATA", "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME", "PI_CODING_AGENT_DIR", "TEMP", "TMP", "TMPDIR"} {
+				t.Setenv(key, home)
+			}
+			path := ConfigPath(home)
+			// A safe literal assignment, with intentionally non-generated formatting.
+			original := "# Keep my formatting and custom settings\n  export PROVIDER='opencode' # chosen provider\nFILE_PATTERNS='*.rs,*.zig'\nEXCLUDE_PATTERNS='vendor/*'\nTIMEOUT=17\n"
+			if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte(original), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(AgentsTemplatePath(home), []byte("stale starter\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			for i := 0; i < 2; i++ {
+				res, err := Inject(home, agents)
+				if err != nil {
+					t.Fatal(err)
+				}
+				got, err := os.ReadFile(path)
+				if err != nil || string(got) != original {
+					t.Errorf("custom config rewritten: %q (%v)", got, err)
+				}
+				if res.ConfigChanged || res.ConfigFile != "" || res.ConfigCreationSkipped {
+					t.Errorf("existing config reported as written/skipped creation: %+v", res)
+				}
+				for _, written := range res.FilesWritten() {
+					if written == path {
+						t.Error("unchanged config counted as written")
+					}
+				}
+				if res.AgentsChanged != (i == 0) {
+					t.Errorf("starter refresh on run %d: %+v", i, res)
+				}
+				starter, err := os.ReadFile(AgentsTemplatePath(home))
+				if err != nil || len(starter) == 0 || string(starter) == "stale starter\n" {
+					t.Fatalf("starter not refreshed: %q (%v)", starter, err)
+				}
+				for _, notice := range res.Notices {
+					if strings.Contains(notice, "no provider is configured") {
+						t.Errorf("valid provider described as missing: %s", notice)
+					}
+				}
+			}
+			// Independently seed the mapped control, even if preservation failed.
+			if err := os.WriteFile(path, []byte(original), 0600); err != nil {
+				t.Fatal(err)
+			}
+			// Positive control: mapped selection still regenerates managed defaults.
+			res, err := Inject(home, []model.AgentID{model.AgentCodex})
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := os.ReadFile(path)
+			want := strings.Replace(string(BuildConfig("codex")), `PROVIDER="codex"`, "PROVIDER='opencode'", 1)
+			if err != nil || string(got) != want || !res.ConfigChanged {
+				t.Fatalf("mapped defaults no longer refreshed: %+v, %q (%v)", res, got, err)
+			}
+		})
+	}
+}
+
 func agentNames(ids []model.AgentID) []string {
 	var names []string
 	for _, id := range ids {
