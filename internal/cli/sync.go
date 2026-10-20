@@ -2690,15 +2690,9 @@ func withFailedSyncVerificationNote(report verify.Report) verify.Report {
 	return report
 }
 
-// runPostSyncVerification verifies that managed files exist after sync.
-// runPostSyncVerificationScoped verifies that the files a scoped sync writes
-// exist after the run. Under ScopeWorkspace, globally-managed components are
-// skipped and any declared path that still resolves under the home root is
-// dropped, because a workspace sync never writes there (issue #1074).
-func runPostSyncVerificationScoped(homeDir, workspaceDir string, scope InstallScope, selection model.Selection) verify.Report {
-	return runPostSyncVerificationWithState(homeDir, workspaceDir, scope, selection, nil)
-}
-
+// runPostSyncVerificationWithState verifies the files a scoped sync writes,
+// accounting for actual component outcomes. Workspace scope excludes globally
+// managed components and paths belonging only to the global home (issue #1074).
 func runPostSyncVerificationWithState(homeDir, workspaceDir string, scope InstallScope, selection model.Selection, state *runtimeState) verify.Report {
 	workspace := scope == ScopeWorkspace
 	checks := make([]verify.Check, 0)

@@ -7241,7 +7241,7 @@ func TestPostSyncVerificationRequiresEveryRetiredPluginRemoved(t *testing.T) {
 	stale := filepath.Join(adapter.GlobalConfigDir(home), "plugins", "sdd-task-result-artifacts.ts")
 	mustWriteFile(t, stale, []byte("stale"))
 	selection := model.Selection{Agents: []model.AgentID{model.AgentOpenCode}}
-	report := runPostSyncVerificationScoped(home, t.TempDir(), ScopeGlobal, selection)
+	report := runPostSyncVerificationWithState(home, t.TempDir(), ScopeGlobal, selection, nil)
 	for _, check := range report.Checks {
 		if check.ID == "verify:sync:file:"+stale {
 			if check.Status != verify.CheckStatusFailed {
@@ -7262,7 +7262,7 @@ func TestPostSyncVerificationRequiresKilocodeRetiredPluginRemoved(t *testing.T) 
 	stale := filepath.Join(adapter.GlobalConfigDir(home), "plugins", "background-agents.ts")
 	mustWriteFile(t, stale, []byte("stale"))
 	selection := model.Selection{Agents: []model.AgentID{model.AgentKilocode}}
-	report := runPostSyncVerificationScoped(home, t.TempDir(), ScopeGlobal, selection)
+	report := runPostSyncVerificationWithState(home, t.TempDir(), ScopeGlobal, selection, nil)
 	for _, check := range report.Checks {
 		if check.ID == "verify:sync:file:"+stale {
 			if check.Status != verify.CheckStatusFailed {

@@ -216,7 +216,7 @@ func TestGGAProviderVerificationUsesActualSkip(t *testing.T) {
 				if report := runPostApplyVerification(input); report.Ready {
 					t.Fatal("absence allowed without actual skip")
 				}
-				if report := runPostSyncVerificationScoped(home, "", ScopeGlobal, selection); report.Ready {
+				if report := runPostSyncVerificationWithState(home, "", ScopeGlobal, selection, nil); report.Ready {
 					t.Fatal("sync absence allowed without actual skip")
 				}
 			}
