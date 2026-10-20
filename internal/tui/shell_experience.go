@@ -227,6 +227,9 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if config.err == nil && config.profile.SDKSource == "main-preview" {
 					config.err = shellMainSDKChoiceError(config.profile)
 				}
+				if config.err == nil && config.reconfigure && len(config.existing) == 1 {
+					return m.beginManageChanges(config)
+				}
 				if config.err == nil {
 					var destination string
 					var destErr error
@@ -320,6 +323,14 @@ func (m Model) shellInstallView() string {
 			entries[index] = screens.ShellDetectedEntry{Target: install.Target, Mode: shellDetectedMode(install.Mode), Channel: shellDetectedChannel(install.Channel)}
 		}
 		return screens.RenderShellDetectedList(entries, m.shellDetectedCursor, m.Width, m.Height)
+	}
+	if m.shellManage != nil {
+		return screens.RenderShellManage(m.shellManage.install.Target, m.shellManage.preferences, m.shellManage.components, m.shellManage.applied, func() string {
+			if m.shellManage.err != nil {
+				return m.shellManage.err.Error()
+			}
+			return ""
+		}(), m.shellManage.cursor, m.Width, m.Height)
 	}
 	if m.shellInstallRun != nil {
 		steps := make([]screens.ShellInstallStep, len(m.shellInstallRun.steps))

@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/shellinstaller"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/system"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/tui/screens"
 )
 
 func managedInstallFixture(t *testing.T) (string, string) {
@@ -54,6 +55,30 @@ func addAgentInstall(t *testing.T, home string) string {
 		t.Fatal(err)
 	}
 	return target
+}
+
+func TestShellManageShowsComponentChangesWithoutReinstall(t *testing.T) {
+	managedInstallFixture(t)
+	m := NewModel(system.DetectionResult{}, "detected").WithShellInstaller()
+	m.Width, m.Height = 120, 35
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter}) // Manage.
+	m = next.(Model)
+	m = experienceFocus(t, m, screens.ShellExperienceSDK, "main-preview")
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.shellManage == nil || len(m.shellManage.components) == 0 || len(m.shellManage.preferences) != 0 || m.shellPlan != nil {
+		t.Fatalf("component changes were not isolated: %+v", m.shellManage)
+	}
+	view := m.View()
+	if !strings.Contains(view, "COMPONENT CHANGES") || !strings.Contains(view, "SDK source") || strings.Contains(view, "Apply preferences") {
+		t.Fatalf("component summary differs:\n%s", view)
+	}
+	if m.shellInstallSelection.Confirmed {
+		t.Fatal("component summary forged installation consent")
+	}
 }
 
 func TestShellMultipleInstallsRequireChoice(t *testing.T) {
@@ -118,10 +143,26 @@ func TestShellDetectsManagedInstallAndManage(t *testing.T) {
 	if !strings.Contains(view, "Configure Gentle-Shell experience") || !strings.Contains(view, "(*) Separate install (Gentle-Shell)  · locked") || !strings.Contains(view, "( ) On my existing Pi  · locked") {
 		t.Fatalf("manage did not lock the managed target:\n%s", view)
 	}
+	m = experienceFocus(t, m, screens.ShellExperiencePersona, "neutral")
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	if m.shellPlan == nil || m.shellPlanRequest.Destination != target {
-		t.Fatalf("manage did not plan against the discovered target: %+v err=%v", m.shellPlanRequest, m.shellExperience.err)
+	if m.shellManage == nil || m.shellExperience != nil || m.shellPlan != nil {
+		t.Fatalf("manage did not open the change summary: %+v", m.shellExperience)
+	}
+	if len(m.shellManage.preferences) != 1 || m.shellManage.preferences[0].Label != "Persona" || m.shellManage.preferences[0].To != "Neutral" {
+		t.Fatalf("manage summary lost the persona change: %+v", m.shellManage.preferences)
+	}
+	if view := m.View(); !strings.Contains(view, "PREFERENCE CHANGES") || !strings.Contains(view, "Apply preferences") {
+		t.Fatalf("manage summary is incomplete:\n%s", view)
+	}
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if !m.shellManage.applied || m.shellManage.err != nil || m.shellInstallSelection.Confirmed {
+		t.Fatalf("preference apply failed or forged installation: %+v", m.shellManage)
+	}
+	loaded, err := shellinstaller.LoadUserShellExperience(shellinstaller.UserShellInstall{Target: target, Mode: "separate"})
+	if err != nil || loaded.Persona != "neutral" {
+		t.Fatalf("persona was not applied in place: %+v %v", loaded, err)
 	}
 }
 

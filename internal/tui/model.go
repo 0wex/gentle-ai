@@ -641,6 +641,7 @@ type Model struct {
 	shellDetected         []shellinstaller.UserShellInstall
 	shellDetectedProfiles []shellinstaller.UserExperience
 	shellDetectedCursor   int
+	shellManage           *shellManageState
 	shellReconfigure      string
 	shellPlan             []string
 	shellPlanConfig       *shellExperienceConfig

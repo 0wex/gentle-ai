@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/cli"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/shellinstaller"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/tui/screens"
 )
 
 var shellInstallStepLabels = []string{
@@ -91,6 +92,131 @@ func (m Model) beginShellInstall() (tea.Model, tea.Cmd) {
 		close(events)
 	}()
 	return m, waitShellInstallEvent(events)
+}
+
+type shellManageState struct {
+	install     shellinstaller.UserShellInstall
+	config      shellExperienceConfig
+	preferences []screens.ShellManageChange
+	components  []screens.ShellManageChange
+	cursor      int
+	applied     bool
+	err         error
+}
+
+func manageDisplay(value, fallback string) string {
+	if value == "" {
+		return fallback
+	}
+	switch value {
+	case "on":
+		return "On"
+	case "off":
+		return "Off"
+	case "gentleman":
+		return "Gentleman"
+	case "neutral":
+		return "Neutral"
+	case "unmanaged":
+		return "Custom"
+	case "main-preview":
+		return "Main preview"
+	case "stable":
+		return "Stable"
+	default:
+		return value
+	}
+}
+
+func (m Model) beginManageChanges(config shellExperienceConfig) (tea.Model, tea.Cmd) {
+	if len(config.existing) != 1 {
+		config.err = errors.New("the managed installation is no longer available")
+		m.shellExperience = &config
+		return m, nil
+	}
+	install := config.existing[0]
+	current, err := shellinstaller.LoadUserShellExperience(install)
+	if err != nil {
+		config.err = err
+		m.shellExperience = &config
+		return m, nil
+	}
+	selected := config.profile
+	inPlace := install.Mode == "separate"
+	preferences, components := manageChanges(current, selected, inPlace)
+	m.shellManage = &shellManageState{install: install, config: config, preferences: preferences, components: components}
+	m.shellExperience = nil
+	m.shellPlan = nil
+	return m, nil
+}
+
+func manageChanges(current, selected shellinstaller.UserExperience, inPlace bool) ([]screens.ShellManageChange, []screens.ShellManageChange) {
+	var preferences, components []screens.ShellManageChange
+	add := func(label, from, to string, component bool) {
+		if from == to {
+			return
+		}
+		change := screens.ShellManageChange{Label: label, From: manageDisplay(from, "Inherit"), To: manageDisplay(to, "Inherit"), Component: component}
+		if component || !inPlace {
+			components = append(components, change)
+		} else {
+			preferences = append(preferences, change)
+		}
+	}
+	add("Persona", current.Persona, selected.Persona, false)
+	add("Background", current.BackgroundSubagents, selected.BackgroundSubagents, false)
+	add("Strict TDD", current.StrictTDD, selected.StrictTDD, false)
+	add("Global RDD", current.GlobalRDD, selected.GlobalRDD, false)
+	add("Context7", current.Context7, selected.Context7, false)
+	add("GGA", current.GGA, selected.GGA, true)
+	add("GGA provider", current.GGAProvider, selected.GGAProvider, true)
+	add("CodeGraph", current.CodeGraph, selected.CodeGraph, true)
+	add("SDK source", current.SDKSource, selected.SDKSource, true)
+	return preferences, components
+}
+
+func (m Model) updateShellManage(msg tea.Msg) (tea.Model, tea.Cmd) {
+	key, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
+	manage := m.shellManage
+	if manage == nil {
+		return m, nil
+	}
+	if manage.applied {
+		if key.String() == "enter" || key.String() == "esc" || key.String() == "ctrl+c" {
+			m.shellManage = nil
+			m.shellExperience, m.shellInstallModel = nil, nil
+			m.shellInstallSelection = cli.ShellInstallSelection{}
+			m.setScreen(ScreenWelcome)
+		}
+		return m, nil
+	}
+	last := 0
+	if len(manage.preferences) > 0 {
+		last = 1
+	}
+	switch key.String() {
+	case "j", "down":
+		manage.cursor = min(last, manage.cursor+1)
+	case "k", "up":
+		manage.cursor = max(0, manage.cursor-1)
+	case "esc", "ctrl+c":
+		m.shellExperience, m.shellManage = &manage.config, nil
+		return m, nil
+	case "enter":
+		if manage.cursor == 1 || len(manage.preferences) == 0 {
+			m.shellExperience, m.shellManage = &manage.config, nil
+			return m, nil
+		}
+		if err := shellinstaller.ApplyUserExperiencePreferences(manage.install, manage.config.profile); err != nil {
+			manage.err = err
+			return m, nil
+		}
+		manage.applied, manage.err = true, nil
+	}
+	return m, nil
 }
 
 func (m Model) updateShellDetected(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -235,6 +361,9 @@ func (m Model) ShellInstallSelection() cli.ShellInstallSelection {
 func (m Model) updateShellInstall(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if len(m.shellDetected) > 0 {
 		return m.updateShellDetected(msg)
+	}
+	if m.shellManage != nil {
+		return m.updateShellManage(msg)
 	}
 	if m.shellInstallRun != nil {
 		return m.updateShellInstallRun(msg)
