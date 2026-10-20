@@ -273,6 +273,8 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					}
 				}
+			case screens.ShellExperienceUpdate:
+				return m.beginShellUpdate(config)
 			case screens.ShellExperienceUninstall:
 				return m.beginUninstallFromConfig(config), nil
 			case screens.ShellExperienceCancel:
@@ -326,6 +328,14 @@ func (m Model) shellInstallView() string {
 			entries[index] = screens.ShellDetectedEntry{Target: install.Target, Mode: shellDetectedMode(install.Mode), Channel: shellDetectedChannel(install.Channel)}
 		}
 		return screens.RenderShellDetectedList(entries, m.shellDetectedCursor, m.Width, m.Height)
+	}
+	if m.shellUpdate != nil {
+		update := m.shellUpdate
+		errText := ""
+		if update.err != nil {
+			errText = update.err.Error()
+		}
+		return screens.RenderShellUpdate(update.install.Target, update.install.Mode, update.info.Channel, update.checking, update.info.Available, update.info.Components, update.info.Detail, errText, update.cursor, m.Width, m.Height)
 	}
 	if m.shellManage != nil {
 		manage := m.shellManage

@@ -25,6 +25,7 @@ const (
 	ShellExperienceCancel
 	ShellExperienceInstallTarget
 	ShellExperienceUninstall
+	ShellExperienceUpdate
 )
 
 // ShellExperienceEntry is an inert projection, never a second preference store.
@@ -118,6 +119,7 @@ func shellExperienceEntries(p shellinstaller.UserExperience, uninstall bool, tar
 		add(ShellExperienceEntry{Control: ShellExperienceProvider, Category: "Optional workflows", Kind: "text", Label: "GGA provider (type explicitly)", Description: "Optional: type a provider here or leave it empty for GGA to configure it later. Never inferred from Pi.", Value: provider})
 	}
 	if uninstall {
+		add(ShellExperienceEntry{Control: ShellExperienceUpdate, Category: "Actions", Kind: "action", Label: "Check for updates", Description: "Checks this installation's Stable or Main channel for component updates."})
 		add(ShellExperienceEntry{Control: ShellExperienceUninstall, Category: "Actions", Kind: "action", Label: "Uninstall this installation", Description: "Moves this managed installation to a timestamped backup and removes it from detection. Your personal Pi is untouched."})
 	}
 	add(ShellExperienceEntry{Control: ShellExperienceContinue, Category: "Actions", Kind: "action", Label: "Continue", Description: "Continue with this Gentle-Shell profile. Installation still requires physical confirmation."})

@@ -94,6 +94,29 @@ func (m Model) beginShellInstall() (tea.Model, tea.Cmd) {
 	return m, waitShellInstallEvent(events)
 }
 
+type shellUpdateState struct {
+	install  shellinstaller.UserShellInstall
+	config   shellExperienceConfig
+	info     shellinstaller.UserShellUpdate
+	err      error
+	checking bool
+	cursor   int
+}
+
+type shellUpdateResult struct {
+	info shellinstaller.UserShellUpdate
+	err  error
+}
+
+func shellUpdateCommand(install shellinstaller.UserShellInstall) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		info, err := shellinstaller.CheckUserShellUpdate(ctx, install)
+		return shellUpdateResult{info: info, err: err}
+	}
+}
+
 type shellManageState struct {
 	install      shellinstaller.UserShellInstall
 	config       shellExperienceConfig
@@ -107,6 +130,98 @@ type shellManageState struct {
 	backup       string
 	uninstallErr error
 	fromConfig   bool
+}
+
+func (m Model) beginShellUpdate(config shellExperienceConfig) (tea.Model, tea.Cmd) {
+	if len(config.existing) != 1 {
+		config.err = errors.New("the managed installation is no longer available")
+		m.shellExperience = &config
+		return m, nil
+	}
+	install := config.existing[0]
+	info := shellinstaller.UserShellUpdate{Channel: install.Channel}
+	m.shellUpdate = &shellUpdateState{install: install, config: config, info: info, checking: true}
+	m.shellExperience = nil
+	return m, shellUpdateCommand(install)
+}
+
+func (m Model) restoreUpdateConfig(update *shellUpdateState) Model {
+	m.shellExperience, m.shellUpdate = &update.config, nil
+	return m
+}
+
+func (m Model) beginComponentUpdate(update *shellUpdateState) (tea.Model, error) {
+	install := update.install
+	profile, err := shellinstaller.LoadUserShellExperience(install)
+	if err != nil {
+		return m, err
+	}
+	if home, homeErr := os.UserHomeDir(); homeErr == nil {
+		_ = os.Setenv("GENTLE_AI_SHELL_REGISTRY_HOME", home)
+	}
+	_ = os.Setenv("GENTLE_AI_RECONFIGURE_TARGET", install.Target)
+	request := shellinstaller.UserInstallRequest{Destination: install.Target, Mode: install.Mode, SharedPrefix: install.Prefix, SharedAgent: install.Agent, Experience: &profile}
+	if install.Mode == "separate" {
+		request.SharedPrefix, request.SharedAgent = "", ""
+	}
+	token, err := shellinstaller.InspectUserInstall(request)
+	if err != nil {
+		return m, err
+	}
+	request.Confirmation = token
+	m.shellPlanRequest = request
+	m.shellPlanConfig = nil
+	m.shellPlan = append([]string(nil), shellInstallStepLabels...)
+	m.shellInstallModel = cli.NewShellInstallModelWithExperience(nil, profile)
+	m.shellUpdate = nil
+	return m, nil
+}
+
+func (m Model) updateShellUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
+	update := m.shellUpdate
+	if update == nil {
+		return m, nil
+	}
+	if result, ok := msg.(shellUpdateResult); ok {
+		update.checking, update.err = false, result.err
+		if result.err == nil {
+			update.info = result.info
+		}
+		return m, nil
+	}
+	key, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
+	if update.checking {
+		if key.String() == "esc" || key.String() == "ctrl+c" {
+			return m.restoreUpdateConfig(update), nil
+		}
+		return m, nil
+	}
+	actions := 1
+	if update.info.Available {
+		actions = 2
+	}
+	switch key.String() {
+	case "j", "down":
+		update.cursor = min(actions-1, update.cursor+1)
+	case "k", "up":
+		update.cursor = max(0, update.cursor-1)
+	case "esc", "ctrl+c":
+		return m.restoreUpdateConfig(update), nil
+	case "enter":
+		if update.info.Available && update.cursor == 0 {
+			next, err := m.beginComponentUpdate(update)
+			if err != nil {
+				update.err = err
+				return m, nil
+			}
+			return next, nil
+		}
+		return m.restoreUpdateConfig(update), nil
+	}
+	return m, nil
 }
 
 func manageDisplay(value, fallback string) string {
@@ -430,6 +545,9 @@ func (m Model) ShellInstallSelection() cli.ShellInstallSelection {
 func (m Model) updateShellInstall(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if len(m.shellDetected) > 0 {
 		return m.updateShellDetected(msg)
+	}
+	if m.shellUpdate != nil {
+		return m.updateShellUpdate(msg)
 	}
 	if m.shellManage != nil {
 		return m.updateShellManage(msg)

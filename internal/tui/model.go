@@ -642,6 +642,7 @@ type Model struct {
 	shellDetectedProfiles []shellinstaller.UserExperience
 	shellDetectedCursor   int
 	shellManage           *shellManageState
+	shellUpdate           *shellUpdateState
 	shellReconfigure      string
 	shellPlan             []string
 	shellPlanConfig       *shellExperienceConfig
@@ -1050,7 +1051,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.WindowSizeMsg:
 			m.Width, m.Height = msg.Width, msg.Height
 			return m.updateShellInstall(msg)
-		case shellInstallEvent, shellInstallTick:
+		case shellInstallEvent, shellInstallTick, shellUpdateResult:
 			return m.updateShellInstall(msg)
 		}
 	}

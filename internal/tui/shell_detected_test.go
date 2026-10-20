@@ -106,6 +106,35 @@ func TestShellManageNoChangesIdentifiesInstallKind(t *testing.T) {
 	}
 }
 
+func TestShellManageChecksChannelUpdates(t *testing.T) {
+	_, target := managedInstallFixture(t)
+	m := NewModel(system.DetectionResult{}, "detected").WithShellInstaller()
+	m.Width, m.Height = 120, 35
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter}) // Manage.
+	m = next.(Model)
+	if !strings.Contains(m.View(), "Check for updates") {
+		t.Fatalf("manage hides the update action:\n%s", m.View())
+	}
+	m = experienceFocus(t, m, screens.ShellExperienceUpdate, "")
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Model)
+	if m.shellUpdate == nil || !m.shellUpdate.checking {
+		t.Fatalf("update check did not start: %+v", m.shellUpdate)
+	}
+	next, _ = m.Update(shellUpdateResult{info: shellinstaller.UserShellUpdate{Channel: "stable", Available: true, Components: []string{"Node runtime"}}})
+	m = next.(Model)
+	if view := m.View(); !strings.Contains(view, "Update available") || !strings.Contains(view, "Node runtime") || !strings.Contains(view, "stable") {
+		t.Fatalf("update result is incomplete:\n%s", view)
+	}
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter}) // Update now.
+	m = next.(Model)
+	if m.shellPlan == nil || m.shellPlanRequest.Destination != target {
+		t.Fatalf("update action did not prepare the component update: %+v %+v", m.shellPlan, m.shellUpdate)
+	}
+}
+
 func TestShellUninstallSeparateKeepsBackup(t *testing.T) {
 	home, target := managedInstallFixture(t)
 	if err := shellinstaller.RecordUserShellInstall(home, shellinstaller.UserShellInstall{Target: target, Mode: "separate", Channel: "stable"}); err != nil {
