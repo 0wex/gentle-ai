@@ -73,11 +73,36 @@ func TestShellManageShowsComponentChangesWithoutReinstall(t *testing.T) {
 		t.Fatalf("component changes were not isolated: %+v", m.shellManage)
 	}
 	view := m.View()
-	if !strings.Contains(view, "COMPONENT CHANGES") || !strings.Contains(view, "SDK source") || strings.Contains(view, "Apply preferences") {
+	if !strings.Contains(view, "COMPONENT CHANGES") || !strings.Contains(view, "SDK source") || strings.Contains(view, "Apply preferences") || !strings.Contains(view, "opens with gentle-shell") {
 		t.Fatalf("component summary differs:\n%s", view)
 	}
 	if m.shellInstallSelection.Confirmed {
 		t.Fatal("component summary forged installation consent")
+	}
+}
+
+func TestShellManageNoChangesIdentifiesInstallKind(t *testing.T) {
+	managedInstallFixture(t)
+	m := NewModel(system.DetectionResult{}, "detected").WithShellInstaller()
+	m.Width, m.Height = 120, 35
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter}) // Manage.
+	m = next.(Model)
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	view := m.View()
+	for _, want := range []string{"Separate install", "opens with gentle-shell", "No changes selected. Back to change preferences."} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("empty manage summary hides %q:\n%s", want, view)
+		}
+	}
+	if strings.Contains(view, "Apply preferences") {
+		t.Fatalf("empty summary offers Apply:\n%s", view)
+	}
+	agentView := screens.RenderShellManage("/home/test/install", "agent", nil, nil, false, "", 0, 100, 30)
+	if !strings.Contains(agentView, "On my existing Pi") || !strings.Contains(agentView, "opens with pi") {
+		t.Fatalf("agent summary does not identify its launcher:\n%s", agentView)
 	}
 }
 
@@ -153,7 +178,7 @@ func TestShellDetectsManagedInstallAndManage(t *testing.T) {
 	if len(m.shellManage.preferences) != 1 || m.shellManage.preferences[0].Label != "Persona" || m.shellManage.preferences[0].To != "Neutral" {
 		t.Fatalf("manage summary lost the persona change: %+v", m.shellManage.preferences)
 	}
-	if view := m.View(); !strings.Contains(view, "PREFERENCE CHANGES") || !strings.Contains(view, "Apply preferences") {
+	if view := m.View(); !strings.Contains(view, "PREFERENCE CHANGES") || !strings.Contains(view, "Apply preferences") || !strings.Contains(view, "Separate install") || !strings.Contains(view, "opens with gentle-shell") {
 		t.Fatalf("manage summary is incomplete:\n%s", view)
 	}
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})

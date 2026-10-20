@@ -325,7 +325,7 @@ func (m Model) shellInstallView() string {
 		return screens.RenderShellDetectedList(entries, m.shellDetectedCursor, m.Width, m.Height)
 	}
 	if m.shellManage != nil {
-		return screens.RenderShellManage(m.shellManage.install.Target, m.shellManage.preferences, m.shellManage.components, m.shellManage.applied, func() string {
+		return screens.RenderShellManage(m.shellManage.install.Target, m.shellManage.install.Mode, m.shellManage.preferences, m.shellManage.components, m.shellManage.applied, func() string {
 			if m.shellManage.err != nil {
 				return m.shellManage.err.Error()
 			}

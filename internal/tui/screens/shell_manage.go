@@ -14,13 +14,19 @@ type ShellManageChange struct {
 }
 
 // RenderShellManage summarizes the selected deltas before applying anything.
-func RenderShellManage(target string, preferences, components []ShellManageChange, applied bool, applyErr string, cursor, width, height int) string {
+func RenderShellManage(target, mode string, preferences, components []ShellManageChange, applied bool, applyErr string, cursor, width, height int) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
-	lines := []string{styles.TitleStyle.Render("Manage installation"), detectedSubtleStyle.Render(shellDetectedTarget(target)), ""}
+	kind, launcher := shellManageInstallKind(mode)
+	lines := []string{
+		styles.TitleStyle.Render("Manage installation"),
+		detectedSubtleStyle.Render(shellDetectedTarget(target)),
+		detectedLabelStyle.Render("TYPE") + detectedValueStyle.Render(kind) + detectedSubtleStyle.Render("  ·  opens with "+launcher),
+		"",
+	}
 	if len(preferences) == 0 && len(components) == 0 {
-		lines = append(lines, "No changes selected.")
+		lines = append(lines, "No changes selected. Back to change preferences.")
 	}
 	changeLines := func(changes []ShellManageChange) []string {
 		var out []string
@@ -72,6 +78,17 @@ func RenderShellManage(target string, preferences, components []ShellManageChang
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+func shellManageInstallKind(mode string) (string, string) {
+	switch mode {
+	case "agent":
+		return "On my existing Pi", "pi"
+	case "shared":
+		return "Shared Pi prefix", "pi"
+	default:
+		return "Separate install", "gentle-shell"
+	}
 }
 
 func stringOr(value, fallback string) string {
