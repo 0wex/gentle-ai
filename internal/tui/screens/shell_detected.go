@@ -25,7 +25,6 @@ var (
 	detectedCardStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(styles.ColorLavender).
-				Background(styles.ColorSurface).
 				Padding(1, 2)
 
 	detectedLabelStyle = lipgloss.NewStyle().
