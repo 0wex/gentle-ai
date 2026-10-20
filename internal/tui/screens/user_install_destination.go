@@ -64,7 +64,7 @@ func RenderUserInstallDestination(req shellinstaller.UserInstallRequest, field i
 			lines = append(lines, wrapped[:min(height-4, len(wrapped))]...)
 		}
 	}
-	lines = append(lines, shellFlowFit(width, "Tab: field • arrows: mode • Enter: review • Esc: cancel", "Tab field; Enter review; Esc cancel", "enter / esc", "esc"))
+	lines = append(lines, shellFlowFit(width, "Tab: field • Enter: review • Esc: cancel", "Tab field; Enter review; Esc cancel", "enter / esc", "esc"))
 	return joinShellExperienceConfigLines(lines, height)
 }
 
