@@ -89,9 +89,10 @@ func shellDetectedRow(label, value string) string {
 }
 
 func shellDetectedCard(content string, width, height int) string {
-	cardWidth := min(78, max(30, width-8))
-	card := detectedCardStyle.Width(cardWidth).Render(content)
-	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, card)
+	// Keep the same left-aligned, full-width reading order as the other TUI
+	// screens instead of floating the card in the middle of the terminal.
+	cardWidth := max(30, width-6)
+	return detectedCardStyle.Width(cardWidth).Render(content)
 }
 
 // RenderShellDetected identifies an existing managed installation before the
