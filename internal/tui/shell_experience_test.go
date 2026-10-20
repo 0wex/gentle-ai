@@ -114,11 +114,15 @@ func TestShellExperiencePreservesUnsupportedChoicesAndCancel(t *testing.T) {
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("codex")})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(shellExperienceTarget(t))})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.shellExperience == nil || m.shellExperience.err == nil || !strings.Contains(m.shellExperience.err.Error(), "GGA ON") {
+		t.Fatal("unsupported choice was dropped or admitted")
+	}
+	if m.shellExperience.profile.GGA != "on" || m.shellExperience.profile.GGAProvider != "codex" {
+		t.Fatal("unsupported choice was cleared")
+	}
 	state, _ := cli.ShellInstallPresentationOf(m.shellInstallModel)
-	if state.Error == nil || state.Review || state.Request.Experience.GGA != "on" || state.Request.Experience.GGAProvider != "codex" {
-		t.Fatal("unsupported choice dropped or admitted")
+	if state.Review || state.Request.Confirmation != "" {
+		t.Fatal("GGA refusal forged consent or advanced")
 	}
 	for _, key := range []tea.KeyType{tea.KeyEsc, tea.KeyCtrlC} {
 		cancel := experienceStart(t)

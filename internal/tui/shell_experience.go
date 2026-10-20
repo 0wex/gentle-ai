@@ -113,6 +113,11 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			case screens.ShellExperienceContinue:
 				config.err = config.profile.Validate()
+				// GGA ON has no qualified consumer in this installer route on
+				// either channel; say so here instead of failing at Destination.
+				if config.err == nil && config.profile.GGA == "on" {
+					config.err = errors.New("GGA ON is not available in this installer; turn it off to continue")
+				}
 				if config.err == nil && config.profile.SDKSource == "main-preview" {
 					config.err = shellMainSDKChoiceError(config.profile)
 				}
@@ -209,9 +214,6 @@ func shellMainPlatformError() error {
 func shellMainSDKChoiceError(p shellinstaller.UserExperience) error {
 	if err := shellMainPlatformError(); err != nil {
 		return err
-	}
-	if p.GGA == "on" {
-		return errors.New("Main preview does not support GGA; turn it off or choose Stable")
 	}
 	return nil
 }
