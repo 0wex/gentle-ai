@@ -152,7 +152,7 @@ func shellViewport(width, height int) (int, int) {
 
 func shellSDKSourceLabel(p *shellinstaller.UserExperience) string {
 	if p == nil || p.SDKSource == "" {
-		return "SDK source: stock (default)"
+		return "SDK source: stock"
 	}
 	if p.SDKSource == "main-preview" {
 		return "SDK Main + stock provider (Linux amd64 fresh Separate only)"

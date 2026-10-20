@@ -60,7 +60,7 @@ func TestShellOriginalMenuPreferenceProjection(t *testing.T) {
 		if entry.Kind == "foundation" && entry.Selectable {
 			t.Fatal("foundation information became a configuration action")
 		}
-		if entry.Kind == "toggle" && entry.Control != ShellExperienceBackground && (entry.Checked || !strings.Contains(entry.Value, "no override")) {
+		if entry.Kind == "toggle" && entry.Control != ShellExperienceBackground && (entry.Checked || entry.Value != "Inherited") {
 			t.Fatal("inherited preference presented as an explicit override", entry)
 		}
 	}

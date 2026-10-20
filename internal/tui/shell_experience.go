@@ -84,9 +84,6 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 		case "backspace":
-			if entry.Control == screens.ShellExperienceSDK {
-				config.profile.SDKSource = ""
-			}
 			if entry.Control == screens.ShellExperienceProvider && len(config.profile.GGAProvider) > 0 {
 				config.profile.GGAProvider = config.profile.GGAProvider[:len(config.profile.GGAProvider)-1]
 			}
@@ -129,13 +126,10 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 			default:
 				fields := []*string{&config.profile.StrictTDD, &config.profile.GlobalRDD, &config.profile.CodeGraph, &config.profile.Context7, &config.profile.GGA}
 				field := fields[entry.Control-screens.ShellExperienceTDD]
-				switch *field {
-				case "":
-					*field = "on"
-				case "on":
+				if *field == "on" {
 					*field = "off"
-				default:
-					*field = ""
+				} else {
+					*field = "on"
 				}
 			}
 		}

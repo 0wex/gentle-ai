@@ -69,7 +69,7 @@ func shellExperienceEntries(p shellinstaller.UserExperience) []ShellExperienceEn
 	addToggle := func(control ShellExperienceControl, category, label, description, value string) {
 		caption := strings.ToUpper(value)
 		if value == "" {
-			caption = "Default (no override)"
+			caption = "Inherited"
 		}
 		add(ShellExperienceEntry{Control: control, Category: category, Kind: "toggle", Label: label, Description: description, Value: caption, Checked: value == "on"})
 	}

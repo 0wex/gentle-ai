@@ -158,12 +158,9 @@ func renderShellExperienceConfigPanel(focused ShellExperienceEntry, width int) [
 	hint := "Enter: select"
 	switch focused.Kind {
 	case "toggle":
-		hint = "Enter: cycle default / ON / OFF"
-		if focused.Control == ShellExperienceBackground {
-			hint = "Enter: toggle"
-		}
+		hint = "Enter: toggle"
 	case "radio":
-		hint = "Enter: select • Backspace: inherit stock default"
+		hint = "Enter: select"
 	case "text":
 		hint = "Type provider • Backspace: delete • Enter: keep"
 	case "action":

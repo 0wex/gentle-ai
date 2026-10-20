@@ -48,10 +48,9 @@ func (shellPTYModel) Init() tea.Cmd { return nil }
 
 func shellPTYExperience(scenario string) shellinstaller.UserExperience {
 	profile := shellinstaller.DefaultUserExperience()
+	profile.StrictTDD, profile.GlobalRDD, profile.CodeGraph, profile.Context7, profile.GGA = "on", "on", "on", "on", "off"
 	if strings.HasPrefix(scenario, "confirm-main") {
 		profile.SDKSource = "main-preview"
-	} else {
-		profile.StrictTDD, profile.GlobalRDD, profile.CodeGraph, profile.Context7, profile.GGA = "on", "on", "on", "on", "off"
 	}
 	return profile
 }
@@ -159,7 +158,7 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 					wantProfile.Persona = "neutral"
 				}
 				if err != nil || !selection.Confirmed || selection.Request.Destination != target || selection.Request.Confirmation != fresh || selection.Request.Experience == nil || *selection.Request.Experience != wantProfile {
-					return fmt.Errorf("public interaction lost physical selection: %+v, %v", selection, err)
+					return fmt.Errorf("public interaction lost physical selection: got %+v want %+v, %v", selection.Request.Experience, wantProfile, err)
 				}
 				if strings.HasSuffix(scenario, "edit") && (originalConfirmation == "" || selection.Request.Confirmation == originalConfirmation) {
 					return fmt.Errorf("edited profile reused physical confirmation: %+v", selection)
@@ -234,11 +233,9 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 			send("\r")
 			waitFor("Configure Gentle-Shell experience")
 			if strings.HasPrefix(scenario, "confirm-main") {
-				// Physically inherit the five optional choices before Main; the
-				// fresh ON/OFF preset must not be silently cleared by production.
-				send(strings.Repeat("\x1b[B", 4) + strings.Repeat("\r\r\x1b[B", 4))
-				send(strings.Repeat("\x1b[B", 2) + "\r\x1b[H")
-				send(strings.Repeat("\x1b[B", 9) + "\r")
+				// Main keeps the concrete fresh preset; ON/OFF toggles no longer
+				// expose an inherited third state in the editor.
+				send("\x1b[H" + strings.Repeat("\x1b[B", 9) + "\r")
 				waitFor("SDK Main + stock provider")
 			}
 			send("\x1b[F\r")

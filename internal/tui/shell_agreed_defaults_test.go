@@ -31,7 +31,7 @@ func TestShellAgreedFreshDefaults(t *testing.T) {
 			t.Errorf("fresh menu omits concrete default %q", line)
 		}
 	}
-	if strings.Contains(m.View(), "Default (no override)") || strings.Contains(m.View(), "ADVANCED") || strings.Contains(m.View(), "GGA provider") {
+	if strings.Contains(m.View(), "Inherited") || strings.Contains(m.View(), "ADVANCED") || strings.Contains(m.View(), "GGA provider") {
 		t.Error("fresh menu still inherits or exposes an inactive provider")
 	}
 	for _, key := range []tea.KeyMsg{{Type: tea.KeyEnd}, {Type: tea.KeyEnter}} {

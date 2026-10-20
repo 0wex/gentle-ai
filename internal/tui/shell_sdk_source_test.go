@@ -56,11 +56,11 @@ func TestShellExperienceSDKSourceHandoff(t *testing.T) {
 	}
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyCtrlE})
 	m = sdkSourceRow(t, m)
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyBackspace}) // back to omitted stock
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // back to stock
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	state, _ = cli.ShellInstallPresentationOf(m.shellInstallModel)
-	if state.Review || state.Request.Confirmation != "" || state.Request.Experience.SDKSource != "" || state.Request.Destination != target {
+	if state.Review || state.Request.Confirmation != "" || state.Request.Experience.SDKSource != "stable" || state.Request.Destination != target {
 		t.Fatal("SDK edit retains physical confirmation or loses destination")
 	}
 	for _, key := range []tea.KeyType{tea.KeyEsc, tea.KeyCtrlC} {
@@ -111,9 +111,9 @@ func TestShellExperienceSDKSourceEditingKeepsGGA(t *testing.T) {
 		t.Fatal("selecting GGA changed unrelated choices")
 	}
 	m = sdkSourceRow(t, m)
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyBackspace})
-	if m.shellExperience.profile.SDKSource != "" || m.shellExperience.profile.GGA != "on" {
-		t.Fatal("clearing SDK source changes unrelated preferences")
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // Main → Stable
+	if m.shellExperience.profile.SDKSource != "stable" || m.shellExperience.profile.GGA != "on" {
+		t.Fatal("changing SDK source changes unrelated preferences")
 	}
 }
 

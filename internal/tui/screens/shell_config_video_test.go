@@ -72,7 +72,7 @@ func TestShellConfigVideoCurrentValueIsNotFocusOrRecommendation(t *testing.T) {
 		t.Fatalf("focused Gentleman overwrote the actual persona value:\n%s", panel)
 	}
 	panel = shellConfigVideoPanel(t, profile, ShellExperienceTDD, "")
-	if !strings.Contains(panel, "CURRENT VALUE\nDefault (no override)\n") {
+	if !strings.Contains(panel, "CURRENT VALUE\nInherited\n") {
 		t.Fatalf("inherited preference was presented as OFF or a recommendation:\n%s", panel)
 	}
 	profile.SDKSource = "stable"

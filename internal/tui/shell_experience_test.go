@@ -108,8 +108,7 @@ func TestShellExperienceConfigureDestinationReady(t *testing.T) {
 
 func TestShellExperiencePreservesGGAChoiceAndCancel(t *testing.T) {
 	m := experienceFocus(t, experienceStart(t), screens.ShellExperienceGGA, "")
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // OFF → inherit.
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // Inherit → ON is still unqualified.
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // Inherited → ON.
 	m = experienceFocus(t, m, screens.ShellExperienceProvider, "")
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("codex")})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
