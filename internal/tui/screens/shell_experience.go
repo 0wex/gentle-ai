@@ -13,8 +13,12 @@ import (
 )
 
 func RenderShellExperience(p shellinstaller.UserExperience, cursor int, err error, width, height int, targets ...ShellExperienceEntry) string {
+	return RenderShellExperienceWithUninstall(p, cursor, err, width, height, false, targets...)
+}
+
+func RenderShellExperienceWithUninstall(p shellinstaller.UserExperience, cursor int, err error, width, height int, uninstall bool, targets ...ShellExperienceEntry) string {
 	width, height = shellViewport(width, height)
-	view := renderShellExperienceConfig(p, cursor, width, height, targets...)
+	view := renderShellExperienceConfigWithUninstall(p, cursor, width, height, uninstall, targets...)
 	if err != nil {
 		warning := wrapShellExperienceConfigText(err.Error(), width)
 		warning = warning[:min(len(warning), max(1, min(3, height-1)))]

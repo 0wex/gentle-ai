@@ -56,7 +56,7 @@ func TestShellOriginalPresentationViewportMatrix(t *testing.T) {
 
 func TestShellOriginalMenuPreferenceProjection(t *testing.T) {
 	profile := shellinstaller.DefaultUserExperience()
-	for _, entry := range shellExperienceEntries(profile) {
+	for _, entry := range shellExperienceEntries(profile, false) {
 		if entry.Kind == "foundation" && entry.Selectable {
 			t.Fatal("foundation information became a configuration action")
 		}

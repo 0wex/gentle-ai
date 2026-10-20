@@ -209,8 +209,17 @@ func TestShellDetectsManagedInstallAndManage(t *testing.T) {
 		t.Fatalf("manage did not prefill the discovered install: %+v", m.shellExperience)
 	}
 	view := m.View()
-	if !strings.Contains(view, "Configure Gentle-Shell experience") || !strings.Contains(view, "(*) Separate install (Gentle-Shell)  · locked") || !strings.Contains(view, "( ) On my existing Pi  · locked") {
-		t.Fatalf("manage did not lock the managed target:\n%s", view)
+	if !strings.Contains(view, "Configure Gentle-Shell experience") || !strings.Contains(view, "(*) Separate install (Gentle-Shell)  · locked") || !strings.Contains(view, "( ) On my existing Pi  · locked") || !strings.Contains(view, "Uninstall this installation") {
+		t.Fatalf("manage did not lock the target or offer uninstall:\n%s", view)
+	}
+	m = experienceFocus(t, m, screens.ShellExperienceUninstall, "")
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.shellManage == nil || !m.shellManage.confirm || !m.shellManage.fromConfig {
+		t.Fatalf("configure uninstall did not open confirmation: %+v", m.shellManage)
+	}
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.shellExperience == nil || m.shellManage != nil {
+		t.Fatal("uninstall confirmation did not return to configuration")
 	}
 	m = experienceFocus(t, m, screens.ShellExperiencePersona, "neutral")
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})

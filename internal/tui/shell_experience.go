@@ -132,7 +132,8 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 		reuseAgent = config.agent
 	}
 	targets := screens.ShellInstallTargetEntries(config.mode, config.piFound, config.piNote, reuseAgent, config.existing, config.reconfigure)
-	options := screens.ShellExperienceOptions(config.profile, targets...)
+	canUninstall := config.reconfigure && (config.mode == "separate" || config.mode == "agent")
+	options := screens.ShellExperienceOptionsWithUninstall(config.profile, canUninstall, targets...)
 	config.cursor = min(max(0, config.cursor), len(options)-1)
 	entry := options[config.cursor]
 	if entry.Control == screens.ShellExperienceProvider && key.Type == tea.KeyRunes {
@@ -272,6 +273,8 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					}
 				}
+			case screens.ShellExperienceUninstall:
+				return m.beginUninstallFromConfig(config), nil
 			case screens.ShellExperienceCancel:
 				return m.configureShellExperience(tea.KeyMsg{Type: tea.KeyEsc})
 			default:
@@ -359,7 +362,8 @@ func (m Model) shellInstallView() string {
 			reuseAgent = m.shellExperience.agent
 		}
 		targets := screens.ShellInstallTargetEntries(m.shellExperience.mode, m.shellExperience.piFound, m.shellExperience.piNote, reuseAgent, m.shellExperience.existing, m.shellExperience.reconfigure)
-		return screens.RenderShellExperience(m.shellExperience.profile, m.shellExperience.cursor, m.shellExperience.err, m.Width, m.Height, targets...)
+		canUninstall := m.shellExperience.reconfigure && (m.shellExperience.mode == "separate" || m.shellExperience.mode == "agent")
+		return screens.RenderShellExperienceWithUninstall(m.shellExperience.profile, m.shellExperience.cursor, m.shellExperience.err, m.Width, m.Height, canUninstall, targets...)
 	}
 	state, ok := cli.ShellInstallPresentationOf(m.shellInstallModel)
 	if ok && state.Review {

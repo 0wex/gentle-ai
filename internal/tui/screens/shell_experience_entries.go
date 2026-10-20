@@ -24,6 +24,7 @@ const (
 	ShellExperienceContinue
 	ShellExperienceCancel
 	ShellExperienceInstallTarget
+	ShellExperienceUninstall
 )
 
 // ShellExperienceEntry is an inert projection, never a second preference store.
@@ -58,7 +59,7 @@ func ShellInstallTargetEntries(mode string, piFound bool, piNote string, agent s
 	}
 }
 
-func shellExperienceEntries(p shellinstaller.UserExperience, targets ...ShellExperienceEntry) []ShellExperienceEntry {
+func shellExperienceEntries(p shellinstaller.UserExperience, uninstall bool, targets ...ShellExperienceEntry) []ShellExperienceEntry {
 	var entries []ShellExperienceEntry
 	cursor := 0
 	add := func(e ShellExperienceEntry) {
@@ -116,6 +117,9 @@ func shellExperienceEntries(p shellinstaller.UserExperience, targets ...ShellExp
 		}
 		add(ShellExperienceEntry{Control: ShellExperienceProvider, Category: "Optional workflows", Kind: "text", Label: "GGA provider (type explicitly)", Description: "Optional: type a provider here or leave it empty for GGA to configure it later. Never inferred from Pi.", Value: provider})
 	}
+	if uninstall {
+		add(ShellExperienceEntry{Control: ShellExperienceUninstall, Category: "Actions", Kind: "action", Label: "Uninstall this installation", Description: "Moves this managed installation to a timestamped backup and removes it from detection. Your personal Pi is untouched."})
+	}
 	add(ShellExperienceEntry{Control: ShellExperienceContinue, Category: "Actions", Kind: "action", Label: "Continue", Description: "Continue with this Gentle-Shell profile. Installation still requires physical confirmation."})
 	add(ShellExperienceEntry{Control: ShellExperienceCancel, Category: "Actions", Kind: "action", Label: "Cancel", Description: "Cancel configuration without applying changes."})
 	return entries
@@ -123,8 +127,12 @@ func shellExperienceEntries(p shellinstaller.UserExperience, targets ...ShellExp
 
 // ShellExperienceOptions is the same selectable projection used by every layout.
 func ShellExperienceOptions(p shellinstaller.UserExperience, targets ...ShellExperienceEntry) []ShellExperienceEntry {
+	return ShellExperienceOptionsWithUninstall(p, false, targets...)
+}
+
+func ShellExperienceOptionsWithUninstall(p shellinstaller.UserExperience, uninstall bool, targets ...ShellExperienceEntry) []ShellExperienceEntry {
 	var options []ShellExperienceEntry
-	for _, entry := range shellExperienceEntries(p, targets...) {
+	for _, entry := range shellExperienceEntries(p, uninstall, targets...) {
 		if entry.Selectable {
 			options = append(options, entry)
 		}

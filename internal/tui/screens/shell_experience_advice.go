@@ -34,6 +34,8 @@ func shellExperienceRecommendation(entry ShellExperienceEntry) (string, string) 
 			return "Separate install", "Reuse a detected Pi prefix only when you want the defaults applied over it; Main is available with On my existing Pi or Separate, not the retained Shared prefix."
 		}
 		return "Separate install", "Keeps your personal Pi untouched and installs its own prefix, agent and launchers."
+	case ShellExperienceUninstall:
+		return "Uninstall", "Moves this managed installation to a timestamped backup and removes it from detection. Your personal Pi is untouched."
 	case ShellExperienceSDK:
 		if entry.Choice == "main-preview" {
 			return "Stable", "Choose Main for On my existing Pi or a Separate install; provider and native pins stay stock. Linux amd64 is qualified today; Windows and macOS support is being completed."

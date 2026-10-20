@@ -106,6 +106,7 @@ type shellManageState struct {
 	uninstalled  bool
 	backup       string
 	uninstallErr error
+	fromConfig   bool
 }
 
 func manageDisplay(value, fallback string) string {
@@ -193,6 +194,17 @@ func manageActions(manage *shellManageState) []string {
 	return append(actions, "Back")
 }
 
+func (m Model) beginUninstallFromConfig(config shellExperienceConfig) Model {
+	if len(config.existing) != 1 {
+		config.err = errors.New("the managed installation is no longer available")
+		m.shellExperience = &config
+		return m
+	}
+	m.shellManage = &shellManageState{install: config.existing[0], config: config, confirm: true, fromConfig: true}
+	m.shellExperience = nil
+	return m
+}
+
 func (m Model) updateShellManage(msg tea.Msg) (tea.Model, tea.Cmd) {
 	key, ok := msg.(tea.KeyMsg)
 	if !ok {
@@ -222,9 +234,17 @@ func (m Model) updateShellManage(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "k", "up":
 			manage.cursor = max(0, manage.cursor-1)
 		case "esc", "ctrl+c":
+			if manage.fromConfig {
+				m.shellExperience, m.shellManage = &manage.config, nil
+				return m, nil
+			}
 			manage.confirm, manage.uninstallErr, manage.cursor = false, nil, 0
 		case "enter":
 			if manage.cursor == 1 {
+				if manage.fromConfig {
+					m.shellExperience, m.shellManage = &manage.config, nil
+					return m, nil
+				}
 				manage.confirm, manage.uninstallErr, manage.cursor = false, nil, 0
 				return m, nil
 			}

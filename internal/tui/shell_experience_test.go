@@ -27,7 +27,8 @@ func experienceFocus(t *testing.T, m Model, control screens.ShellExperienceContr
 		reuseAgent = m.shellExperience.agent
 	}
 	targets := screens.ShellInstallTargetEntries(m.shellExperience.mode, m.shellExperience.piFound, m.shellExperience.piNote, reuseAgent, m.shellExperience.existing, m.shellExperience.reconfigure)
-	for _, entry := range screens.ShellExperienceOptions(m.shellExperience.profile, targets...) {
+	uninstall := m.shellExperience.reconfigure && (m.shellExperience.mode == "separate" || m.shellExperience.mode == "agent")
+	for _, entry := range screens.ShellExperienceOptionsWithUninstall(m.shellExperience.profile, uninstall, targets...) {
 		if entry.Control == control && (choice == "" || entry.Choice == choice) {
 			m = experienceKey(m, tea.KeyMsg{Type: tea.KeyHome})
 			for i := 0; i < entry.Cursor; i++ {
