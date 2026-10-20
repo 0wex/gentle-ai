@@ -5,6 +5,7 @@ package shellinstaller
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -55,5 +56,17 @@ func TestDetectUserPiMissing(t *testing.T) {
 	}
 	if got := DetectUserPi(home); got.Found || got.Problem != "missing" {
 		t.Fatalf("Pi agent without a bundle was detected: %+v", got)
+	}
+}
+
+func TestDetectUserPiRestrictedPrefix(t *testing.T) {
+	t.Setenv("NPM_CONFIG_PREFIX", "")
+	home := detectPiFixture(t)
+	if err := os.Chmod(filepath.Join(home, ".npm-global"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	got := DetectUserPi(home)
+	if got.Found || got.Problem != "restricted" || !strings.Contains(got.Detail, "private owned 0700") {
+		t.Fatalf("restricted Pi was not explained: %+v", got)
 	}
 }

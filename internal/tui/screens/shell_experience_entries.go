@@ -43,10 +43,13 @@ func shellExperienceCategories() []string {
 // ShellInstallTargetEntries projects the install-target choice. It is not part
 // of UserExperience, so the transport DTO stays unchanged; the caller owns the
 // selection and the detected Pi data.
-func ShellInstallTargetEntries(mode string, piFound bool, existing []shellinstaller.UserShellInstall) []ShellExperienceEntry {
+func ShellInstallTargetEntries(mode string, piFound bool, piNote string, existing []shellinstaller.UserShellInstall) []ShellExperienceEntry {
 	piDescription := "Reuse the single detected Pi prefix and agent; Context7 is written into its mcp.json."
 	if !piFound {
 		piDescription = "No single npm-style Pi install was detected; fix that Pi install or choose Separate."
+		if piNote != "" && piNote != "missing" && piNote != "ambiguous" {
+			piDescription = piNote
+		}
 	}
 	sharedValue, separateValue := "On my existing Pi", "Separate install (Gentle-Shell)"
 	entries := []ShellExperienceEntry{

@@ -32,7 +32,11 @@ func shellDetectPi() (string, string, bool, string) {
 		return "", "", false, "missing"
 	}
 	detection := shellinstaller.DetectUserPi(home)
-	return detection.Prefix, detection.Agent, detection.Found, detection.Problem
+	note := detection.Problem
+	if detection.Detail != "" {
+		note = detection.Detail
+	}
+	return detection.Prefix, detection.Agent, detection.Found, note
 }
 
 func shellDiscoverInstalls() []shellinstaller.UserShellInstall {
@@ -83,7 +87,7 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	config := *m.shellExperience
 	config.err = nil
-	targets := screens.ShellInstallTargetEntries(config.choice, config.piFound, config.existing)
+	targets := screens.ShellInstallTargetEntries(config.choice, config.piFound, config.piNote, config.existing)
 	options := screens.ShellExperienceOptions(config.profile, targets...)
 	config.cursor = min(max(0, config.cursor), len(options)-1)
 	entry := options[config.cursor]
@@ -136,7 +140,11 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 				config.reconfigure, config.target = false, ""
 				if entry.Choice == "shared" {
 					if !config.piFound {
-						config.err = errors.New("No single npm-style Pi install was detected; choose Separate install")
+						detail := "No single npm-style Pi install was detected; choose Separate install"
+						if config.piNote != "missing" && config.piNote != "ambiguous" && config.piNote != "" {
+							detail = config.piNote
+						}
+						config.err = errors.New(detail)
 					} else {
 						config.mode, config.choice = "shared", "shared"
 					}
@@ -213,7 +221,7 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) shellInstallView() string {
 	if m.shellExperience != nil {
-		targets := screens.ShellInstallTargetEntries(m.shellExperience.choice, m.shellExperience.piFound, m.shellExperience.existing)
+		targets := screens.ShellInstallTargetEntries(m.shellExperience.choice, m.shellExperience.piFound, m.shellExperience.piNote, m.shellExperience.existing)
 		return screens.RenderShellExperience(m.shellExperience.profile, m.shellExperience.cursor, m.shellExperience.err, m.Width, m.Height, targets...)
 	}
 	state, ok := cli.ShellInstallPresentationOf(m.shellInstallModel)
