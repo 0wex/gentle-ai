@@ -211,7 +211,7 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	if err != nil || req.Confirmation != confirmation {
 		return result, privateError("refused", errors.Join(err, errors.New("physical selection confirmation differs")))
 	}
-	if _, statErr := os.Lstat(req.Destination); statErr == nil {
+	if _, statErr := os.Lstat(req.Destination); statErr == nil && userReconfigureTarget() != req.Destination {
 		manifest, err := userReadManifest(ctx, req.Destination)
 		if err != nil {
 			return result, err

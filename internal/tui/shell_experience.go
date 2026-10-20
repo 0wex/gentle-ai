@@ -81,9 +81,21 @@ func shellDiscoverInstalls() []shellinstaller.UserShellInstall {
 
 func (m *Model) beginShellExperience() {
 	m.shellReadyCursor, m.shellReadyOffset = 0, 0
+	if home, err := os.UserHomeDir(); err == nil {
+		_ = os.Setenv("GENTLE_AI_SHELL_REGISTRY_HOME", home)
+	}
+	_ = os.Unsetenv("GENTLE_AI_RECONFIGURE_TARGET")
 	profile := shellWelcomeExperience()
 	prefix, agent, found, note := shellDetectPi()
-	m.shellExperience = &shellExperienceConfig{profile: profile, mode: "separate", choice: "separate", prefix: prefix, agent: agent, piFound: found, piNote: note, existing: shellDiscoverInstalls()}
+	installs := shellDiscoverInstalls()
+	if len(installs) == 1 {
+		if detected, err := shellinstaller.LoadUserShellExperience(installs[0]); err == nil {
+			m.shellDetected, m.shellDetectedProfile, m.shellDetectedCursor = &installs[0], detected, 0
+			m.shellExperience, m.shellInstallModel = nil, nil
+			return
+		}
+	}
+	m.shellExperience = &shellExperienceConfig{profile: profile, mode: "separate", choice: "separate", prefix: prefix, agent: agent, piFound: found, piNote: note, existing: installs}
 	m.shellInstallModel = cli.NewShellInstallModelWithExperience(nil, profile)
 }
 
@@ -216,7 +228,18 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 					config.err = shellMainSDKChoiceError(config.profile)
 				}
 				if config.err == nil {
-					destination, destErr := shellDefaultDestination()
+					var destination string
+					var destErr error
+					if config.reconfigure && config.target != "" {
+						destination = config.target
+					} else {
+						destination, destErr = shellDefaultDestination()
+					}
+					if config.reconfigure && config.target != "" {
+						_ = os.Setenv("GENTLE_AI_RECONFIGURE_TARGET", config.target)
+					} else {
+						_ = os.Unsetenv("GENTLE_AI_RECONFIGURE_TARGET")
+					}
 					if destErr != nil {
 						config.err = destErr
 					} else {
@@ -263,7 +286,29 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func shellDetectedMode(mode string) string {
+	if mode == "shared" {
+		return "Shared Pi prefix"
+	}
+	return "Separate install"
+}
+
+func shellDetectedChannel(channel string) string {
+	if channel == "main-preview" {
+		return "Main preview"
+	}
+	return "Stable"
+}
+
 func (m Model) shellInstallView() string {
+	if m.shellDetected != nil {
+		profile := m.shellDetectedProfile
+		return screens.RenderShellDetected(screens.ShellDetectedInstall{
+			Target: m.shellDetected.Target, Mode: shellDetectedMode(m.shellDetected.Mode), Channel: shellDetectedChannel(m.shellDetected.Channel),
+			Persona: profile.Persona, Background: profile.BackgroundSubagents,
+			TDD: profile.StrictTDD, RDD: profile.GlobalRDD, CodeGraph: profile.CodeGraph, Context7: profile.Context7, GGA: profile.GGA,
+		}, m.shellDetectedCursor, m.Width, m.Height)
+	}
 	if m.shellInstallRun != nil {
 		steps := make([]screens.ShellInstallStep, len(m.shellInstallRun.steps))
 		for index, step := range m.shellInstallRun.steps {

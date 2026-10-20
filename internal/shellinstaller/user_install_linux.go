@@ -388,7 +388,7 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (UserInstallRes
 // RunUserInstallDirect is the portable user-level installer: no transient
 // service, no cgroup claim and no process replacement. It keeps the user
 // identity, no-new-privileges, verified artifacts and atomic publication.
-func RunUserInstallDirect(ctx context.Context, req UserInstallRequest) (UserInstallResult, error) {
+func RunUserInstallDirect(ctx context.Context, req UserInstallRequest) (result UserInstallResult, err error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}

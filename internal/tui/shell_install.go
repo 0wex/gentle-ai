@@ -93,6 +93,48 @@ func (m Model) beginShellInstall() (tea.Model, tea.Cmd) {
 	return m, waitShellInstallEvent(events)
 }
 
+func (m Model) updateShellDetected(msg tea.Msg) (tea.Model, tea.Cmd) {
+	key, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
+	switch key.String() {
+	case "j", "down":
+		m.shellDetectedCursor = min(1, m.shellDetectedCursor+1)
+	case "k", "up":
+		m.shellDetectedCursor = max(0, m.shellDetectedCursor-1)
+	case "enter":
+		if m.shellDetectedCursor == 0 {
+			return m.manageDetectedInstall(), nil
+		}
+		return m.leaveDetectedInstall(), nil
+	case "esc", "x", "ctrl+c":
+		return m.leaveDetectedInstall(), nil
+	}
+	return m, nil
+}
+
+func (m Model) leaveDetectedInstall() Model {
+	m.shellDetected = nil
+	m.shellExperience, m.shellInstallModel = nil, nil
+	m.shellDetectedCursor = 0
+	m.setScreen(ScreenWelcome)
+	return m
+}
+
+func (m Model) manageDetectedInstall() Model {
+	install := *m.shellDetected
+	_, _, found, note := shellDetectPi()
+	m.shellExperience = &shellExperienceConfig{
+		profile: m.shellDetectedProfile, mode: install.Mode, choice: "existing",
+		prefix: install.Prefix, agent: install.Agent, piFound: found, piNote: note,
+		existing: []shellinstaller.UserShellInstall{install}, reconfigure: true, target: install.Target,
+	}
+	m.shellInstallModel = cli.NewShellInstallModelWithExperience(nil, m.shellDetectedProfile)
+	m.shellDetected, m.shellDetectedCursor = nil, 0
+	return m
+}
+
 func (m Model) updateShellInstallRun(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if _, ok := msg.(shellInstallTick); ok {
 		if m.shellInstallRun == nil || m.shellInstallRun.done {
@@ -178,6 +220,9 @@ func (m Model) ShellInstallSelection() cli.ShellInstallSelection {
 }
 
 func (m Model) updateShellInstall(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.shellDetected != nil {
+		return m.updateShellDetected(msg)
+	}
 	if m.shellInstallRun != nil {
 		return m.updateShellInstallRun(msg)
 	}

@@ -106,7 +106,10 @@ func DiscoverUserShellInstalls(home string) []UserShellInstall {
 		return nil
 	}
 	candidates := ReadUserShellInstalls(home)
-	candidates = append(candidates, UserShellInstall{Target: filepath.Join(home, ".gentle-shell")})
+	candidates = append(candidates,
+		UserShellInstall{Target: filepath.Join(home, ".local", "share", "gentle-shell", "install")},
+		UserShellInstall{Target: filepath.Join(home, ".gentle-shell")},
+	)
 	seen := map[string]bool{}
 	var installs []UserShellInstall
 	for _, candidate := range candidates {

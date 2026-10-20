@@ -638,6 +638,9 @@ const (
 
 type Model struct {
 	shellExperience       *shellExperienceConfig
+	shellDetected         *shellinstaller.UserShellInstall
+	shellDetectedProfile  shellinstaller.UserExperience
+	shellDetectedCursor   int
 	shellReconfigure      string
 	shellPlan             []string
 	shellPlanConfig       *shellExperienceConfig
@@ -2022,7 +2025,9 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 			case screens.ShellInstallWelcomeOption:
 				m.shellInstallSelection = cli.ShellInstallSelection{}
 				m.beginShellExperience()
-				m.shellInstallModel, _ = m.shellInstallModel.Update(tea.WindowSizeMsg{Width: m.Width, Height: m.Height})
+				if m.shellInstallModel != nil {
+					m.shellInstallModel, _ = m.shellInstallModel.Update(tea.WindowSizeMsg{Width: m.Width, Height: m.Height})
+				}
 				m.setScreen(ScreenShellInstall)
 				return m, nil
 			case "Quit":
