@@ -110,7 +110,7 @@ func TestLoadUserShellExperiencePrefill(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := UserExperience{Persona: "neutral", BackgroundSubagents: "off", StrictTDD: "on", GlobalRDD: "off", CodeGraph: "on", Context7: "on", SDKSource: "main-preview"}
+	want := UserExperience{Persona: "neutral", BackgroundSubagents: "off", StrictTDD: "on", GlobalRDD: "off", CodeGraph: "on", Context7: "on", GGA: "off", SDKSource: "main-preview"}
 	if profile != want {
 		t.Fatalf("prefill differs: got %+v want %+v", profile, want)
 	}

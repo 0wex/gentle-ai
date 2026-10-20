@@ -204,6 +204,9 @@ func LoadUserShellExperience(install UserShellInstall) (UserExperience, error) {
 	if manifest.CodeGraph {
 		profile.CodeGraph = "on"
 	}
+	// GGA is a two-state choice in the installer. A missing/off manifest bit
+	// is the explicit OFF/default state; it is not shown as inherited.
+	profile.GGA = "off"
 	if manifest.GGA {
 		profile.GGA = "on"
 	}
