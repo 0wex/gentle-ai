@@ -43,6 +43,14 @@ Run `go test -tags=shell_main_sdk_admission -run '^TestUserMainSDKPreviewAdmissi
 inside the existing bounded Guest, with `/frozen-main`, `/frozen-gentle-pi.tgz`
 and `/source` mounted read-only. No new network or supplier code is executed.
 
+## Qualified commit gate
+
+`userMainQualifiedCommit` is the only Main snapshot the installer fetches. A
+new `main` HEAD is ignored automatically; advance the constant only after this
+admission suite and a composition install pass against the stock pins. This
+repository cannot run the upstream `gentle-shell` merge CI, so the pin update
+is the qualification boundary.
+
 ## Still pending
 
 No copy/activation, launcher, worker, selector or Ready composition label is

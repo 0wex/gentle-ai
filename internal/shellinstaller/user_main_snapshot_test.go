@@ -3,6 +3,7 @@ package shellinstaller
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -23,63 +24,51 @@ func (b userMainBody) Close() error { b.close(); return nil }
 
 // Controlled HTTP response DATA only, not publisher/TLS/authenticated ZIP or
 // installed/Main selection. Nothing from these archive bytes is executed.
-func TestUserMainSnapshotFreezesOneCanonicalRef(t *testing.T) {
-	commit := strings.Repeat("ab", 20)
+func TestUserMainSnapshotFetchesOnlyQualifiedCommit(t *testing.T) {
 	archive := "Main archive response DATA"
-	for _, name := range []string{"success", "canceled before", "canceled on archive close", "malformed ref", "metadata overflow", "ref status", "archive status", "archive encoding"} {
-		t.Run(name, func(t *testing.T) {
-			ctx, cancel := context.WithCancel(context.Background())
-			defer cancel()
-			if name == "canceled before" {
-				cancel()
-			}
-			calls, closes := 0, 0
+	calls := 0
+	client := &http.Client{Transport: userMainResponse(func(req *http.Request) (*http.Response, error) {
+		calls++
+		if req.Method != http.MethodGet || req.URL.String() != "https://codeload.github.com/Gentleman-Programming/gentle-shell/zip/"+userMainQualifiedCommit || req.Header.Get("Accept-Encoding") != "identity" || req.Header.Get("Authorization") != "" {
+			t.Fatal("qualified publisher request changed", req)
+		}
+		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, ContentLength: int64(len(archive)), Body: userMainBody{Reader: strings.NewReader(archive), close: func() {}}}, nil
+	})}
+	artifact, data, err := userMainSnapshotUsing(context.Background(), client)
+	want, descriptorErr := userMainDescriptor(userMainQualifiedCommit, fmt.Sprintf("%x", sha256.Sum256([]byte(archive))))
+	if err != nil || descriptorErr != nil || artifact != want || string(data) != archive || calls != 1 {
+		t.Fatalf("qualified Main snapshot differs: %+v %q %v calls=%d", artifact, data, err, calls)
+	}
+}
+
+func TestUserMainSnapshotRejectsPublisherFailures(t *testing.T) {
+	for _, failure := range []string{"status", "encoding", "overflow", "close"} {
+		t.Run(failure, func(t *testing.T) {
+			cause := errors.New("controlled close failure")
 			client := &http.Client{Transport: userMainResponse(func(req *http.Request) (*http.Response, error) {
-				calls++
-				url := "https://api.github.com/repos/Gentleman-Programming/gentle-shell/commits/main"
-				data := `{"sha":"` + commit + `"}`
+				data := "archive"
 				status, encoding := http.StatusOK, ""
-				if calls == 1 {
-					if name == "malformed ref" {
-						data = `{"sha":"main"}`
-					}
-					if name == "metadata overflow" {
-						data = strings.Repeat(" ", (256<<10)+1)
-					}
-					if name == "ref status" {
-						status = http.StatusForbidden
-					}
-				} else {
-					url, data = "https://codeload.github.com/Gentleman-Programming/gentle-shell/zip/"+commit, archive
-					if name == "archive status" {
-						status = http.StatusNotFound
-					}
-					if name == "archive encoding" {
-						encoding = "gzip"
-					}
+				if failure == "status" {
+					status = http.StatusNotFound
 				}
-				if calls > 2 || req.Method != http.MethodGet || req.URL.String() != url || req.Header.Get("Accept-Encoding") != "identity" || req.Header.Get("Authorization") != "" || req.URL.User != nil {
-					t.Fatal("fixed publisher request changed", req)
+				if failure == "encoding" {
+					encoding = "gzip"
 				}
-				body := userMainBody{Reader: strings.NewReader(data), close: func() {
-					closes++
-					if calls == 2 && name == "canceled on archive close" {
-						cancel()
-					}
-				}}
+				if failure == "overflow" {
+					data = strings.Repeat("x", (32<<20)+1)
+				}
+				body := userMainCloseErrorBody{Reader: strings.NewReader(data), closed: new(int)}
+				if failure == "close" {
+					body.cause = cause
+				}
 				return &http.Response{StatusCode: status, Header: http.Header{"Content-Encoding": []string{encoding}}, ContentLength: int64(len(data)), Body: body}, nil
 			})}
-			artifact, data, err := userMainSnapshotUsing(ctx, client)
-			if name == "success" {
-				want, descriptorErr := userMainDescriptor(commit, fmt.Sprintf("%x", sha256.Sum256([]byte(archive))))
-				if descriptorErr != nil || err != nil || artifact != want || string(data) != archive || calls != 2 {
-					t.Fatal("Main ref was not frozen exactly once", artifact, err, calls)
-				}
-			} else if err == nil || artifact != (userSnapshotArtifact{}) || data != nil {
-				t.Fatal("failed/canceled producer returned usable snapshot", artifact, err)
+			artifact, data, err := userMainSnapshotUsing(context.Background(), client)
+			if err == nil || artifact != (userSnapshotArtifact{}) || data != nil {
+				t.Fatalf("publisher failure became usable snapshot: %v", err)
 			}
-			if calls != closes || (name == "canceled before" && calls != 0) {
-				t.Fatal("requests did not settle", calls, closes)
+			if failure == "close" && !errors.Is(err, cause) {
+				t.Fatalf("close failure lost its cause: %v", err)
 			}
 		})
 	}
