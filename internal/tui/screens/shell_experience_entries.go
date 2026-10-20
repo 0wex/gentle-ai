@@ -84,7 +84,7 @@ func shellExperienceEntries(p shellinstaller.UserExperience) []ShellExperienceEn
 	} {
 		add(ShellExperienceEntry{Control: ShellExperienceSDK, Category: "SDK source", Kind: "radio", Label: choice[1], Description: choice[2], Choice: choice[0], Value: shellSDKSourceLabel(&p), Current: p.SDKSource == choice[0] || p.SDKSource == "" && choice[0] == "stable"})
 	}
-	addToggle(ShellExperienceGGA, "Optional workflows", "GGA", "Off by default. An explicit provider is required when enabled; inheritance does not write an OFF override.", p.GGA)
+	addToggle(ShellExperienceGGA, "Optional workflows", "GGA", "Off by default. A provider is optional; leave it empty and GGA configures it later. Inheritance does not write an OFF override.", p.GGA)
 	// A retained provider stays editable so invalid OFF/inherit combinations
 	// can be corrected without silently discarding an explicit selection.
 	if p.GGA == "on" || p.GGAProvider != "" {
