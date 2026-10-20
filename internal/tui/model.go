@@ -643,6 +643,7 @@ type Model struct {
 	shellDetectedCursor   int
 	shellManage           *shellManageState
 	shellUpdate           *shellUpdateState
+	shellPreview          *shellPreviewState
 	shellReconfigure      string
 	shellPlan             []string
 	shellPlanConfig       *shellExperienceConfig

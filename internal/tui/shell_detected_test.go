@@ -238,8 +238,17 @@ func TestShellDetectsManagedInstallAndManage(t *testing.T) {
 		t.Fatalf("manage did not prefill the discovered install: %+v", m.shellExperience)
 	}
 	view := m.View()
-	if !strings.Contains(view, "Configure Gentle-Shell experience") || !strings.Contains(view, "(*) Separate install (Gentle-Shell)  · locked") || !strings.Contains(view, "( ) On my existing Pi  · locked") || !strings.Contains(view, "Uninstall this installation") {
-		t.Fatalf("manage did not lock the target or offer uninstall:\n%s", view)
+	if !strings.Contains(view, "Configure Gentle-Shell experience") || !strings.Contains(view, "(*) Separate install (Gentle-Shell)  · locked") || !strings.Contains(view, "( ) On my existing Pi  · locked") || !strings.Contains(view, "Uninstall this installation") || !strings.Contains(view, "Preview completion animation") {
+		t.Fatalf("manage did not lock the target or offer actions:\n%s", view)
+	}
+	m = experienceFocus(t, m, screens.ShellExperiencePreview, "")
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.shellPreview == nil || !strings.Contains(m.View(), "Welcome to the gentle-tailored experience") {
+		t.Fatalf("completion preview did not render:\n%s", m.View())
+	}
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.shellPreview != nil || m.shellExperience == nil {
+		t.Fatal("preview did not return to Manage configuration")
 	}
 	m = experienceFocus(t, m, screens.ShellExperienceUninstall, "")
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
