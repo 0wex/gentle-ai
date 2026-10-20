@@ -1550,6 +1550,10 @@ func (s componentSyncStep) Run() error {
 		if err != nil {
 			return fmt.Errorf("sync gga config: %w", err)
 		}
+		s.state.recordGGAInjection(res)
+		if s.skipped != nil {
+			*s.skipped = append(*s.skipped, res.Notices...)
+		}
 		// Count GGA files changed based on individual Changed flags.
 		total := boolToInt(res.ConfigChanged) + boolToInt(res.AgentsChanged)
 		var ggaFiles []string
@@ -2136,7 +2140,7 @@ func runSyncWithSelectionScope(homeDir string, selection model.Selection, scope 
 	}
 
 	// Post-apply verification reuses the same component paths as install.
-	result.Verify = runPostSyncVerificationScoped(homeDir, rt.workspaceDir, scope, selection)
+	result.Verify = runPostSyncVerificationWithState(homeDir, rt.workspaceDir, scope, selection, rt.state)
 	configChecks := verify.RunChecks(context.Background(), openCodeConfigChecks(homeDir, rt.workspaceDir, agentIDs))
 	result.Verify = verify.BuildReport(append(result.Verify.Checks, configChecks...))
 	result.Verify = withFailedSyncVerificationNote(result.Verify)
@@ -2692,6 +2696,10 @@ func withFailedSyncVerificationNote(report verify.Report) verify.Report {
 // skipped and any declared path that still resolves under the home root is
 // dropped, because a workspace sync never writes there (issue #1074).
 func runPostSyncVerificationScoped(homeDir, workspaceDir string, scope InstallScope, selection model.Selection) verify.Report {
+	return runPostSyncVerificationWithState(homeDir, workspaceDir, scope, selection, nil)
+}
+
+func runPostSyncVerificationWithState(homeDir, workspaceDir string, scope InstallScope, selection model.Selection, state *runtimeState) verify.Report {
 	workspace := scope == ScopeWorkspace
 	checks := make([]verify.Check, 0)
 	adapters := resolveAdapters(selection.Agents)
@@ -2713,6 +2721,9 @@ func runPostSyncVerificationScoped(homeDir, workspaceDir string, scope InstallSc
 			paths = verificationComponentPaths(homeDir, workspaceDir, scope, selection, componentAdapters, component)
 		}
 		for _, path := range paths {
+			if state.skipsGGAConfigVerification(homeDir, component, path) {
+				continue
+			}
 			if workspace && pathUnderHomeOnly(path, homeDir, workspaceDir) {
 				continue
 			}

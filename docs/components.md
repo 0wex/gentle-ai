@@ -62,6 +62,12 @@ This first delivery covers the 15 non-Pi primary instruction carriers, not every
 
 `gentle-ai install --component gga` installs/provisions the `gga` binary globally on your machine.
 
+Install and sync preserve an existing literal `PROVIDER`, including custom/future names such as `ollama:my-model`, regardless of selected agents. Only a missing provider is initialized from known mappings, in priority order: Claude Code → `claude`, OpenCode → `opencode`, Gemini CLI / Antigravity → `gemini`, Codex → `codex`.
+
+With only unmapped agents (for example Cursor), no provider is invented: the config stays unchanged or absent, and guidance asks you to set a literal provider or select a mapped agent. Runtime assets and the starter `AGENTS.md` can still refresh.
+
+GGA config is shell-sourced, but Gentle AI never sources or evaluates it. It recognizes simple standalone literal assignments (optionally `export`) and comments. Ambiguous, dynamic, malformed, duplicate, or unsupported syntax preserves the **entire config byte-for-byte**, with guidance even on repeat/no-op syncs. For example, `PROVIDER='ollama:my-model'` is literal; `PROVIDER="$MODEL"` and `PROVIDER=$(choose-provider)` require manual simplification. Unreadable config is an error, not permission to replace it. Other managed config defaults continue to refresh when the config is safe to update.
+
 It does **not** run project-level hook setup automatically (`gga init` / `gga install`) because that should be an explicit decision per repository.
 
 After global install, enable GGA per project with:

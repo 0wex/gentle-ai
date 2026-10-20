@@ -787,6 +787,7 @@ type runtimeState struct {
 	nativeReviewActions      []string
 	retiredSDDActions        []string
 	compatibilityTransaction compatibilityRefreshTransaction
+	ggaConfigCreationSkipped bool
 
 	// engramVersionResolved, engramVersion, and engramVersionErr cache the
 	// single `engram version` invocation performed by componentApplyStep.Run
@@ -800,6 +801,18 @@ type runtimeState struct {
 	// codexServiceTier is the tier the global engram injection left in Codex's
 	// config.toml (nil = not written); state records it as the managed tier.
 	codexServiceTier *string
+}
+
+// recordGGAInjection carries the actual write decision into verification. Agent
+// selection alone cannot excuse a missing config that should have been written.
+func (s *runtimeState) recordGGAInjection(result gga.InjectionResult) {
+	if s != nil {
+		s.ggaConfigCreationSkipped = result.ConfigCreationSkipped
+	}
+}
+
+func (s *runtimeState) skipsGGAConfigVerification(homeDir string, component model.ComponentID, path string) bool {
+	return s != nil && s.ggaConfigCreationSkipped && component == model.ComponentGGA && path == gga.ConfigPath(homeDir)
 }
 
 func (s *runtimeState) cleanupRollbackSnapshot() {
@@ -3401,9 +3414,12 @@ func (s componentApplyStep) Run() error {
 				fmt.Fprintf(os.Stderr, "WARNING: could not add %s to PATH: %v\n", ggaBinDir, err)
 			}
 		}
-		if _, err := gga.Inject(s.homeDir, s.agents); err != nil {
+		res, err := gga.Inject(s.homeDir, s.agents)
+		if err != nil {
 			return fmt.Errorf("inject gga config: %w", err)
 		}
+		s.state.recordGGAInjection(res)
+		writeGGAProviderNotices(os.Stderr, res)
 		return nil
 	case model.ComponentTheme:
 		for _, adapter := range adapters {
@@ -3435,6 +3451,14 @@ func (s componentApplyStep) Run() error {
 		return nil
 	default:
 		return fmt.Errorf("component %q is not supported in install runtime", s.component)
+	}
+}
+
+// writeGGAProviderNotices keeps installation skips visible without treating
+// missing inference or conservative preservation as an installation failure.
+func writeGGAProviderNotices(w io.Writer, result gga.InjectionResult) {
+	for _, notice := range result.Notices {
+		fmt.Fprintf(w, "WARNING: %s\n", notice)
 	}
 }
 
@@ -4499,7 +4523,7 @@ func runPostApplyVerification(input postApplyVerificationInput) verify.Report {
 			continue
 		}
 		for _, path := range verificationComponentPaths(input.HomeDir, input.WorkspaceDir, input.Scope, input.Selection, adapters, component) {
-			if path == "" {
+			if path == "" || input.State.skipsGGAConfigVerification(input.HomeDir, component, path) {
 				continue
 			}
 			if _, dup := seenPath[path]; dup {
