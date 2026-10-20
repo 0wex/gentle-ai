@@ -14,6 +14,7 @@ import (
 type UserInstallProgress struct {
 	Index, Total int
 	Label, State string
+	Detail       string
 }
 
 type userInstallProgressKey struct{}
@@ -55,6 +56,14 @@ func userInstallReport(ctx context.Context, progress UserInstallProgress) {
 // plan output. It never changes installation authority or ordering.
 func userShellStepBegin(ctx context.Context, index, total int, label string) {
 	userInstallReport(ctx, UserInstallProgress{Index: index, Total: total, Label: label, State: "running"})
+}
+
+func userShellDetail(ctx context.Context, index, total int, label string) {
+	userInstallReport(ctx, UserInstallProgress{Index: index, Total: total, Label: label, State: "detail", Detail: label})
+	if os.Getenv("GENTLE_AI_SHELL_STEPS") != "1" {
+		return
+	}
+	fmt.Fprintf(os.Stdout, "~ %d/%d %s\n", index, total, label)
 }
 
 func userShellStep(ctx context.Context, index, total int, label string) {

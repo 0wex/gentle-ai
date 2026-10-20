@@ -161,9 +161,10 @@ func RunShellInstallInline(ctx context.Context, selection ShellInstallSelection,
 		for scanner.Scan() {
 			line := scanner.Text()
 			_, _ = workerLog.Write([]byte(line + "\n"))
-			index, total, label, ok := shellStepLine(line)
-			if ok && report != nil {
+			if index, total, label, ok := shellStepLine(line); ok && report != nil {
 				report(shellinstaller.UserInstallProgress{Index: index, Total: total, Label: label, State: "done"})
+			} else if index, total, label, ok := shellDetailLine(line); ok && report != nil {
+				report(shellinstaller.UserInstallProgress{Index: index, Total: total, Label: label, State: "detail", Detail: label})
 			}
 		}
 	}()
@@ -197,6 +198,28 @@ func (w *boundedWorkerLog) String() string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return string(w.data)
+}
+
+// shellDetailLine parses the worker's ordered internal task marker: "~ i/n label".
+func shellDetailLine(line string) (int, int, string, bool) {
+	rest, ok := strings.CutPrefix(line, "~ ")
+	if !ok {
+		return 0, 0, "", false
+	}
+	counts, label, ok := strings.Cut(rest, " ")
+	if !ok {
+		return 0, 0, "", false
+	}
+	left, right, ok := strings.Cut(counts, "/")
+	if !ok {
+		return 0, 0, "", false
+	}
+	index, leftErr := strconv.Atoi(left)
+	total, rightErr := strconv.Atoi(right)
+	if leftErr != nil || rightErr != nil || index < 1 || total < 1 || index > total {
+		return 0, 0, "", false
+	}
+	return index, total, label, true
 }
 
 // shellStepLine parses the worker's fixed ordered marker: "✓ i/n label".

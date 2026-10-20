@@ -58,7 +58,7 @@ func experiencePlan(t *testing.T, m Model) (Model, shellinstaller.UserInstallReq
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	if m.shellPlan == nil || m.shellExperience != nil {
-		t.Fatalf("configuration did not reach the installation plan: %+v", m.shellExperience)
+		t.Fatalf("configuration did not reach the installation plan: %+v err=%v", m.shellExperience, m.shellExperience.err)
 	}
 	if m.shellPlanRequest.Confirmation == "" {
 		t.Fatal("installation plan lacks the inspection token")

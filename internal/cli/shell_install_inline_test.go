@@ -40,6 +40,26 @@ func TestShellInternalInstallDirectIsRouted(t *testing.T) {
 	}
 }
 
+func TestShellDetailLineParsesOrderedTasks(t *testing.T) {
+	for _, test := range []struct {
+		line  string
+		index int
+		total int
+		label string
+		ok    bool
+	}{
+		{"~ 3/5 Downloading Node 24.18.0", 3, 5, "Downloading Node 24.18.0", true},
+		{"~ 4/5 Applying the selected SDK channel", 4, 5, "Applying the selected SDK channel", true},
+		{"✓ 3/5 Publish, verify and register the installation", 0, 0, "", false},
+		{"~ 0/5 refused", 0, 0, "", false},
+	} {
+		index, total, label, ok := shellDetailLine(test.line)
+		if index != test.index || total != test.total || label != test.label || ok != test.ok {
+			t.Fatalf("shellDetailLine(%q) = %d,%d,%q,%v", test.line, index, total, label, ok)
+		}
+	}
+}
+
 func TestRunShellInstallInlineRefusesUninspectedSelection(t *testing.T) {
 	request := shellinstaller.UserInstallRequest{
 		Destination: filepath.Join(t.TempDir(), "install"),

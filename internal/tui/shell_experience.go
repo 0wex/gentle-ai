@@ -267,13 +267,13 @@ func (m Model) shellInstallView() string {
 	if m.shellInstallRun != nil {
 		steps := make([]screens.ShellInstallStep, len(m.shellInstallRun.steps))
 		for index, step := range m.shellInstallRun.steps {
-			steps[index] = screens.ShellInstallStep{Label: step.Label, State: step.State}
+			steps[index] = screens.ShellInstallStep{Label: step.Label, State: step.State, Details: step.Details}
 		}
 		failure := ""
 		if m.shellInstallRun.err != nil {
 			failure = m.shellInstallRun.err.Error()
 		}
-		return screens.RenderShellInstall(steps, failure, m.shellInstallRun.done, m.Width, m.Height)
+		return screens.RenderShellInstall(steps, failure, m.shellInstallRun.done, m.shellInstallRun.spinner, m.Width, m.Height)
 	}
 	if m.shellPlan != nil {
 		return screens.RenderShellPlan(m.shellPlan, m.Width, m.Height)

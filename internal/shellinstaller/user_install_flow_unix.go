@@ -204,6 +204,8 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 		return result, err
 	}
 	userShellStepBegin(ctx, 1, 5, "Validate the selection and target")
+	userShellDetail(ctx, 1, 5, "Checking the destination and private parent")
+	userShellDetail(ctx, 1, 5, "Verifying the inspected selection")
 	userShellStep(ctx, 1, 5, "Selection and target validated")
 	confirmation, err := InspectUserInstall(req)
 	if err != nil || req.Confirmation != confirmation {
@@ -228,6 +230,7 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	ctx, cancel := context.WithTimeout(ctx, 870*time.Second)
 	defer cancel()
 	userShellStepBegin(ctx, 2, 5, "Prepare the private stage and preferences")
+	userShellDetail(ctx, 2, 5, "Creating the private staging workspace")
 	workspace, err := os.MkdirTemp(filepath.Dir(req.Destination), ".gentle-user-")
 	if err != nil {
 		return result, err
@@ -241,18 +244,22 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 		return result, err
 	}
 	root := filepath.Join(workspace, "installed")
+	userShellDetail(ctx, 2, 5, "Writing persona and recommended preferences")
 	if err = userPrepareInstallStage(ctx, root, req.Mode, req.Experience); err != nil {
 		return result, err
 	}
 	userShellStep(ctx, 2, 5, "Private stage and preferences prepared")
 	userShellStepBegin(ctx, 3, 5, "Install the runtime and pinned suppliers")
+	userShellDetail(ctx, 3, 5, "Downloading Node 24.18.0")
 	if err = userBootstrap(ctx, root, workspace); err != nil {
 		return result, fmt.Errorf("runtime acquisition: %w", err)
 	}
+	userShellDetail(ctx, 3, 5, "Verifying the pinned Node runtime")
 	node := filepath.Join(root, "runtime/node/bin/node")
 	if _, err = privateNativeFile(ctx, node, 0700, privateNativeNodeSize, privateNativeNodeSHA); err != nil {
 		return result, fmt.Errorf("bootstrap Node readback: %w", err)
 	}
+	userShellDetail(ctx, 3, 5, "Provisioning bundled assets")
 	if err = userProvisionAssets(ctx, root, true); err != nil {
 		return result, err
 	}
@@ -270,9 +277,11 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	}
 	// Acquire and verify pinned fd/rg inside the private stage before any
 	// selected Shared object changes; binding into AGENT/bin comes later.
+	userShellDetail(ctx, 3, 5, "Downloading pinned tools")
 	if err = userToolsAcquire(ctx, root); err != nil {
 		return result, fmt.Errorf("pinned tool acquisition: %w", err)
 	}
+	userShellDetail(ctx, 3, 5, "Preparing optional CodeGraph")
 	if err = userCodeGraphProvision(ctx, root, req.Mode, req.Experience); err != nil {
 		return result, fmt.Errorf("optional CodeGraph provisioning: %w", err)
 	}
@@ -281,6 +290,7 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 			return result, err
 		}
 	}
+	userShellDetail(ctx, 3, 5, "Preparing optional GGA")
 	if err = userGGAProvision(ctx, root, req.Mode, req.Experience); err != nil {
 		return result, fmt.Errorf("optional GGA provisioning: %w", err)
 	}
@@ -289,6 +299,7 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 		return result, privateError("preimage", errors.Join(inspectErr, errors.New("selected files changed before global provisioning")))
 	}
 	sharedProvisioningStarted = req.Mode == "shared"
+	userShellDetail(ctx, 3, 5, "Installing the global runtime")
 	cmd := exec.CommandContext(ctx, node, helperPath, root, prefix, agent, finalPrefix, req.Destination, req.Mode, "install")
 	cmd.Dir, cmd.Env = filepath.Join(root, "project"), userEnvironment(root, prefix, agent)
 	if output, err := userOwnedRun(ctx, cmd, cancel); err != nil {
@@ -300,6 +311,7 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 			return result, fmt.Errorf("authenticate native supplier %q: %w", source.name, err)
 		}
 	}
+	userShellDetail(ctx, 3, 5, "Verifying the native supplier")
 	cmd = exec.CommandContext(ctx, node, "--input-type=module", "-e", privateNativeInvoke)
 	cmd.Dir, cmd.Env = pkg, userEnvironment(root, prefix, agent)
 	if output, err := userOwnedRun(ctx, cmd, cancel); err != nil {
@@ -323,15 +335,18 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	}
 	userShellStep(ctx, 3, 5, "Runtime and pinned suppliers installed")
 	userShellStepBegin(ctx, 4, 5, "Apply optional runtimes and the SDK channel")
+	userShellDetail(ctx, 4, 5, "Applying the selected SDK channel")
 	mainSDK, err := userInstallMainSDK(ctx, root, req.Destination, prefix, agent, req.Experience)
 	if err != nil {
 		return result, fmt.Errorf("Main SDK + stock provider: %w", err)
 	}
 	// A bind refusal here follows Shared provisioning: it stays uncertain and
 	// keeps the staged recovery root instead of claiming an atomic rollback.
+	userShellDetail(ctx, 4, 5, "Binding pinned tools into the agent")
 	if err = userTools(ctx, root, agent, true); err != nil {
 		return result, privateError("source", err)
 	}
+	userShellDetail(ctx, 4, 5, "Recording supervisor provenance")
 	self, err := userExecutable()
 	if err != nil {
 		return result, err
@@ -340,6 +355,7 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	if err != nil {
 		return result, fmt.Errorf("supervisor provenance: %w", err)
 	}
+	userShellDetail(ctx, 4, 5, "Preparing the installation manifest")
 	manifest := userManifest{Schema: userSchema, Destination: req.Destination, Prefix: finalPrefix, Agent: finalAgent, Mode: req.Mode, SupervisorSHA: selfSHA, NodeSHA: privateNativeNodeSHA}
 	manifest.MainSDK = mainSDK
 	manifest.GGA = req.Experience != nil && req.Experience.GGA == "on"
@@ -353,8 +369,10 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	}
 	userShellStep(ctx, 4, 5, "Optional runtimes and SDK channel applied")
 	userShellStepBegin(ctx, 5, 5, "Publish, verify and register the installation")
+	userShellDetail(ctx, 5, 5, "Publishing the staged installation")
 	result, err = userPublishManifest(ctx, root, prefix, agent, manifest)
 	if err == nil {
+		userShellDetail(ctx, 5, 5, "Registering the published installation")
 		userShellStep(ctx, 5, 5, "Published, verified and registered")
 	}
 	return result, err

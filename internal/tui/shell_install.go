@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/cli"
@@ -20,15 +21,19 @@ var shellInstallStepLabels = []string{
 }
 
 type shellInstallStep struct {
-	Label string
-	State string
+	Label   string
+	State   string
+	Details []string
 }
 
 type shellInstallRun struct {
-	steps []shellInstallStep
-	done  bool
-	err   error
+	steps   []shellInstallStep
+	done    bool
+	err     error
+	spinner int
 }
+
+type shellInstallTick struct{}
 
 type shellInstallEvent struct {
 	progress shellinstaller.UserInstallProgress
@@ -46,11 +51,15 @@ func (m Model) WithShellInstallRunner(runner func(context.Context, shellinstalle
 
 func waitShellInstallEvent(events <-chan shellInstallEvent) tea.Cmd {
 	return func() tea.Msg {
-		event, ok := <-events
-		if !ok {
-			return shellInstallEvent{done: true, err: errors.New("installation ended without a result")}
+		select {
+		case event, ok := <-events:
+			if !ok {
+				return shellInstallEvent{done: true, err: errors.New("installation ended without a result")}
+			}
+			return event
+		case <-time.After(120 * time.Millisecond):
+			return shellInstallTick{}
 		}
-		return event
 	}
 }
 
@@ -85,6 +94,13 @@ func (m Model) beginShellInstall() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) updateShellInstallRun(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if _, ok := msg.(shellInstallTick); ok {
+		if m.shellInstallRun == nil || m.shellInstallRun.done {
+			return m, nil
+		}
+		m.shellInstallRun.spinner++
+		return m, waitShellInstallEvent(m.shellInstallEvents)
+	}
 	event, ok := msg.(shellInstallEvent)
 	if ok {
 		run := m.shellInstallRun
@@ -108,11 +124,19 @@ func (m Model) updateShellInstallRun(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		progress := event.progress
 		if progress.Index >= 1 && progress.Index <= len(run.steps) {
+			step := &run.steps[progress.Index-1]
 			switch progress.State {
 			case "running":
-				run.steps[progress.Index-1].State = "running"
+				step.State = "running"
+			case "detail":
+				if progress.Detail != "" {
+					step.Details = append(step.Details, progress.Detail)
+					if len(step.Details) > 3 {
+						step.Details = step.Details[len(step.Details)-3:]
+					}
+				}
 			case "done":
-				run.steps[progress.Index-1].State = "done"
+				step.State = "done"
 				if progress.Index < len(run.steps) && run.steps[progress.Index].State == "pending" {
 					run.steps[progress.Index].State = "running"
 				}

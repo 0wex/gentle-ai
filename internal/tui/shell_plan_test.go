@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/cli"
@@ -16,6 +17,7 @@ import (
 
 func openInstallationPlan(t *testing.T) (Model, shellinstaller.UserInstallRequest) {
 	t.Helper()
+	t.Setenv("HOME", t.TempDir())
 	m := NewModel(system.DetectionResult{}, "plan-test").WithShellInstaller()
 	m.Width, m.Height = 120, 30
 	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -88,6 +90,49 @@ func TestShellPlanEnterRunsInstallationInsideTUI(t *testing.T) {
 	}
 	if _, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil {
 		t.Fatal("completion enter did not leave the TUI")
+	}
+}
+
+func TestShellInstallShowsCurrentInternalTask(t *testing.T) {
+	m, _ := openInstallationPlan(t)
+	release := make(chan struct{})
+	m = m.WithShellInstallRunner(func(ctx context.Context, got shellinstaller.UserInstallRequest, report func(shellinstaller.UserInstallProgress)) error {
+		for index := 1; index <= 2; index++ {
+			report(shellinstaller.UserInstallProgress{Index: index, Total: 5, Label: shellInstallStepLabels[index-1], State: "running"})
+			report(shellinstaller.UserInstallProgress{Index: index, Total: 5, Label: shellInstallStepLabels[index-1], State: "done"})
+		}
+		report(shellinstaller.UserInstallProgress{Index: 3, Total: 5, Label: shellInstallStepLabels[2], State: "running"})
+		report(shellinstaller.UserInstallProgress{Index: 3, Total: 5, State: "detail", Detail: "Downloading Node 24.18.0"})
+		<-release
+		for index := 3; index <= 5; index++ {
+			report(shellinstaller.UserInstallProgress{Index: index, Total: 5, Label: shellInstallStepLabels[index-1], State: "done"})
+		}
+		return nil
+	})
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Model)
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) && !strings.Contains(m.View(), "Downloading Node 24.18.0") {
+		if cmd == nil {
+			t.Fatal("progress pump stopped before the internal task")
+		}
+		next, cmd = m.Update(cmd())
+		m = next.(Model)
+	}
+	view := m.View()
+	if !strings.Contains(view, "CURRENT TASK") || !strings.Contains(view, "Downloading Node 24.18.0") || !strings.Contains(view, "2/5") || !strings.Contains(view, "running") {
+		t.Fatalf("internal task or progress is hidden:\n%s", view)
+	}
+	close(release)
+	for !m.shellInstallRun.done {
+		if cmd == nil {
+			t.Fatal("progress pump stopped before completion")
+		}
+		next, cmd = m.Update(cmd())
+		m = next.(Model)
+	}
+	if !strings.Contains(m.View(), "Installation complete") {
+		t.Fatalf("completion screen missing:\n%s", m.View())
 	}
 }
 
