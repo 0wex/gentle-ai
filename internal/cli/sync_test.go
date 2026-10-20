@@ -5933,6 +5933,25 @@ func TestRenderSyncReportIncludesChangedFilePaths(t *testing.T) {
 	}
 }
 
+// TestRenderSyncReportNoOpManualActionWording preserves ordinary no-op output
+// and uses neutral guidance without hiding action-specific recovery details.
+func TestRenderSyncReportNoOpManualActionWording(t *testing.T) {
+	action := nativeReviewPreservedAction("/managed/jd-judge-a.md")
+	for _, manual := range []bool{false, true} {
+		result := SyncResult{NoOp: true, Agents: []model.AgentID{model.AgentOpenCode}}
+		want := "gentle-ai sync — no managed sync actions needed\nAgents: opencode\n"
+		if manual {
+			result.ManualActions = []string{action}
+			want += "No managed files changed; review the manual actions below.\nManual actions required:\n- " + action
+		} else {
+			want += "All managed assets are already up to date. No files changed."
+		}
+		if got := RenderSyncReport(result); got != want {
+			t.Fatalf("manual=%v report = %q, want %q", manual, got, want)
+		}
+	}
+}
+
 // TestRenderSyncReportNoOpOmitsChangedFilePaths verifies that RenderSyncReport
 // does not list individual file path bullets in the no-op case.
 func TestRenderSyncReportNoOpOmitsChangedFilePaths(t *testing.T) {

@@ -38,6 +38,9 @@ func TestSyncGGAProviderNotices(t *testing.T) {
 					t.Fatalf("repeat changed %d files: %v", result.FilesChanged, result.ChangedFiles)
 				}
 				rendered := RenderSyncReport(result)
+				if i == 1 && (!result.NoOp || len(result.ChangedFiles) != 0 || !strings.Contains(rendered, "No managed files changed; review the manual actions below.\n")) {
+					t.Fatalf("repeat must report a no-op with neutral manual guidance: %+v\n%s", result, rendered)
+				}
 				if !strings.Contains(rendered, "GGA config unchanged:") || !strings.Contains(rendered, "rerun gentle-ai sync") || !strings.Contains(rendered, path) {
 					t.Fatalf("notice lost on run %d: %s", i, rendered)
 				}

@@ -2582,7 +2582,7 @@ func RenderSyncReport(result SyncResult) string {
 			if len(result.ManualActions) == 0 {
 				fmt.Fprintln(&b, "All managed assets are already up to date. No files changed.")
 			} else {
-				fmt.Fprintln(&b, "No managed files changed; preserved native agents were not updated.")
+				fmt.Fprintln(&b, "No managed files changed; review the manual actions below.")
 			}
 		}
 		renderSyncSkippedAgents(&b, result.SkippedAgents)
