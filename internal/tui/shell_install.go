@@ -187,7 +187,7 @@ func manageActions(manage *shellManageState) []string {
 	if len(manage.preferences) > 0 {
 		actions = append(actions, "Apply preferences")
 	}
-	if manage.install.Mode == "separate" {
+	if manage.install.Mode == "separate" || manage.install.Mode == "agent" {
 		actions = append(actions, "Uninstall this installation")
 	}
 	return append(actions, "Back")

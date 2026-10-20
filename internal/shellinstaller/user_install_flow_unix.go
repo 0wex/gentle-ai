@@ -368,6 +368,11 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 		return result, err
 	}
 	userShellStep(ctx, 4, 5, "Optional runtimes and SDK channel applied")
+	if req.Mode == "agent" {
+		if err = userCaptureAgentPostImages(agent, root); err != nil {
+			return result, fmt.Errorf("agent post-image evidence: %w", err)
+		}
+	}
 	userShellStepBegin(ctx, 5, 5, "Publish, verify and register the installation")
 	userShellDetail(ctx, 5, 5, "Publishing the staged installation")
 	result, err = userPublishManifest(ctx, root, prefix, agent, manifest)

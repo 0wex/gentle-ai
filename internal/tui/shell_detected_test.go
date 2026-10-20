@@ -175,6 +175,11 @@ func TestShellMultipleInstallsRequireChoice(t *testing.T) {
 	if view := m.View(); !strings.Contains(view, "(*) On my existing Pi  · locked") || !strings.Contains(view, "( ) Separate install (Gentle-Shell)  · locked") {
 		t.Fatalf("agent target is not the locked current target:\n%s", view)
 	}
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.shellManage == nil || !strings.Contains(m.View(), "Uninstall this installation") {
+		t.Fatalf("agent install does not offer uninstall:\n%s", m.View())
+	}
 }
 
 func TestShellDetectsManagedInstallAndManage(t *testing.T) {

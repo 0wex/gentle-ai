@@ -91,7 +91,13 @@ func RenderShellUninstall(target, mode string, uninstalled bool, backup, applyEr
 		lines = append(lines, styles.SuccessStyle.Render("Installation uninstalled."), detectedSubtleStyle.Render("Backup: "+backup), "", detectedSubtleStyle.Render("Enter: back to menu"))
 		return strings.Join(lines, "\n")
 	}
-	lines = append(lines, "This moves the target to a timestamped backup and removes it from detection.", "Your personal Pi and projects are untouched.", "")
+	lines = append(lines, "This moves the target to a timestamped backup and removes it from detection.")
+	if mode == "agent" {
+		lines = append(lines, "Managed Pi settings/MCP are restored only if they are unchanged; otherwise uninstall aborts.", "Your projects are untouched.")
+	} else {
+		lines = append(lines, "Your personal Pi and projects are untouched.")
+	}
+	lines = append(lines, "")
 	if applyErr != "" {
 		lines = append(lines, styles.ErrorStyle.Render(applyErr), "")
 	}

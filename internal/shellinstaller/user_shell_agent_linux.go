@@ -4,6 +4,7 @@ package shellinstaller
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -97,6 +98,92 @@ func userStageOwnedAgentContext7(ctx context.Context, agent, choice, stage strin
 	after, err := userOwnedIdentity(agent)
 	if err != nil || after != before {
 		return privateError("preimage", err)
+	}
+	return nil
+}
+
+type userAgentPostFile struct {
+	Exists bool   `json:"exists"`
+	SHA256 string `json:"sha256,omitempty"`
+}
+
+const userAgentPostSchema = "gentle-shell-agent-post/v1"
+
+var userAgentTouchFiles = []string{"settings.json", "mcp.json", "bin/fd", "bin/rg"}
+
+// userCaptureAgentPostImages records the exact external-agent state after all
+// managed writes. Uninstall restores preimages only when every file still
+// matches this evidence.
+func userCaptureAgentPostImages(agent, root string) error {
+	files := map[string]userAgentPostFile{}
+	for _, name := range userAgentTouchFiles {
+		path := filepath.Join(agent, filepath.FromSlash(name))
+		data, err := os.ReadFile(path)
+		if os.IsNotExist(err) {
+			files[name] = userAgentPostFile{}
+			continue
+		}
+		if err != nil || len(data) > 1<<20 {
+			return privateError("preimage", err)
+		}
+		files[name] = userAgentPostFile{Exists: true, SHA256: fmt.Sprintf("%x", sha256.Sum256(data))}
+	}
+	data, err := json.Marshal(struct {
+		Schema string                       `json:"schema"`
+		Files  map[string]userAgentPostFile `json:"files"`
+	}{userAgentPostSchema, files})
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Join(root, "state"), 0700); err != nil {
+		return err
+	}
+	return userToolWrite(filepath.Join(root, "state/agent.post.json"), data, 0600)
+}
+
+func userRestoreAgentImages(target, agent string) error {
+	if _, err := userOwnedIdentity(agent); err != nil {
+		return err
+	}
+	data, err := os.ReadFile(filepath.Join(target, "state/agent.post.json"))
+	var post struct {
+		Schema string                       `json:"schema"`
+		Files  map[string]userAgentPostFile `json:"files"`
+	}
+	if err != nil || json.Unmarshal(data, &post) != nil || post.Schema != userAgentPostSchema {
+		return errors.New("agent uninstall evidence is missing; reinstall this agent install with the current version first")
+	}
+	for _, name := range userAgentTouchFiles {
+		evidence, ok := post.Files[name]
+		if !ok {
+			return errors.New("agent uninstall evidence is incomplete")
+		}
+		path := filepath.Join(agent, filepath.FromSlash(name))
+		current, readErr := os.ReadFile(path)
+		if evidence.Exists {
+			if readErr != nil || fmt.Sprintf("%x", sha256.Sum256(current)) != evidence.SHA256 {
+				return errors.New("the Pi agent changed after installation; uninstall aborted without touching it")
+			}
+		} else if !os.IsNotExist(readErr) {
+			return errors.New("the Pi agent changed after installation; uninstall aborted without touching it")
+		}
+	}
+	for _, name := range userAgentTouchFiles {
+		evidence := post.Files[name]
+		path := filepath.Join(agent, filepath.FromSlash(name))
+		preimage, preimageErr := os.ReadFile(filepath.Join(target, "state/agent.preimage", name))
+		switch {
+		case preimageErr == nil:
+			if err := atomicPreferenceWrite(path, preimage); err != nil {
+				return err
+			}
+		case evidence.Exists && os.IsNotExist(preimageErr):
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+				return err
+			}
+		case !os.IsNotExist(preimageErr):
+			return preimageErr
+		}
 	}
 	return nil
 }
