@@ -74,6 +74,7 @@ func (b userMainCloseErrorBody) Close() error {
 }
 
 func TestUserMainIntegrationRejectsBodyCloseFailure(t *testing.T) {
+	t.Setenv("GENTLE_AI_MAIN_FALLBACK", "1")
 	for _, failingCall := range []int{1} {
 		cause := errors.New("controlled response close failure")
 		calls, closes := 0, 0

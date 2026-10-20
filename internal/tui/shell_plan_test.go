@@ -144,6 +144,39 @@ func TestShellInstallShowsCurrentInternalTask(t *testing.T) {
 	}
 }
 
+func TestShellMainFailureOffersQualifiedFallback(t *testing.T) {
+	t.Cleanup(func() { _ = os.Unsetenv("GENTLE_AI_MAIN_FALLBACK") })
+	m, request := openInstallationPlan(t)
+	profile := *request.Experience
+	profile.SDKSource = "main-preview"
+	request.Experience = &profile
+	m.shellPlanRequest = request
+	calls := 0
+	m = m.WithShellInstallRunner(func(ctx context.Context, got shellinstaller.UserInstallRequest, report func(shellinstaller.UserInstallProgress)) error {
+		calls++
+		report(shellinstaller.UserInstallProgress{Index: 1, Total: 5, Label: shellInstallStepLabels[0], State: "running"})
+		return errors.New("Main SDK + stock provider: private installation: nonzero")
+	})
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Model)
+	for !m.shellInstallRun.done {
+		next, cmd = m.Update(cmd())
+		m = next.(Model)
+	}
+	if !m.shellInstallRun.fallbackAvailable || !strings.Contains(m.View(), "try last qualified Main") {
+		t.Fatalf("Main failure did not offer the qualified fallback:\n%s", m.View())
+	}
+	next, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Model)
+	for cmd != nil && m.shellInstallRun != nil && !m.shellInstallRun.done {
+		next, cmd = m.Update(cmd())
+		m = next.(Model)
+	}
+	if calls != 2 || os.Getenv("GENTLE_AI_MAIN_FALLBACK") != "1" {
+		t.Fatalf("fallback did not launch exactly once: calls=%d env=%q", calls, os.Getenv("GENTLE_AI_MAIN_FALLBACK"))
+	}
+}
+
 func TestShellInstallFailureStaysInTUI(t *testing.T) {
 	m, _ := openInstallationPlan(t)
 	m = m.WithShellInstallRunner(func(ctx context.Context, got shellinstaller.UserInstallRequest, report func(shellinstaller.UserInstallProgress)) error {

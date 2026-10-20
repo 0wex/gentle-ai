@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -28,11 +29,12 @@ type shellInstallStep struct {
 }
 
 type shellInstallRun struct {
-	steps   []shellInstallStep
-	done    bool
-	err     error
-	spinner int
-	bloom   int
+	steps             []shellInstallStep
+	done              bool
+	err               error
+	spinner           int
+	bloom             int
+	fallbackAvailable bool
 }
 
 type shellInstallTick struct{}
@@ -66,7 +68,15 @@ func waitShellInstallEvent(events <-chan shellInstallEvent) tea.Cmd {
 }
 
 func (m Model) beginShellInstall() (tea.Model, tea.Cmd) {
-	request := m.shellPlanRequest
+	return m.launchShellInstall(m.shellPlanRequest, false)
+}
+
+func (m Model) launchShellInstall(request shellinstaller.UserInstallRequest, fallback bool) (tea.Model, tea.Cmd) {
+	if fallback {
+		_ = os.Setenv("GENTLE_AI_MAIN_FALLBACK", "1")
+	} else {
+		_ = os.Unsetenv("GENTLE_AI_MAIN_FALLBACK")
+	}
 	m.shellInstallSelection = cli.ShellInstallSelection{Request: request, Confirmed: true, Executed: true}
 	steps := make([]shellInstallStep, len(shellInstallStepLabels))
 	for index, label := range shellInstallStepLabels {
@@ -482,6 +492,12 @@ func (m Model) updateShellInstallRun(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if event.done {
 			run.done, run.err = true, event.err
+			if event.err != nil {
+				request := m.shellInstallSelection.Request
+				if request.Experience != nil && request.Experience.SDKSource == "main-preview" && strings.Contains(event.err.Error(), "Main SDK") && os.Getenv("GENTLE_AI_MAIN_FALLBACK") != "1" {
+					run.fallbackAvailable = true
+				}
+			}
 			if event.err == nil {
 				return m, tea.Tick(250*time.Millisecond, func(time.Time) tea.Msg { return shellInstallTick{} })
 			}
@@ -534,11 +550,26 @@ func (m Model) updateShellInstallRun(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if run.err != nil {
+		if run.fallbackAvailable {
+			switch key.Type {
+			case tea.KeyEnter:
+				request := m.shellInstallSelection.Request
+				return m.launchShellInstall(request, true)
+			case tea.KeyEsc, tea.KeyCtrlC:
+				_ = os.Unsetenv("GENTLE_AI_MAIN_FALLBACK")
+				m.shellInstallRun, m.shellInstallEvents = nil, nil
+				m.shellInstallSelection = cli.ShellInstallSelection{}
+				m.setScreen(ScreenWelcome)
+				return m, nil
+			}
+			return m, nil
+		}
 		m.shellInstallRun, m.shellInstallEvents = nil, nil
 		m.shellInstallSelection = cli.ShellInstallSelection{}
 		m.setScreen(ScreenWelcome)
 		return m, nil
 	}
+	_ = os.Unsetenv("GENTLE_AI_MAIN_FALLBACK")
 	return m, tea.Quit
 }
 

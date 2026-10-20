@@ -55,7 +55,7 @@ var shellInstallSpinner = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "�
 
 // RenderShellInstall keeps the operator inside the TUI while the owned worker
 // runs. It never claims success without a completed worker result.
-func RenderShellInstall(steps []ShellInstallStep, failure string, done bool, frame, bloom int, destinationPublished bool, mode string, width, height int) string {
+func RenderShellInstall(steps []ShellInstallStep, failure string, done bool, frame, bloom int, destinationPublished, fallbackAvailable bool, mode string, width, height int) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
@@ -109,6 +109,9 @@ func RenderShellInstall(steps []ShellInstallStep, failure string, done bool, fra
 		default:
 			lines = append(lines, styles.WarningStyle.Render("A destination exists; the transaction may be partial or uncertain. Inspect the preserved evidence."))
 		}
+		if fallbackAvailable {
+			lines = append(lines, styles.WarningStyle.Render("Latest Main HEAD was not compatible. The last qualified Main snapshot is available."))
+		}
 		lines = append(lines, styles.ErrorStyle.Render("The installation stopped before publishing a verified result:"))
 		for _, line := range strings.Split(failure, "\n") {
 			for len(line) > width-2 && width > 2 {
@@ -133,6 +136,8 @@ func RenderShellInstall(steps []ShellInstallStep, failure string, done bool, fra
 			lines = append(lines, styles.TitleStyle.Render("CURRENT TASK"), "  "+current, "")
 		}
 		lines = append(lines, styles.HelpStyle.Render("The worker is running; do not close the terminal"))
+	} else if failure != "" && fallbackAvailable {
+		lines = append(lines, styles.HelpStyle.Render("Enter: try last qualified Main  •  esc: back to menu"))
 	} else if failure != "" {
 		lines = append(lines, styles.HelpStyle.Render("Enter: back to menu"))
 	} else {

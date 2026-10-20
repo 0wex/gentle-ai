@@ -4,18 +4,20 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
 
-// userMainQualifiedCommit is the only Main commit this release may install.
-// It advances only after the Main composition passes compatibility CI against
-// the stock pins; a new main HEAD is never accepted automatically.
-const userMainQualifiedCommit = "63d6065f924ec366a321dd21f7396f04026c026f"
+// userMainFallbackCommit is the last Main snapshot verified against the stock
+// composition. HEAD is attempted first; this commit is used only when the TUI
+// retries after a Main composition failure.
+const userMainFallbackCommit = "63d6065f924ec366a321dd21f7396f04026c026f"
 
 type userSnapshotArtifact struct {
 	URL, SHA, Archive, Prefix string
@@ -84,7 +86,23 @@ func userMainSnapshotUsing(ctx context.Context, client *http.Client) (userSnapsh
 		}
 		return data, nil
 	}
-	data, err := get("https://codeload.github.com/Gentleman-Programming/gentle-shell/zip/"+userMainQualifiedCommit, 32<<20)
+	commit := ""
+	if os.Getenv("GENTLE_AI_MAIN_FALLBACK") == "1" {
+		commit = userMainFallbackCommit
+	} else {
+		metadata, err := get("https://api.github.com/repos/Gentleman-Programming/gentle-shell/commits/main", 256<<10)
+		var record struct {
+			SHA string `json:"sha"`
+		}
+		if err != nil {
+			return userSnapshotArtifact{}, nil, err
+		}
+		if err := json.Unmarshal(metadata, &record); err != nil || !userSnapshotLowerHex(record.SHA, 40) {
+			return userSnapshotArtifact{}, nil, errors.Join(err, errors.New("canonical Main ref identity refused"))
+		}
+		commit = record.SHA
+	}
+	data, err := get("https://codeload.github.com/Gentleman-Programming/gentle-shell/zip/"+commit, 32<<20)
 	if err != nil {
 		return userSnapshotArtifact{}, nil, err
 	}
@@ -93,6 +111,6 @@ func userMainSnapshotUsing(ctx context.Context, client *http.Client) (userSnapsh
 	if err := ctx.Err(); err != nil {
 		return userSnapshotArtifact{}, nil, err
 	}
-	artifact, err := userMainDescriptor(userMainQualifiedCommit, fmt.Sprintf("%x", sha256.Sum256(data)))
+	artifact, err := userMainDescriptor(commit, fmt.Sprintf("%x", sha256.Sum256(data)))
 	return artifact, data, err
 }

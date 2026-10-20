@@ -24,24 +24,26 @@ func (b userMainBody) Close() error { b.close(); return nil }
 
 // Controlled HTTP response DATA only, not publisher/TLS/authenticated ZIP or
 // installed/Main selection. Nothing from these archive bytes is executed.
-func TestUserMainSnapshotFetchesOnlyQualifiedCommit(t *testing.T) {
+func TestUserMainSnapshotFetchesFallbackCommit(t *testing.T) {
+	t.Setenv("GENTLE_AI_MAIN_FALLBACK", "1")
 	archive := "Main archive response DATA"
 	calls := 0
 	client := &http.Client{Transport: userMainResponse(func(req *http.Request) (*http.Response, error) {
 		calls++
-		if req.Method != http.MethodGet || req.URL.String() != "https://codeload.github.com/Gentleman-Programming/gentle-shell/zip/"+userMainQualifiedCommit || req.Header.Get("Accept-Encoding") != "identity" || req.Header.Get("Authorization") != "" {
+		if req.Method != http.MethodGet || req.URL.String() != "https://codeload.github.com/Gentleman-Programming/gentle-shell/zip/"+userMainFallbackCommit || req.Header.Get("Accept-Encoding") != "identity" || req.Header.Get("Authorization") != "" {
 			t.Fatal("qualified publisher request changed", req)
 		}
 		return &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, ContentLength: int64(len(archive)), Body: userMainBody{Reader: strings.NewReader(archive), close: func() {}}}, nil
 	})}
 	artifact, data, err := userMainSnapshotUsing(context.Background(), client)
-	want, descriptorErr := userMainDescriptor(userMainQualifiedCommit, fmt.Sprintf("%x", sha256.Sum256([]byte(archive))))
+	want, descriptorErr := userMainDescriptor(userMainFallbackCommit, fmt.Sprintf("%x", sha256.Sum256([]byte(archive))))
 	if err != nil || descriptorErr != nil || artifact != want || string(data) != archive || calls != 1 {
 		t.Fatalf("qualified Main snapshot differs: %+v %q %v calls=%d", artifact, data, err, calls)
 	}
 }
 
 func TestUserMainSnapshotRejectsPublisherFailures(t *testing.T) {
+	t.Setenv("GENTLE_AI_MAIN_FALLBACK", "1")
 	for _, failure := range []string{"status", "encoding", "overflow", "close"} {
 		t.Run(failure, func(t *testing.T) {
 			cause := errors.New("controlled close failure")
