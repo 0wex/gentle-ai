@@ -51,7 +51,7 @@ func (m *Model) beginShellExperience() {
 	m.shellReadyCursor, m.shellReadyOffset = 0, 0
 	profile := shellWelcomeExperience()
 	prefix, agent, found, note := shellDetectPi()
-	m.shellExperience = &shellExperienceConfig{profile: profile, mode: "separate", prefix: prefix, agent: agent, piFound: found, piNote: note, existing: shellDiscoverInstalls()}
+	m.shellExperience = &shellExperienceConfig{profile: profile, mode: "separate", choice: "separate", prefix: prefix, agent: agent, piFound: found, piNote: note, existing: shellDiscoverInstalls()}
 	m.shellInstallModel = cli.NewShellInstallModelWithExperience(nil, profile)
 }
 
@@ -60,6 +60,7 @@ type shellExperienceConfig struct {
 	cursor      int
 	err         error
 	mode        string
+	choice      string
 	prefix      string
 	agent       string
 	piFound     bool
@@ -82,7 +83,7 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	config := *m.shellExperience
 	config.err = nil
-	targets := screens.ShellInstallTargetEntries(config.mode, config.piFound, config.existing)
+	targets := screens.ShellInstallTargetEntries(config.choice, config.piFound, config.existing)
 	options := screens.ShellExperienceOptions(config.profile, targets...)
 	config.cursor = min(max(0, config.cursor), len(options)-1)
 	entry := options[config.cursor]
@@ -137,7 +138,7 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if !config.piFound {
 						config.err = errors.New("No single npm-style Pi install was detected; choose Separate install")
 					} else {
-						config.mode = "shared"
+						config.mode, config.choice = "shared", "shared"
 					}
 				} else if entry.Choice == "existing" && len(config.existing) == 1 {
 					install := config.existing[0]
@@ -145,12 +146,12 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if loadErr != nil {
 						config.err = loadErr
 					} else {
-						config.profile, config.mode = profile, install.Mode
+						config.profile, config.mode, config.choice = profile, install.Mode, "existing"
 						config.prefix, config.agent = install.Prefix, install.Agent
 						config.reconfigure, config.target = true, install.Target
 					}
 				} else {
-					config.mode = "separate"
+					config.mode, config.choice = "separate", "separate"
 				}
 			case screens.ShellExperienceProvider: // Typed explicitly, never inferred from Pi.
 			case screens.ShellExperienceSDK:
@@ -212,7 +213,7 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) shellInstallView() string {
 	if m.shellExperience != nil {
-		targets := screens.ShellInstallTargetEntries(m.shellExperience.mode, m.shellExperience.piFound, m.shellExperience.existing)
+		targets := screens.ShellInstallTargetEntries(m.shellExperience.choice, m.shellExperience.piFound, m.shellExperience.existing)
 		return screens.RenderShellExperience(m.shellExperience.profile, m.shellExperience.cursor, m.shellExperience.err, m.Width, m.Height, targets...)
 	}
 	state, ok := cli.ShellInstallPresentationOf(m.shellInstallModel)
@@ -244,7 +245,7 @@ func (m Model) shellExperienceNavigation(key tea.KeyMsg) (Model, bool) {
 		if state.Request.Mode == "shared" {
 			mode, prefix, agent = "shared", state.Request.SharedPrefix, state.Request.SharedAgent
 		}
-		m.shellExperience = &shellExperienceConfig{profile: profile, mode: mode, prefix: prefix, agent: agent, piFound: found, piNote: note, existing: shellDiscoverInstalls()}
+		m.shellExperience = &shellExperienceConfig{profile: profile, mode: mode, choice: mode, prefix: prefix, agent: agent, piFound: found, piNote: note, existing: shellDiscoverInstalls()}
 		return m, true
 	}
 	if !state.Review {
