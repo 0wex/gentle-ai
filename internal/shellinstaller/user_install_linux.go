@@ -80,7 +80,7 @@ func userBusEnvironment() ([]string, error) {
 		return nil, errors.New("existing user-manager bus unavailable; no delegation is created automatically")
 	}
 	home := os.Getenv("HOME")
-	if err := privateNativeDirectory(home); err != nil {
+	if err := privateNativeHome(home); err != nil {
 		return nil, err
 	}
 	return []string{"HOME=" + home, "XDG_RUNTIME_DIR=" + runtimeDir, "DBUS_SESSION_BUS_ADDRESS=unix:path=" + bus, "PATH=/usr/bin:/bin", "TERM=xterm-256color"}, nil
@@ -187,6 +187,7 @@ func userServiceWithPlan(ctx context.Context, self string, args []string, stdin 
 		}
 	}()
 	env = append(env, "GENTLE_SHELL_UNIT="+unit, "GENTLE_SHELL_UNIT_RECEIPT="+filepath.Join(receiptDir, "kernel.json"))
+	env = append(env, userProgressEnvironment(ctx)...)
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err

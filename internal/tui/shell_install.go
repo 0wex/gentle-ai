@@ -1,11 +1,146 @@
 package tui
 
 import (
+	"context"
+	"errors"
+	"io"
+	"os"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/cli"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/shellinstaller"
-	"os"
 )
+
+var shellInstallStepLabels = []string{
+	"Validate the selection and target",
+	"Prepare the private stage and preferences",
+	"Install the runtime and pinned suppliers",
+	"Apply optional runtimes and the SDK channel",
+	"Publish, verify and register the installation",
+}
+
+type shellInstallStep struct {
+	Label string
+	State string
+}
+
+type shellInstallRun struct {
+	steps []shellInstallStep
+	done  bool
+	err   error
+}
+
+type shellInstallEvent struct {
+	progress shellinstaller.UserInstallProgress
+	done     bool
+	err      error
+}
+
+// WithShellInstallRunner lets the owning application inject its validated
+// in-process worker. The runner receives the inspected request, never a new
+// confirmation.
+func (m Model) WithShellInstallRunner(runner func(context.Context, shellinstaller.UserInstallRequest, func(shellinstaller.UserInstallProgress)) error) Model {
+	m.shellInstallRunner = runner
+	return m
+}
+
+func waitShellInstallEvent(events <-chan shellInstallEvent) tea.Cmd {
+	return func() tea.Msg {
+		event, ok := <-events
+		if !ok {
+			return shellInstallEvent{done: true, err: errors.New("installation ended without a result")}
+		}
+		return event
+	}
+}
+
+func (m Model) beginShellInstall() (tea.Model, tea.Cmd) {
+	request := m.shellPlanRequest
+	m.shellInstallSelection = cli.ShellInstallSelection{Request: request, Confirmed: true, Executed: true}
+	steps := make([]shellInstallStep, len(shellInstallStepLabels))
+	for index, label := range shellInstallStepLabels {
+		steps[index] = shellInstallStep{Label: label, State: "pending"}
+	}
+	steps[0].State = "running"
+	events := make(chan shellInstallEvent, 32)
+	m.shellInstallRun = &shellInstallRun{steps: steps}
+	m.shellInstallEvents = events
+	m.shellPlan, m.shellPlanRequest = nil, shellinstaller.UserInstallRequest{}
+	runner := m.shellInstallRunner
+	if runner == nil {
+		runner = func(ctx context.Context, req shellinstaller.UserInstallRequest, report func(shellinstaller.UserInstallProgress)) error {
+			return cli.RunShellInstallInline(ctx, cli.ShellInstallSelection{Request: req, Confirmed: true, Executed: true}, report, io.Discard)
+		}
+	}
+	go func() {
+		// The inspected request is immutable here; the runner revalidates its
+		// token and physical selection before any effect.
+		err := runner(context.Background(), request, func(progress shellinstaller.UserInstallProgress) {
+			events <- shellInstallEvent{progress: progress}
+		})
+		events <- shellInstallEvent{done: true, err: err}
+		close(events)
+	}()
+	return m, waitShellInstallEvent(events)
+}
+
+func (m Model) updateShellInstallRun(msg tea.Msg) (tea.Model, tea.Cmd) {
+	event, ok := msg.(shellInstallEvent)
+	if ok {
+		run := m.shellInstallRun
+		if run == nil {
+			return m, nil
+		}
+		if event.done {
+			run.done, run.err = true, event.err
+			if event.err != nil {
+				for index := range run.steps {
+					if run.steps[index].State == "running" {
+						run.steps[index].State = "failed"
+					}
+				}
+			} else {
+				for index := range run.steps {
+					run.steps[index].State = "done"
+				}
+			}
+			return m, nil
+		}
+		progress := event.progress
+		if progress.Index >= 1 && progress.Index <= len(run.steps) {
+			switch progress.State {
+			case "running":
+				run.steps[progress.Index-1].State = "running"
+			case "done":
+				run.steps[progress.Index-1].State = "done"
+				if progress.Index < len(run.steps) && run.steps[progress.Index].State == "pending" {
+					run.steps[progress.Index].State = "running"
+				}
+			}
+		}
+		return m, waitShellInstallEvent(m.shellInstallEvents)
+	}
+	key, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
+	run := m.shellInstallRun
+	if run == nil || !run.done {
+		// The worker owns the operation; no key can claim completion or cancel
+		// a possibly uncertain publication.
+		return m, nil
+	}
+	if key.Type != tea.KeyEnter {
+		return m, nil
+	}
+	if run.err != nil {
+		m.shellInstallRun, m.shellInstallEvents = nil, nil
+		m.shellInstallSelection = cli.ShellInstallSelection{}
+		m.setScreen(ScreenWelcome)
+		return m, nil
+	}
+	return m, tea.Quit
+}
 
 // WithShellInstaller opts into selection within this existing TUI program.
 func (m Model) WithShellInstaller() Model {
@@ -19,6 +154,9 @@ func (m Model) ShellInstallSelection() cli.ShellInstallSelection {
 }
 
 func (m Model) updateShellInstall(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.shellInstallRun != nil {
+		return m.updateShellInstallRun(msg)
+	}
 	if m.shellPlan != nil {
 		key, ok := msg.(tea.KeyMsg)
 		if !ok {
@@ -26,8 +164,7 @@ func (m Model) updateShellInstall(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch key.Type {
 		case tea.KeyEnter:
-			_ = os.Setenv("GENTLE_AI_SHELL_STEPS", "1")
-			return m.finishShellInstallSelection(cli.ShellInstallSelection{Request: m.shellPlanRequest, Confirmed: true}, nil)
+			return m.beginShellInstall()
 		case tea.KeyEsc:
 			m.shellExperience, m.shellPlanConfig = m.shellPlanConfig, nil
 			m.shellPlan, m.shellPlanRequest = nil, shellinstaller.UserInstallRequest{}

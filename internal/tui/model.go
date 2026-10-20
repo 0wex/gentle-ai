@@ -642,6 +642,9 @@ type Model struct {
 	shellPlan             []string
 	shellPlanConfig       *shellExperienceConfig
 	shellPlanRequest      shellinstaller.UserInstallRequest
+	shellInstallRun       *shellInstallRun
+	shellInstallEvents    <-chan shellInstallEvent
+	shellInstallRunner    func(context.Context, shellinstaller.UserInstallRequest, func(shellinstaller.UserInstallProgress)) error
 	shellReadyOffset      int
 	shellReadyCursor      int
 	shellInstallEnabled   bool
@@ -1042,6 +1045,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateShellInstall(msg)
 		case tea.WindowSizeMsg:
 			m.Width, m.Height = msg.Width, msg.Height
+			return m.updateShellInstall(msg)
+		case shellInstallEvent:
 			return m.updateShellInstall(msg)
 		}
 	}

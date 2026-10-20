@@ -80,6 +80,21 @@ func privateNativeDirectory(path string) error {
 	return nil
 }
 
+// privateNativeHome accepts the operator's home when group read/traverse is
+// present. It is strictly more private than the already accepted 0755 and is
+// never used for owned install directories.
+func privateNativeHome(path string) error {
+	info, err := os.Lstat(path)
+	canonical, canonicalErr := filepath.EvalSymlinks(path)
+	if err != nil || canonicalErr != nil || canonical != path || (info.Mode() != os.ModeDir|0700 && info.Mode() != os.ModeDir|0750 && info.Mode() != os.ModeDir|0755) || info.Sys().(*syscall.Stat_t).Uid != uint32(os.Getuid()) {
+		return privateError("source", errors.Join(err, canonicalErr))
+	}
+	if err := privateExtendedMetadata(path, info, true); err != nil {
+		return privateError("source", err)
+	}
+	return nil
+}
+
 func privateNativeEntries(path string) ([]os.DirEntry, error) {
 	directory, err := os.OpenFile(path, os.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
 	if err != nil {

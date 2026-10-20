@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -43,23 +45,80 @@ func TestShellPlanListsStepsAndDefaultTarget(t *testing.T) {
 	}
 }
 
-func TestShellPlanEnterConfirmsHandoff(t *testing.T) {
+func TestShellPlanEnterRunsInstallationInsideTUI(t *testing.T) {
 	m, request := openInstallationPlan(t)
-	if m.ShellInstallSelection().Confirmed {
-		t.Fatal("plan inspection forged consent")
-	}
+	var calls int
+	m = m.WithShellInstallRunner(func(ctx context.Context, got shellinstaller.UserInstallRequest, report func(shellinstaller.UserInstallProgress)) error {
+		calls++
+		if got.Confirmation != request.Confirmation || got.Destination != request.Destination {
+			return errors.New("runner received a different inspected request")
+		}
+		for index, label := range shellInstallStepLabels {
+			report(shellinstaller.UserInstallProgress{Index: index + 1, Total: 5, Label: label, State: "running"})
+			report(shellinstaller.UserInstallProgress{Index: index + 1, Total: 5, Label: label, State: "done"})
+		}
+		return nil
+	})
 	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = next.(Model)
 	selection := m.ShellInstallSelection()
-	if cmd == nil || !selection.Confirmed || selection.Request.Confirmation != request.Confirmation {
-		t.Fatalf("plan enter did not confirm the inspected handoff: %+v", selection)
+	if !selection.Confirmed || !selection.Executed || cmd == nil || m.shellInstallRun == nil {
+		t.Fatalf("plan enter did not start the in-TUI worker: %+v", selection)
 	}
-	args := cli.ShellInstallArguments(selection)
-	if len(args) != 8 || args[6] != "--experience" {
-		t.Fatalf("plan handoff changed the worker ABI: %v", args)
+	if m.shellPlan != nil || m.shellInstallRun.done {
+		t.Fatal("plan transition exposed an unexpected state")
 	}
-	if decoded, err := shellinstaller.UserInstallFromEntry(args[1:]); err != nil || decoded.Destination != request.Destination || decoded.Mode != request.Mode {
-		t.Fatalf("plan handoff lost the request: %+v %v", decoded, err)
+	for m.shellInstallRun != nil && !m.shellInstallRun.done {
+		if cmd == nil {
+			t.Fatal("progress pump stopped before the worker result")
+		}
+		next, cmd = m.Update(cmd())
+		m = next.(Model)
+	}
+	if calls != 1 || m.shellInstallRun == nil || m.shellInstallRun.err != nil {
+		t.Fatalf("in-TUI worker did not finish cleanly: calls=%d err=%v", calls, m.shellInstallRun.err)
+	}
+	for _, step := range m.shellInstallRun.steps {
+		if step.State != "done" {
+			t.Fatalf("step was not completed in order: %+v", m.shellInstallRun.steps)
+		}
+	}
+	if view := m.View(); !strings.Contains(view, "Installation complete") || !strings.Contains(view, "Enter: finish") {
+		t.Fatalf("completion screen differs:\n%s", view)
+	}
+	if _, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil {
+		t.Fatal("completion enter did not leave the TUI")
+	}
+}
+
+func TestShellInstallFailureStaysInTUI(t *testing.T) {
+	m, _ := openInstallationPlan(t)
+	m = m.WithShellInstallRunner(func(ctx context.Context, got shellinstaller.UserInstallRequest, report func(shellinstaller.UserInstallProgress)) error {
+		report(shellinstaller.UserInstallProgress{Index: 1, Total: 5, Label: shellInstallStepLabels[0], State: "running"})
+		report(shellinstaller.UserInstallProgress{Index: 1, Total: 5, Label: shellInstallStepLabels[0], State: "done"})
+		report(shellinstaller.UserInstallProgress{Index: 2, Total: 5, Label: shellInstallStepLabels[1], State: "running"})
+		return errors.New("private installation: uncertain; Preserve evidence: workspace=\"/tmp/ws\"")
+	})
+	next, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Model)
+	for !m.shellInstallRun.done {
+		next, cmd = m.Update(cmd())
+		m = next.(Model)
+	}
+	if m.shellInstallRun.err == nil || m.shellInstallRun.steps[0].State != "done" || m.shellInstallRun.steps[1].State != "failed" {
+		t.Fatalf("failure did not preserve ordered step state: %+v", m.shellInstallRun)
+	}
+	view := m.View()
+	if !strings.Contains(view, "Installation failed") || !strings.Contains(view, "workspace=") || !strings.Contains(view, "Enter: back to menu") {
+		t.Fatalf("failure screen hides evidence or next action:\n%s", view)
+	}
+	next, quit := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Model)
+	if quit != nil {
+		t.Fatal("failure enter quit the TUI instead of returning to the menu")
+	}
+	if m.Screen != ScreenWelcome || m.ShellInstallSelection().Confirmed {
+		t.Fatalf("failure did not stay owned by the TUI: screen=%v selection=%+v", m.Screen, m.ShellInstallSelection())
 	}
 }
 

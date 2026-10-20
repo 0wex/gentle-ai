@@ -56,7 +56,7 @@ func shellPTYExperience(scenario string) shellinstaller.UserExperience {
 }
 
 func TestShellInstallParentPhysicalPTY(t *testing.T) {
-	scenarios := []string{"confirm", "confirm-edit", "cancel-target", "cancel-review", "ctrl-c-target", "ctrl-c-review"}
+	scenarios := []string{"confirm", "confirm-edit", "cancel-target", "cancel-review", "ctrl-c-target", "ctrl-c-review", "install-failure"}
 	if runtime.GOARCH == "amd64" {
 		scenarios = append(scenarios, "confirm-main", "confirm-main-edit")
 	}
@@ -117,7 +117,7 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 			var originalConfirmation string
 			readerDone, parentDone := make(chan struct{}), make(chan struct{})
 			oldIn, oldOut := os.Stdin, os.Stdout
-			oldOS, oldDetect, oldTUI, oldRun := ensureCurrentOSSupported, detectSystem, runTUI, runShellInstallSelection
+			oldOS, oldDetect, oldTUI, oldRun, oldInline := ensureCurrentOSSupported, detectSystem, runTUI, runShellInstallSelection, runInlineShellInstall
 			os.Stdin, os.Stdout = slave, slave // Real TTY boundary, not an isatty override.
 			t.Cleanup(func() {
 				select {
@@ -131,13 +131,13 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 					t.Error("terminal owner is still running before global restoration")
 				}
 				os.Stdin, os.Stdout = oldIn, oldOut
-				ensureCurrentOSSupported, detectSystem, runTUI, runShellInstallSelection = oldOS, oldDetect, oldTUI, oldRun
+				ensureCurrentOSSupported, detectSystem, runTUI, runShellInstallSelection, runInlineShellInstall = oldOS, oldDetect, oldTUI, oldRun, oldInline
 			})
 			ensureCurrentOSSupported = func() error { return nil }
 			detectSystem = func(context.Context) (system.DetectionResult, error) {
 				return system.DetectionResult{System: system.SystemInfo{Supported: true}}, nil
 			}
-			programs, workers, returned := 0, 0, false
+			programs, returned := 0, false
 			created := make(chan *tea.Program, 1)
 			runTUI = func(m tea.Model, opts ...tea.ProgramOption) (tea.Model, error) {
 				programs++
@@ -146,24 +146,35 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 				defer func() { returned = true }()
 				return p.Run()
 			}
-			runShellInstallSelection = func(selection cli.ShellInstallSelection, stdout io.Writer) error {
-				workers++
-				after, err := term.GetState(slave.Fd())
-				if err != nil || !returned || !reflect.DeepEqual(before, after) || stdout != slave {
-					return fmt.Errorf("worker hook before terminal restoration: %v", err)
+			inlineCalls, postWorkers := 0, 0
+			runInlineShellInstall = func(ctx context.Context, request shellinstaller.UserInstallRequest, report func(shellinstaller.UserInstallProgress)) error {
+				inlineCalls++
+				if returned {
+					return fmt.Errorf("in-process worker ran after the TUI returned")
 				}
-				fresh, err := shellinstaller.InspectUserInstall(selection.Request)
 				wantProfile := shellPTYExperience(scenario)
 				if strings.HasSuffix(scenario, "edit") {
 					wantProfile.Persona = "neutral"
 				}
-				if err != nil || !selection.Confirmed || selection.Request.Destination != target || selection.Request.Confirmation != fresh || selection.Request.Experience == nil || *selection.Request.Experience != wantProfile {
-					return fmt.Errorf("public interaction lost physical selection: got %+v want %+v, %v", selection.Request.Experience, wantProfile, err)
+				if request.Destination != target || request.Confirmation == "" || request.Experience == nil || *request.Experience != wantProfile {
+					return fmt.Errorf("in-process worker lost physical selection: got %+v want %+v", request.Experience, wantProfile)
 				}
-				if strings.HasSuffix(scenario, "edit") && (originalConfirmation == "" || selection.Request.Confirmation == originalConfirmation) {
-					return fmt.Errorf("edited profile reused physical confirmation: %+v", selection)
+				if strings.HasSuffix(scenario, "edit") && (originalConfirmation == "" || request.Confirmation == originalConfirmation) {
+					return fmt.Errorf("edited profile reused physical confirmation: %+v", request)
 				}
-				return nil // Inert boundary spy: no acquisition or installation authority.
+				for index, label := range []string{"Validate the selection and target", "Prepare the private stage and preferences", "Install the runtime and pinned suppliers", "Apply optional runtimes and the SDK channel", "Publish, verify and register the installation"} {
+					report(shellinstaller.UserInstallProgress{Index: index + 1, Total: 5, Label: label, State: "running"})
+					report(shellinstaller.UserInstallProgress{Index: index + 1, Total: 5, Label: label, State: "done"})
+					time.Sleep(30 * time.Millisecond)
+				}
+				if scenario == "install-failure" {
+					return fmt.Errorf("private installation: uncertain; Preserve evidence: workspace=%q destination/unit=%q", filepath.Dir(target)+"/.gentle-pty", target)
+				}
+				return nil
+			}
+			runShellInstallSelection = func(selection cli.ShellInstallSelection, stdout io.Writer) error {
+				postWorkers++
+				return fmt.Errorf("post-TUI worker ran for an in-process selection")
 			}
 			var output bytes.Buffer
 			var mu sync.Mutex
@@ -266,8 +277,20 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 				default:
 				}
 			}
-			if strings.HasPrefix(scenario, "confirm") {
+			confirms := strings.HasPrefix(scenario, "confirm") || scenario == "install-failure"
+			if confirms {
 				send("\r")
+				waitFor("Installing Gentle-Shell")
+				if scenario == "install-failure" {
+					waitFor("Installation failed")
+					waitFor("workspace=")
+					send("\r")
+					waitFor("Install Gentle-Shell, our own agent")
+					send("q")
+				} else {
+					waitFor("Installation complete")
+					send("\r")
+				}
 			} else {
 				mu.Lock()
 				output.Reset()
@@ -285,12 +308,12 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 			}
 			select {
 			case err := <-done:
-				wantWorkers := 0
-				if strings.HasPrefix(scenario, "confirm") {
-					wantWorkers = 1
+				wantInline := 0
+				if strings.HasPrefix(scenario, "confirm") || scenario == "install-failure" {
+					wantInline = 1
 				}
-				if err != nil || programs != 1 || workers != wantWorkers {
-					t.Fatalf("programs=%d workers=%d error=%v", programs, workers, err)
+				if err != nil || programs != 1 || inlineCalls != wantInline || postWorkers != 0 {
+					t.Fatalf("programs=%d inline=%d post=%d error=%v", programs, inlineCalls, postWorkers, err)
 				}
 			case <-time.After(10 * time.Second):
 				t.Fatal("terminal owner did not finish")

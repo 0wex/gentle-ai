@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"flag"
@@ -8,6 +9,8 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/shellinstaller"
@@ -90,6 +93,10 @@ func runShellInstallRequest(ctx context.Context, self string, req shellinstaller
 }
 
 func runShellInstallRequestWithEntry(ctx context.Context, self string, req shellinstaller.UserInstallRequest, inspect bool, stdout io.Writer, entry shellEntryRunner) error {
+	return runShellInstallRequestWithStreams(ctx, self, req, inspect, os.Stdin, stdout, os.Stderr, entry)
+}
+
+func runShellInstallRequestWithStreams(ctx context.Context, self string, req shellinstaller.UserInstallRequest, inspect bool, stdin io.Reader, stdout, stderr io.Writer, entry shellEntryRunner) error {
 	token, err := shellInstallInspect(req)
 	if err != nil {
 		return err
@@ -105,7 +112,62 @@ func runShellInstallRequestWithEntry(ctx context.Context, self string, req shell
 	if len(args) == 0 {
 		return errors.New("invalid or oversized experience selection; run gentle-ai shell install to review it again")
 	}
-	return entry(ctx, self, args, os.Stdin, stdout, os.Stderr)
+	return entry(ctx, self, args, stdin, stdout, stderr)
+}
+
+// RunShellInstallInline executes a confirmed selection without replacing the
+// process or restoring the terminal. Ordered progress is reported through the
+// installer context; the caller keeps ownership of its UI.
+func RunShellInstallInline(ctx context.Context, selection ShellInstallSelection, report func(shellinstaller.UserInstallProgress), _ io.Writer) error {
+	if !selection.Confirmed {
+		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx = shellinstaller.WithUserInstallProgress(ctx, report)
+	self, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	reader, writer := io.Pipe()
+	parsed := make(chan struct{})
+	go func() {
+		defer close(parsed)
+		scanner := bufio.NewScanner(reader)
+		for scanner.Scan() {
+			index, total, label, ok := shellStepLine(scanner.Text())
+			if ok && report != nil {
+				report(shellinstaller.UserInstallProgress{Index: index, Total: total, Label: label, State: "done"})
+			}
+		}
+	}()
+	err = runShellInstallRequestWithStreams(ctx, self, selection.Request, false, nil, writer, io.Discard, shellinstaller.RunUserEntry)
+	_ = writer.Close()
+	<-parsed
+	return preserveShellFailure(err)
+}
+
+// shellStepLine parses the worker's fixed ordered marker: "✓ i/n label".
+func shellStepLine(line string) (int, int, string, bool) {
+	rest, ok := strings.CutPrefix(line, "✓ ")
+	if !ok {
+		return 0, 0, "", false
+	}
+	counts, label, ok := strings.Cut(rest, " ")
+	if !ok {
+		return 0, 0, "", false
+	}
+	left, right, ok := strings.Cut(counts, "/")
+	if !ok {
+		return 0, 0, "", false
+	}
+	index, leftErr := strconv.Atoi(left)
+	total, rightErr := strconv.Atoi(right)
+	if leftErr != nil || rightErr != nil || index < 1 || total < 1 || index > total {
+		return 0, 0, "", false
+	}
+	return index, total, label, true
 }
 
 func shellExecutionContext() (context.Context, context.CancelFunc, string, error) {

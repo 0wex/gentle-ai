@@ -239,13 +239,7 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 							request.Confirmation = token
 							m.shellPlanRequest = request
 							m.shellPlanConfig = &config
-							m.shellPlan = []string{
-								"Validate the selection and target",
-								"Prepare the private stage and preferences",
-								"Install the runtime and pinned suppliers",
-								"Apply optional runtimes and the SDK channel",
-								"Publish, verify and register the installation",
-							}
+							m.shellPlan = append([]string(nil), shellInstallStepLabels...)
 							m.shellExperience = nil
 							m.shellInstallModel, _ = m.shellInstallModel.Update(tea.WindowSizeMsg{Width: m.Width, Height: m.Height})
 							return m, nil
@@ -270,6 +264,17 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) shellInstallView() string {
+	if m.shellInstallRun != nil {
+		steps := make([]screens.ShellInstallStep, len(m.shellInstallRun.steps))
+		for index, step := range m.shellInstallRun.steps {
+			steps[index] = screens.ShellInstallStep{Label: step.Label, State: step.State}
+		}
+		failure := ""
+		if m.shellInstallRun.err != nil {
+			failure = m.shellInstallRun.err.Error()
+		}
+		return screens.RenderShellInstall(steps, failure, m.shellInstallRun.done, m.Width, m.Height)
+	}
 	if m.shellPlan != nil {
 		return screens.RenderShellPlan(m.shellPlan, m.Width, m.Height)
 	}

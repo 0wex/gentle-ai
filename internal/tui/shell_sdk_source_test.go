@@ -46,13 +46,12 @@ func TestShellExperienceSDKSourceHandoff(t *testing.T) {
 	}
 	back = sdkSourceRow(t, back)
 	back = experienceKey(back, tea.KeyMsg{Type: tea.KeyEnter}) // back to stock
-	back, second := experiencePlan(t, back)
+	_, second := experiencePlan(t, back)
 	if second.Experience.SDKSource != "stable" || second.Confirmation == request.Confirmation {
 		t.Fatal("SDK edit retained the old inspection or source")
 	}
-	confirmed := experienceKey(back, tea.KeyMsg{Type: tea.KeyEnter}).ShellInstallSelection()
-	args := cli.ShellInstallArguments(confirmed)
-	if !confirmed.Confirmed || len(args) != 8 || args[6] != "--experience" {
+	args := cli.ShellInstallArguments(cli.ShellInstallSelection{Request: second, Confirmed: true})
+	if len(args) != 8 || args[6] != "--experience" {
 		t.Fatal("Main consent changed positional worker ABI", args)
 	}
 	req, err := shellinstaller.UserInstallFromEntry(args[1:])
