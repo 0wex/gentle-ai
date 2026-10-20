@@ -36,12 +36,16 @@ var userCodeGraphSources = []struct {
 // Qualified Linux amd64 Separate preparation retains the complete profile.
 // The native coordinator acquires the same sources before sealed production;
 // publication consumes their authenticated DATA without network or suppliers.
+func userCodeGraphPreferencesSupported(profile *UserExperience) bool {
+	return profile == nil || profile.GlobalRDD == "" || userQualifiedPrivateChoices(profile) || userQualifiedLegacyExperience(profile)
+}
+
 func userCodeGraphProvision(ctx context.Context, root, mode string, profile *UserExperience) error {
 	if profile != nil {
 		if err := profile.Validate(); err != nil {
 			return err
 		}
-		if profile.GlobalRDD != "" && !userQualifiedStockExperience(profile) {
+		if !userCodeGraphPreferencesSupported(profile) {
 			return experienceError("explicit global RDD requires a supported native distribution")
 		}
 	}
