@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/shellinstaller"
@@ -28,6 +29,14 @@ func TestShellStepLineParsesOnlyOrderedMarkers(t *testing.T) {
 		if index != test.index || total != test.total || label != test.label || ok != test.ok {
 			t.Fatalf("shellStepLine(%q) = %d,%d,%q,%v", test.line, index, total, label, ok)
 		}
+	}
+}
+
+func TestShellInternalInstallDirectIsRouted(t *testing.T) {
+	var output strings.Builder
+	err := RunShell([]string{"internal-install-direct"}, &output)
+	if err == nil || strings.Contains(err.Error(), "unknown shell command") {
+		t.Fatalf("direct entry not routed: %v", err)
 	}
 }
 

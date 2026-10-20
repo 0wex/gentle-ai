@@ -8,9 +8,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/shellinstaller"
@@ -58,7 +60,7 @@ func RunShell(args []string, stdout io.Writer) (resultErr error) {
 		return err
 	}
 	switch args[0] {
-	case "install", "launch-pnpm", "internal-launch-pnpm", "launch", "recover", "internal-check", "internal-install", "internal-launch", "internal-recover", "internal-native-produce", "internal-native-coordinate", "internal-native-own":
+	case "install", "launch-pnpm", "internal-launch-pnpm", "launch", "recover", "internal-check", "internal-install", "internal-install-direct", "internal-launch", "internal-recover", "internal-native-produce", "internal-native-coordinate", "internal-native-own":
 		// The delegated supervisor or worker re-enters here; internal selectors
 		// still repeat kernel qualification and never grant execution authority.
 		// Each backend refuses the operations its platform does not provide.
@@ -125,27 +127,76 @@ func RunShellInstallInline(ctx context.Context, selection ShellInstallSelection,
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	ctx = shellinstaller.WithUserInstallProgress(ctx, report)
+	token, err := shellInstallInspect(selection.Request)
+	if err != nil {
+		return err
+	}
+	if selection.Request.Confirmation != token {
+		return errors.New("inspect the physical selection first with --inspect, then pass its --confirm SHA256; run gentle-ai shell install --help for selection flags or gentle-ai shell install for interactive review")
+	}
+	args := ShellInstallArguments(selection)
+	if len(args) < 2 {
+		return errors.New("invalid or oversized experience selection; run gentle-ai shell install to review it again")
+	}
 	self, err := os.Executable()
 	if err != nil {
 		return err
 	}
-	reader, writer := io.Pipe()
-	parsed := make(chan struct{})
+	workerLog := &boundedWorkerLog{limit: 8192}
+	entry := append([]string{"--no-new-privs", "--inh-caps=-all", "--ambient-caps=-all", "--", self, "shell", "internal-install-direct"}, args[1:]...)
+	cmd := exec.CommandContext(ctx, "/usr/bin/setpriv", entry...)
+	cmd.Env = append(os.Environ(), "GENTLE_AI_SHELL_STEPS=1")
+	cmd.Stderr = workerLog
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	scan := make(chan struct{})
 	go func() {
-		defer close(parsed)
-		scanner := bufio.NewScanner(reader)
+		defer close(scan)
+		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
-			index, total, label, ok := shellStepLine(scanner.Text())
+			line := scanner.Text()
+			_, _ = workerLog.Write([]byte(line + "\n"))
+			index, total, label, ok := shellStepLine(line)
 			if ok && report != nil {
 				report(shellinstaller.UserInstallProgress{Index: index, Total: total, Label: label, State: "done"})
 			}
 		}
 	}()
-	err = runShellInstallRequestWithStreams(ctx, self, selection.Request, false, nil, writer, io.Discard, shellinstaller.RunUserEntry)
-	_ = writer.Close()
-	<-parsed
-	return preserveShellFailure(err)
+	waitErr := cmd.Wait()
+	<-scan
+	if waitErr != nil {
+		if output := strings.TrimSpace(workerLog.String()); output != "" {
+			waitErr = fmt.Errorf("%w; worker output: %s", waitErr, output)
+		}
+	}
+	return preserveShellFailure(waitErr)
+}
+
+type boundedWorkerLog struct {
+	mu    sync.Mutex
+	data  []byte
+	limit int
+}
+
+func (w *boundedWorkerLog) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.data = append(w.data, p...)
+	if len(w.data) > w.limit {
+		w.data = append([]byte(nil), w.data[len(w.data)-w.limit:]...)
+	}
+	return len(p), nil
+}
+
+func (w *boundedWorkerLog) String() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return string(w.data)
 }
 
 // shellStepLine parses the worker's fixed ordered marker: "✓ i/n label".

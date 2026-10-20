@@ -179,11 +179,25 @@ func userEnvironment(root, prefix, agent string) []string {
 		"NPM_CONFIG_GLOBALCONFIG=" + root + "/config/global.npmrc", "NPM_CONFIG_CACHE=" + root + "/runtime/cache", "NPM_CONFIG_AUDIT=false", "NPM_CONFIG_FUND=false", "NODE_USE_SYSTEM_CA=1"}
 }
 
+type userDirectInstallKey struct{}
+
+func userDirectInstall(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	direct, _ := ctx.Value(userDirectInstallKey{}).(bool)
+	return direct
+}
+
 func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserInstallResult, err error) {
 	if ctx == nil || ctx.Err() != nil {
 		return result, privateError("canceled", context.Canceled)
 	}
-	if err = UserKernelCheck(); err != nil {
+	if userDirectInstall(ctx) {
+		if err = userDirectKernelCheck(); err != nil {
+			return result, err
+		}
+	} else if err = UserKernelCheck(); err != nil {
 		return result, err
 	}
 	if req, err = userCanonicalRequest(req); err != nil {

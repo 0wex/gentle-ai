@@ -316,6 +316,17 @@ func RunUserEntry(ctx context.Context, self string, args []string, stdin io.Read
 	if args[0] == "internal-native-own" {
 		return userNativeOwnerEntry(ctx, self, args[1:], stdin, stdout, stderr)
 	}
+	if args[0] == "internal-install-direct" {
+		req, err := UserInstallFromEntry(args[1:])
+		if err != nil {
+			return err
+		}
+		result, err := RunUserInstallDirect(ctx, req)
+		if err == nil {
+			_, err = fmt.Fprintf(stdout, "Installed %s; commands %s/bin/gentle-shell and %s/bin/pi\n", result.Destination, result.Destination, result.Destination)
+		}
+		return err
+	}
 	if args[0] == "install" {
 		req, fresh, err := userNativeFreshRequest(args[1:])
 		if err != nil {
@@ -372,6 +383,27 @@ func RunUserEntry(ctx context.Context, self string, args []string, stdin io.Read
 
 func RunUserInstall(ctx context.Context, req UserInstallRequest) (UserInstallResult, error) {
 	return userRunInstall(ctx, req)
+}
+
+// RunUserInstallDirect is the portable user-level installer: no transient
+// service, no cgroup claim and no process replacement. It keeps the user
+// identity, no-new-privileges, verified artifacts and atomic publication.
+func RunUserInstallDirect(ctx context.Context, req UserInstallRequest) (UserInstallResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if err := unix.Prctl(unix.PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0); err != nil {
+		return UserInstallResult{}, privateError("refused", err)
+	}
+	return userRunInstall(context.WithValue(ctx, userDirectInstallKey{}, true), req)
+}
+
+func userDirectKernelCheck() error {
+	status, err := os.ReadFile("/proc/self/status")
+	if err != nil {
+		return err
+	}
+	return userKernelStatus(string(status), os.Getuid())
 }
 
 const userBinarySize int64 = 17109176

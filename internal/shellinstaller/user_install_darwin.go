@@ -46,6 +46,10 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (UserInstallRes
 	return userRunInstall(ctx, req)
 }
 
+func RunUserInstallDirect(ctx context.Context, req UserInstallRequest) (UserInstallResult, error) {
+	return userRunInstall(ctx, req)
+}
+
 // An internal selector names the same operation: darwin never forwards to a
 // manager, so each entry repeats the kernel and physical selection checks.
 func RunUserEntry(ctx context.Context, _ string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
