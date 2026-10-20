@@ -11,6 +11,73 @@ import (
 	"time"
 )
 
+func TestUserPathNotificationFailureRetainsRollbackOwnership(t *testing.T) {
+	if runtime.GOOS != "windows" || testing.Short() {
+		t.Skip("requires Windows registry and PowerShell")
+	}
+	host, err := exec.LookPath("powershell.exe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, failure := range []string{"Add-Type", "invocation"} {
+		t.Run(failure, func(t *testing.T) {
+			t.Setenv("PATH", os.Getenv("PATH"))
+			const target = `C:\GentleAI-5581\bin`
+			const raw = `%USERPROFILE%\bin;%UNDEFINED_5581%\tools`
+			key := fmt.Sprintf(`Software\GentleAI-PathTest-%d-%d`, os.Getpid(), time.Now().UnixNano())
+			run := func(script string) ([]byte, error) {
+				return exec.Command(host, "-NoProfile", "-NonInteractive", "-Command", script).CombinedOutput()
+			}
+			t.Cleanup(func() {
+				out, err := run(fmt.Sprintf(`try {} finally { [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree('%s', $false) }`, key))
+				if err != nil {
+					t.Errorf("fixture cleanup: %v: %s", err, out)
+				}
+			})
+			calls := 0
+			useWindowsUserPathSeam(t, userPathRunnerFunc(func(ctx context.Context, args ...string) ([]byte, error) {
+				calls++
+				script := strings.ReplaceAll(args[len(args)-1], `CreateSubKey('Environment')`, `CreateSubKey('`+key+`')`)
+				if strings.Contains(script, `SubKey('Environment'`) {
+					t.Fatal("unsafe registry script")
+				}
+				if failure == "Add-Type" {
+					script = strings.ReplaceAll(script, "Add-Type -TypeDefinition", "throw 'injected Add-Type failure'; Add-Type -TypeDefinition")
+				} else {
+					script = strings.ReplaceAll(script, `[void][GentleAIPathNotification]::SendMessageTimeout`, `throw 'injected notification failure'; [void][GentleAIPathNotification]::SendMessageTimeout`)
+				}
+				setup, want, output := "", raw, ""
+				if calls == 1 {
+					setup = fmt.Sprintf(`$fixture.SetValue('Path', '%s', [Microsoft.Win32.RegistryValueKind]::ExpandString); `, raw)
+					want, output = target+";"+raw, "changed"
+				}
+				wrapped := fmt.Sprintf(`$ErrorActionPreference = 'Stop'; $fixture = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('%s'); try { %s & { %s }; if ($fixture.GetValue('Path', $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) -cne '%s') { throw 'unexpected persisted PATH' }; if ($fixture.GetValueKind('Path').ToString() -ne 'ExpandString') { throw 'unexpected kind' } } finally { $fixture.Close() }`, key, setup, script, want)
+				out, err := exec.CommandContext(ctx, host, "-NoProfile", "-NonInteractive", "-Command", wrapped).CombinedOutput()
+				if err != nil {
+					return out, fmt.Errorf("registry probe: %w: %s", err, out)
+				}
+				if strings.TrimSpace(string(out)) != output {
+					t.Fatalf("output = %q, want %q", out, output)
+				}
+				return out, nil
+			}))
+			addition, err := AddToUserPathWithResult(target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !addition.PersistentAdded {
+				t.Fatalf("lost ownership: %+v", addition)
+			}
+			if err := RollbackUserPathAddition(target, addition); err != nil {
+				t.Fatal(err)
+			}
+			if calls != 2 {
+				t.Fatalf("calls = %d, want add and rollback", calls)
+			}
+		})
+	}
+}
+
 // Execute the public operations' actual PowerShell against an isolated registry
 // key. Legacy Environment calls are redirected too, so RED never edits real PATH.
 func TestUserPathPreservesRegistryValue(t *testing.T) {
@@ -23,8 +90,8 @@ func TestUserPathPreservesRegistryValue(t *testing.T) {
 	}
 	const target = `C:\O'Brien\bin`
 	const raw = `%USERPROFILE%\bin;%GENTLE_AI_UNDEFINED_5581%\tools`
-	for _, kind := range []string{"ExpandString", "String", "missing"} {
-		for _, operation := range []string{"add", "add existing", "remove", "prioritize", "rollback"} {
+	for _, kind := range []string{"ExpandString", "String", "missing", "empty"} {
+		for _, operation := range []string{"add", "add existing", "remove", "remove absent", "prioritize", "rollback"} {
 			t.Run(kind+"/"+operation, func(t *testing.T) {
 				t.Setenv("PATH", os.Getenv("PATH"))
 				initial, want := raw, target+";"+raw
@@ -37,12 +104,15 @@ func TestUserPathPreservesRegistryValue(t *testing.T) {
 				if operation == "remove" || operation == "rollback" {
 					want = raw
 				}
+				if operation == "remove absent" {
+					initial, want = raw, raw
+				}
 				wantKind := kind
-				if kind == "missing" {
+				if kind == "missing" || kind == "empty" {
 					initial = ""
 					wantKind = "ExpandString"
 					want = target
-					if operation == "remove" || operation == "rollback" {
+					if operation == "remove" || operation == "remove absent" || operation == "rollback" {
 						want = ""
 					}
 				}
@@ -60,9 +130,18 @@ func TestUserPathPreservesRegistryValue(t *testing.T) {
 					}
 					setup := ""
 					if kind != "missing" {
-						setup = fmt.Sprintf(`$fixture.SetValue('Path', '%s', [Microsoft.Win32.RegistryValueKind]::%s); `, escapePowerShellString(initial), kind)
+						setup = fmt.Sprintf(`$fixture.SetValue('Path', '%s', [Microsoft.Win32.RegistryValueKind]::%s); `, escapePowerShellString(initial), wantKind)
 					}
-					wrapped := fmt.Sprintf(`$ErrorActionPreference = 'Stop'; $fixture = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('%s'); try { %s & { %s }; $actual = $fixture.GetValue('Path', $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames); if ($actual -cne '%s') { throw "raw PATH mismatch: $actual" }; if ($fixture.GetValueKind('Path').ToString() -ne '%s') { throw "kind mismatch: $($fixture.GetValueKind('Path'))" } } finally { $fixture.Close(); [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree('%s') }`, key, setup, script, escapePowerShellString(want), wantKind, key)
+					check := fmt.Sprintf(`if ($actual -cne '%s') { throw "raw PATH mismatch: $actual" }; if ($fixture.GetValueKind('Path').ToString() -ne '%s') { throw "kind mismatch" }`, escapePowerShellString(want), wantKind)
+					noRemoval := operation == "remove absent" || ((kind == "missing" || kind == "empty") && (operation == "remove" || operation == "rollback"))
+					if kind == "missing" && noRemoval {
+						check = `if ($fixture.GetValueNames() -contains 'Path') { throw 'absent Path was created' }`
+					}
+					if noRemoval {
+						script = strings.ReplaceAll(script, "Add-Type -TypeDefinition", "$global:notificationInvoked = $true; throw 'notification invoked'; Add-Type -TypeDefinition")
+						check += `; if ($global:notificationInvoked) { throw 'no-op notified' }`
+					}
+					wrapped := fmt.Sprintf(`$ErrorActionPreference = 'Stop'; $fixture = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('%s'); try { %s & { %s }; $actual = $fixture.GetValue('Path', $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames); %s } finally { $fixture.Close(); [Microsoft.Win32.Registry]::CurrentUser.DeleteSubKeyTree('%s') }`, key, setup, script, check, key)
 					cmd := exec.CommandContext(ctx, host, "-NoProfile", "-NonInteractive", "-Command", wrapped)
 					out, err := cmd.CombinedOutput()
 					if err != nil {
@@ -71,7 +150,7 @@ func TestUserPathPreservesRegistryValue(t *testing.T) {
 					wantOutput := ""
 					if operation == "add" || operation == "add existing" {
 						wantOutput = "changed"
-						if operation == "add existing" && kind != "missing" {
+						if operation == "add existing" && kind != "missing" && kind != "empty" {
 							wantOutput = "unchanged"
 						}
 					}
@@ -85,10 +164,10 @@ func TestUserPathPreservesRegistryValue(t *testing.T) {
 				case "add", "add existing":
 					var addition UserPathAddition
 					addition, err = AddToUserPathWithResult(target)
-					if err == nil && addition.PersistentAdded != (operation == "add" || kind == "missing") {
+					if err == nil && addition.PersistentAdded != (operation == "add" || kind == "missing" || kind == "empty") {
 						t.Fatalf("unexpected ownership: %+v", addition)
 					}
-				case "remove":
+				case "remove", "remove absent":
 					err = RemoveFromUserPath(target)
 				case "prioritize":
 					err = PrioritizeUserPath(target)

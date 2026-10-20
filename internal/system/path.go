@@ -122,7 +122,7 @@ func removeFromPersistentUserPath(dir string) error {
 		`$dir = '%s'; `+
 			`$entries = @(); $removed = $false; `+
 			`if ($current) { foreach ($entry in $current.Split(';')) { if (-not $removed -and ([string]::Compare($entry.Trim().Trim('"'), $dir, $true) -eq 0)) { $removed = $true; continue }; $entries += $entry } }; `+
-			`$pathKey.SetValue('Path', ($entries -join ';'), $kind); $pathChanged = $true`,
+			`if ($removed) { $pathKey.SetValue('Path', ($entries -join ';'), $kind); $pathChanged = $true }`,
 		safeDir,
 	))
 	_, err := newUserPathPowerShellRunner().Run(context.Background(), "-NoProfile", "-NonInteractive", "-Command", script)
@@ -170,10 +170,10 @@ func persistentUserPathScript(body string) string {
 		`if ($pathKey.GetValueNames() -contains 'Path') { $kind = $pathKey.GetValueKind('Path') }; ` +
 		`$pathChanged = $false; ` + body +
 		` } finally { $pathKey.Close() }; ` +
-		`if ($pathChanged) { ` +
+		`if ($pathChanged) { try { ` +
 		`Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class GentleAIPathNotification { [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)] public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint msg, UIntPtr wParam, string lParam, uint flags, uint timeout, out UIntPtr result); }'; ` +
 		`$result = [UIntPtr]::Zero; ` +
-		`[void][GentleAIPathNotification]::SendMessageTimeout([IntPtr]0xffff, 0x1a, [UIntPtr]::Zero, 'Environment', 2, 1000, [ref]$result) }`
+		`[void][GentleAIPathNotification]::SendMessageTimeout([IntPtr]0xffff, 0x1a, [UIntPtr]::Zero, 'Environment', 2, 1000, [ref]$result) } catch { } }`
 }
 
 // UserPathEntries returns the persistent user-scoped PATH entries for the given
