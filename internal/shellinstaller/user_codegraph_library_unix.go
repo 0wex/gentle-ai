@@ -54,8 +54,8 @@ func userCodeGraphProvision(ctx context.Context, root, mode string, profile *Use
 	if err := ctx.Err(); err != nil {
 		return privateError("canceled", err)
 	}
-	if mode != "separate" || runtime.GOOS != "linux" || runtime.GOARCH != "amd64" || !privateHierarchyPath(root) {
-		return privateError("refused", errors.New("CodeGraph library requires a live Linux amd64 Separate stage"))
+	if (mode != "separate" && mode != "shared") || runtime.GOOS != "linux" || runtime.GOARCH != "amd64" || !privateHierarchyPath(root) {
+		return privateError("refused", errors.New("CodeGraph library requires a live Linux amd64 Separate or Shared stage"))
 	}
 	if _, err := privateDirectory(filepath.Join(root, "runtime")); err != nil {
 		return err

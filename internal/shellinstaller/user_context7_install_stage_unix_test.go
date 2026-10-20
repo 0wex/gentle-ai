@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -58,11 +57,9 @@ func TestUserPrepareInstallStageContext7(t *testing.T) {
 
 func TestUserPrepareInstallStageContext7ModeRefusals(t *testing.T) {
 	for _, tc := range []struct {
-		name, mode, choice, rdd, sdk, codegraph string
-		nilProfile                              bool
+		name, mode, choice string
+		nilProfile         bool
 	}{
-		{name: "shared-on", mode: "shared", choice: "on"},
-		{name: "shared-off", mode: "shared", choice: "off"},
 		{name: "unknown-mode", mode: "auto"},
 		{name: "empty-mode"},
 		{name: "nil-unknown-mode", mode: "auto", nilProfile: true},
@@ -86,21 +83,14 @@ func TestUserPrepareInstallStageContext7ModeRefusals(t *testing.T) {
 				t.Fatal(err)
 			}
 			profile := UserExperience{Persona: "gentleman", BackgroundSubagents: "on"}
-			profile.Context7, profile.GlobalRDD, profile.SDKSource, profile.CodeGraph = tc.choice, tc.rdd, tc.sdk, tc.codegraph
+			profile.Context7 = tc.choice
 			selected := &profile
 			if tc.nilProfile {
 				selected = nil
 			}
 			err = userPrepareInstallStage(context.Background(), root, tc.mode, selected)
-			failure := ""
-			switch {
-			case tc.mode == "shared":
-				failure = "Context7"
-			case tc.codegraph == "on":
-				failure = "CodeGraph"
-			}
-			if err == nil || (failure != "" && !strings.Contains(err.Error(), failure)) {
-				t.Fatal("invalid mode or unsupported Context7 combination was not refused by policy", err)
+			if err == nil {
+				t.Fatal("invalid mode or Context7 preference was admitted", err)
 			}
 			if _, err := os.Lstat(root); !os.IsNotExist(err) {
 				t.Fatal("refusal created the stage", err)

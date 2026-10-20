@@ -27,8 +27,8 @@ func userGGAProvision(ctx context.Context, root, mode string, profile *UserExper
 	if profile == nil || profile.GGA != "on" {
 		return nil
 	}
-	if mode != "separate" || ctx == nil {
-		return experienceError("GGA provisioning requires a live private Separate stage")
+	if (mode != "separate" && mode != "shared") || ctx == nil {
+		return experienceError("GGA provisioning requires a live private Separate or Shared stage")
 	}
 	if err := ctx.Err(); err != nil {
 		return privateError("canceled", err)

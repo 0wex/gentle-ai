@@ -7,7 +7,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 )
@@ -75,19 +74,25 @@ func TestUserGGAStageKeepsExistingConfiguration(t *testing.T) {
 	}
 }
 
-func TestUserGGAStageRefusesBeforeEffects(t *testing.T) {
+func TestUserGGAStageSharedAndInvalid(t *testing.T) {
 	for _, choice := range []string{"on", "off"} {
 		t.Run(choice+"/shared", func(t *testing.T) {
-			root := filepath.Join(t.TempDir(), "untouched")
+			root := installStagePath(t)
 			profile := UserExperience{Persona: "unmanaged", BackgroundSubagents: "off", GGA: choice}
 			if choice == "on" {
 				profile.GGAProvider = "codex"
 			}
-			if err := userPrepareInstallStage(context.Background(), root, "shared", &profile); err == nil || !strings.Contains(err.Error(), "GGA") {
-				t.Fatal("unqualified preparation accepted GGA", err)
+			if err := userPrepareInstallStage(context.Background(), root, "shared", &profile); err != nil {
+				t.Fatalf("shared GGA refused: %v", err)
 			}
-			if _, err := os.Lstat(root); !os.IsNotExist(err) {
-				t.Fatal("refusal changed filesystem", err)
+			config := filepath.Join(root, "config/gga/config")
+			if choice == "on" {
+				data, err := os.ReadFile(config)
+				if err != nil || string(data) != "PROVIDER=\"codex\"\n" {
+					t.Fatalf("shared GGA provider config %q: %v", data, err)
+				}
+			} else if _, err := os.Lstat(config); !os.IsNotExist(err) {
+				t.Fatal("shared GGA OFF wrote a provider", err)
 			}
 		})
 	}

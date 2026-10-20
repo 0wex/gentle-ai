@@ -45,29 +45,36 @@ func TestUserPrepareInstallStageStrictTDD(t *testing.T) {
 	}
 }
 
-func TestUserPrepareInstallStageStrictTDDRefusesBeforeWrites(t *testing.T) {
-	for _, choice := range []string{"on", "off", "auto"} {
-		t.Run(choice, func(t *testing.T) {
+func TestUserPrepareInstallStageStrictTDDSharedOrInvalid(t *testing.T) {
+	for _, choice := range []string{"on", "off"} {
+		t.Run("shared-"+choice, func(t *testing.T) {
 			root := installStagePath(t)
-			parent := filepath.Dir(root)
-			before, err := os.Stat(parent)
-			if err != nil {
-				t.Fatal(err)
+			profile := UserExperience{Persona: "gentleman", BackgroundSubagents: "on", StrictTDD: choice}
+			if err := userPrepareInstallStage(context.Background(), root, "shared", &profile); err != nil {
+				t.Fatalf("shared Strict TDD refused: %v", err)
 			}
-			profile := UserExperience{Persona: "gentleman", BackgroundSubagents: "on"}
-			profile.StrictTDD = choice
-			if err := userPrepareInstallStage(context.Background(), root, "shared", &profile); err == nil {
-				t.Fatal("Shared or invalid Strict TDD was accepted")
-			}
-			if _, err := os.Lstat(root); !os.IsNotExist(err) {
-				t.Fatal("refusal created a stage", err)
-			}
-			after, err := os.Stat(parent)
-			if err != nil || !os.SameFile(before, after) || !before.ModTime().Equal(after.ModTime()) {
-				t.Fatal("refusal changed parent preimage", err)
-			}
+			assertExperienceFile(t, filepath.Join(root, "config/strict-tdd.json"), "{\n  \"schema\": \"gentle-pi.strict-tdd/v1\",\n  \"policy\": \""+choice+"\"\n}\n")
 		})
 	}
+	t.Run("invalid", func(t *testing.T) {
+		root := installStagePath(t)
+		parent := filepath.Dir(root)
+		before, err := os.Stat(parent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		profile := UserExperience{Persona: "gentleman", BackgroundSubagents: "on", StrictTDD: "auto"}
+		if err := userPrepareInstallStage(context.Background(), root, "shared", &profile); err == nil {
+			t.Fatal("invalid Strict TDD was accepted")
+		}
+		if _, err := os.Lstat(root); !os.IsNotExist(err) {
+			t.Fatal("refusal created a stage", err)
+		}
+		after, err := os.Stat(parent)
+		if err != nil || !os.SameFile(before, after) || !before.ModTime().Equal(after.ModTime()) {
+			t.Fatal("refusal changed parent preimage", err)
+		}
+	})
 }
 
 func TestUserPrepareInstallStageStrictTDDNilIsHistorical(t *testing.T) {

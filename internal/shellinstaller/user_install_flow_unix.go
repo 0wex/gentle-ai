@@ -46,7 +46,12 @@ func userValidateInstall(req UserInstallRequest) error {
 		return err
 	}
 	if req.Experience != nil && req.Mode != "separate" {
-		return experienceError("explicit experience requires a fresh Separate runtime")
+		if req.Mode != "shared" {
+			return experienceError("explicit experience requires a fresh Separate or Shared runtime")
+		}
+		if req.Experience.SDKSource == "main-preview" {
+			return experienceError("Main preview requires a Separate installation; choose Stable to install over your Pi")
+		}
 	}
 	req, err := userCanonicalRequest(req)
 	if err != nil {
@@ -258,6 +263,11 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	}
 	if err = userVerifyGlobal(ctx, root, prefix, agent, finalPrefix, req.Destination, req.Mode); err != nil {
 		return result, fmt.Errorf("post-native global readback: %w", err)
+	}
+	if req.Mode == "shared" && req.Experience != nil {
+		if err = userStageContext7Shared(ctx, req.SharedAgent, req.Experience.Context7); err != nil {
+			return result, fmt.Errorf("shared Context7 staging: %w", err)
+		}
 	}
 	mainSDK, err := userInstallMainSDK(ctx, root, req.Destination, req.Experience)
 	if err != nil {
@@ -670,16 +680,16 @@ func userReadManifest(ctx context.Context, root string) (userManifest, error) {
 		return userReadPNPMManifest(ctx, root, manifest)
 	}
 	if manifest.CodeGraph {
-		if manifest.Mode != "separate" {
-			return manifest, privateError("refused", errors.New("CodeGraph requires a Separate manifest"))
+		if manifest.Mode != "separate" && manifest.Mode != "shared" {
+			return manifest, privateError("refused", errors.New("CodeGraph requires a Separate or Shared manifest"))
 		}
 		if err := userCodeGraphReadback(ctx, root); err != nil {
 			return manifest, fmt.Errorf("CodeGraph retained integrity: %w", err)
 		}
 	}
 	if manifest.GGA {
-		if manifest.Mode != "separate" {
-			return manifest, privateError("refused", errors.New("GGA requires a Separate manifest"))
+		if manifest.Mode != "separate" && manifest.Mode != "shared" {
+			return manifest, privateError("refused", errors.New("GGA requires a Separate or Shared manifest"))
 		}
 		if err := userGGAReadback(ctx, root); err != nil {
 			return manifest, fmt.Errorf("GGA retained integrity: %w", err)
@@ -723,7 +733,7 @@ func userLaunchCommand(ctx context.Context, root string, manifest userManifest, 
 	cmd.Env = append(userEnvironment(root, manifest.Prefix, manifest.Agent), "GIT_OPTIONAL_LOCKS=0")
 	// Only a validated Separate manifest selects this owned optional payload.
 	// Installation/provisioning environments do not inherit this activation.
-	if manifest.GGA && manifest.Mode == "separate" {
+	if manifest.GGA && (manifest.Mode == "separate" || manifest.Mode == "shared") {
 		if strings.ContainsRune(root, os.PathListSeparator) {
 			cmd.Err = privateError("refused", errors.New("private GGA launch root cannot contain a PATH separator"))
 			return cmd

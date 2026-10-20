@@ -17,8 +17,8 @@ func userStageGGA(ctx context.Context, root, mode, choice, provider string) erro
 	if choice == "" {
 		return nil
 	}
-	if mode != "separate" {
-		return experienceError("explicit GGA requires a private Separate configuration stage")
+	if mode != "separate" && mode != "shared" {
+		return experienceError("explicit GGA requires a private Separate or Shared configuration stage")
 	}
 	if choice == "off" {
 		return nil

@@ -33,17 +33,8 @@ func userPrepareInstallStage(ctx context.Context, root, mode string, profile *Us
 			return experienceError("Main SDK requires a fresh Separate stage")
 		}
 	}
-	if profile != nil && profile.CodeGraph != "" && (mode != "separate" || runtime.GOOS != "linux" || runtime.GOARCH != "amd64") {
-		return experienceError("explicit CodeGraph requires Linux amd64 Separate")
-	}
-	if profile != nil && profile.GGA != "" && mode != "separate" {
-		return experienceError("explicit GGA requires a private Separate configuration stage")
-	}
-	if profile != nil && profile.StrictTDD != "" && mode != "separate" {
-		return experienceError("explicit Strict TDD requires a private Separate SDK runtime")
-	}
-	if profile != nil && (profile.Context7 != "" || profile.GlobalRDD != "") && mode != "separate" {
-		return experienceError("explicit Context7/RDD requires a private Separate agent")
+	if profile != nil && profile.CodeGraph != "" && (runtime.GOOS != "linux" || runtime.GOARCH != "amd64") {
+		return experienceError("explicit CodeGraph requires Linux amd64")
 	}
 	files, err := userExperienceConfigFiles(profile)
 	if err != nil {
@@ -79,7 +70,7 @@ func userPrepareInstallStage(ctx context.Context, root, mode string, profile *Us
 		return nil
 	}
 	if userQualifiedPrivateChoices(profile) || userQualifiedLegacyExperience(profile) {
-		if err := userStagePrivateChoices(ctx, root, profile); err != nil {
+		if err := userStagePrivateChoices(ctx, root, mode, profile); err != nil {
 			return err
 		}
 		// The legacy GGA installer still receives its explicit provider through

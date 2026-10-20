@@ -19,7 +19,7 @@ import (
 
 // Generated producer preferences may already contain unrelated state. Merge only
 // the reviewed keys in the unpublished copy, never an environment-selected home.
-func userStagePrivateChoices(ctx context.Context, root string, profile *UserExperience) error {
+func userStagePrivateChoices(ctx context.Context, root, mode string, profile *UserExperience) error {
 	if profile == nil || !userQualifiedPrivateChoices(profile) && !userQualifiedLegacyExperience(profile) {
 		return nil
 	}
@@ -45,10 +45,28 @@ func userStagePrivateChoices(ctx context.Context, root string, profile *UserExpe
 			return err
 		}
 	}
-	if profile.Context7 == "" {
+	if profile.Context7 == "" || mode == "shared" {
+		// Shared Context7 is merged into the existing agent after its recovery
+		// preimages exist; the private stage root agent is not used there.
 		return nil
 	}
-	return userStageJSON(ctx, root, "agent", "mcp.json", func(fields map[string]json.RawMessage) error {
+	return userStageJSON(ctx, root, "agent", "mcp.json", userContext7Update(profile.Context7))
+}
+
+// Shared Context7 mutates the selected Pi agent only, through the same bounded
+// writer and preimage checks used for the private stage.
+func userStageContext7Shared(ctx context.Context, agent, choice string) error {
+	if choice == "" {
+		return nil
+	}
+	if !privateHierarchyPath(agent) {
+		return privateError("preimage", nil)
+	}
+	return userStageJSON(ctx, agent, ".", "mcp.json", userContext7Update(choice))
+}
+
+func userContext7Update(choice string) func(map[string]json.RawMessage) error {
+	return func(fields map[string]json.RawMessage) error {
 		servers := map[string]json.RawMessage{}
 		if raw, ok := fields["mcpServers"]; ok {
 			var err error
@@ -79,12 +97,12 @@ func userStagePrivateChoices(ctx context.Context, root string, profile *UserExpe
 			}
 		}
 		server["url"], _ = json.Marshal("https://mcp.context7.com/mcp")
-		server["enabled"], _ = json.Marshal(profile.Context7 == "on")
+		server["enabled"], _ = json.Marshal(choice == "on")
 		server["exposure"], _ = json.Marshal("codemode")
 		servers["context7"], _ = json.Marshal(server)
 		fields["mcpServers"], _ = json.Marshal(servers)
 		return nil
-	})
+	}
 }
 
 func userStageJSONObject(data []byte) (map[string]json.RawMessage, error) {
