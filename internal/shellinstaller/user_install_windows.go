@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 	"unsafe"
@@ -406,10 +407,10 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 		return result, err
 	}
 	fmt.Fprintln(os.Stderr, "Windows install phase: codegraph-acquire")
-	if err := userWindowsCodeGraphProvision(ctx, stage, req.Experience); err != nil {
-		return result, err
-	}
-	fmt.Fprintln(os.Stderr, "Windows install phase: codegraph-ready")
+	codegraph := make(chan error, 1)
+	go func() {
+		codegraph <- userWindowsCodeGraphProvision(ctx, stage, req.Experience)
+	}()
 	// The Windows stock provision helper requires its exact six-field
 	// selection ABI. Preferences are already materialized in the staged
 	// config/state/mcp files and must not widen this helper boundary.
@@ -423,16 +424,32 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	phase := func(step, artifact string) {
 		fmt.Fprintf(os.Stderr, "Windows install phase: %s %s %dms\n", step, artifact, time.Since(started).Milliseconds())
 	}
-	for i, artifact := range userWindowsArtifacts {
-		phase("acquire", artifact.Archive)
-		data, err := userWindowsAcquire(ctx, artifact, filepath.Join(stage, "runtime/archives", artifact.Archive))
-		if err != nil {
-			return result, err
+	type fetchedArtifact struct {
+		data []byte
+		err  error
+	}
+	fetched := make([]fetchedArtifact, len(userWindowsArtifacts))
+	var downloads sync.WaitGroup
+	for index := range userWindowsArtifacts {
+		index := index
+		downloads.Add(1)
+		go func() {
+			defer downloads.Done()
+			artifact := userWindowsArtifacts[index]
+			phase("acquire", artifact.Archive)
+			fetched[index].data, fetched[index].err = userWindowsAcquire(ctx, artifact, filepath.Join(stage, "runtime/archives", artifact.Archive))
+		}()
+	}
+	downloads.Wait()
+	for index, artifact := range userWindowsArtifacts {
+		if fetched[index].err != nil {
+			return result, fetched[index].err
 		}
 		phase("unpack", artifact.Archive)
-		if i < 2 {
+		data := fetched[index].data
+		if index < 2 {
 			directory := "node"
-			if i == 1 {
+			if index == 1 {
 				directory = "go"
 			}
 			if _, err := userWindowsZIP(ctx, data, artifact, filepath.Join(stage, "runtime", directory), ""); err != nil {
@@ -449,6 +466,10 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 			}
 		}
 	}
+	if err := <-codegraph; err != nil {
+		return result, err
+	}
+	fmt.Fprintln(os.Stderr, "Windows install phase: codegraph-ready")
 	if channel == "main" {
 		metadata, _ := json.Marshal(mainArtifact)
 		if err := userWindowsWrite(filepath.Join(stage, "main.json"), metadata); err != nil {
