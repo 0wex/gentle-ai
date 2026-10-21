@@ -58,3 +58,13 @@ func TestRoseFrameDelay(t *testing.T) {
 		t.Fatal("the closed bud should linger longer than bloom frames")
 	}
 }
+
+func TestParseRosePaletteLine(t *testing.T) {
+	a := parseRose("ROSE 1 1 2\nPALETTE #ffffff\n⣿⣿\t00\n")
+	if len(a.frames) != 1 {
+		t.Fatalf("expected one frame, got %d", len(a.frames))
+	}
+	if strings.Contains(a.frames[0], "PALETTE") || !strings.Contains(a.frames[0], "⣿⣿") {
+		t.Fatalf("palette line was not consumed as a header: %q", a.frames[0])
+	}
+}

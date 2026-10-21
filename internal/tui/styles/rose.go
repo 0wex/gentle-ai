@@ -15,20 +15,17 @@ import (
 // Format:
 //
 //	line 1: "ROSE <frames> <rows> <cols>"
+//	line 2 (optional): "PALETTE #rrggbb #rrggbb ..." (defaults to rosePalette)
 //	then, for every frame, <rows> lines of "glyphs\tcolors", where colors has
 //	one rune per glyph: '.' for an empty cell, otherwise an index (0-9a-z)
-//	into rosePalette.
+//	into the palette.
 //
 //go:embed rose_frames.txt
 var roseFramesData string
 
-// rosePalette is a Rosé Pine ramp: petals go lavender → love → rose by light,
-// stem and leaves go pine → foam, thorns are gold.
-var rosePalette = []lipgloss.Color{
-	ColorLavender, "#d095cc", "#dd83b1", "#e97296", "#eb809b", "#eb94a5", "#eba8b0", ColorMauve, // petals
-	ColorBlue, "#5592a7", "#78b1c0", ColorTeal, // stem and leaves
-	ColorPeach, // thorns
-}
+// rosePalette is the default palette when the frames file does not declare
+// one: the same top-to-bottom bands as the static logo.
+var rosePalette = gradientColors
 
 const (
 	roseFirstFrameDelay = 700 * time.Millisecond
@@ -67,13 +64,25 @@ func parseRose(data string) roseAnimation {
 		return roseAnimation{}
 	}
 
-	styles := make([]lipgloss.Style, len(rosePalette))
-	for i, c := range rosePalette {
+	body := lines[1:]
+	palette := rosePalette
+	if len(body) > 0 && strings.HasPrefix(body[0], "PALETTE ") {
+		palette = nil
+		for _, hex := range strings.Fields(body[0])[1:] {
+			palette = append(palette, lipgloss.Color(hex))
+		}
+		body = body[1:]
+	}
+	if len(body) < count*rows {
+		return roseAnimation{}
+	}
+
+	styles := make([]lipgloss.Style, len(palette))
+	for i, c := range palette {
 		styles[i] = lipgloss.NewStyle().Foreground(c)
 	}
 
 	anim := roseAnimation{frames: make([]string, count), width: cols, height: rows}
-	body := lines[1:]
 	for f := 0; f < count; f++ {
 		var b strings.Builder
 		for r := 0; r < rows; r++ {
