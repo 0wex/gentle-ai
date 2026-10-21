@@ -409,7 +409,12 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 		return result, err
 	}
 	fmt.Fprintln(os.Stderr, "Windows install phase: codegraph-ready")
-	selection, _ := json.Marshal(req)
+	// The Windows stock provision helper requires its exact six-field
+	// selection ABI. Preferences are already materialized in the staged
+	// config/state/mcp files and must not widen this helper boundary.
+	selectionRequest := req
+	selectionRequest.Experience = nil
+	selection, _ := json.Marshal(selectionRequest)
 	if err := userWindowsWrite(filepath.Join(stage, "selection.json"), selection); err != nil {
 		return result, err
 	}
