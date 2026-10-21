@@ -362,6 +362,7 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	var mainArtifact userWindowsArtifact
 	var mainData []byte
 	if channel == "main" {
+		fmt.Fprintln(os.Stderr, "Windows install phase: main-acquire")
 		mainArtifact, mainData, err = userWindowsMainSnapshot(ctx) // Confirmed choice, before first filesystem effect.
 		if err != nil {
 			return result, err
@@ -403,9 +404,11 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	if err := userStageExperience(ctx, stage, req.Experience); err != nil {
 		return result, err
 	}
+	fmt.Fprintln(os.Stderr, "Windows install phase: codegraph-acquire")
 	if err := userWindowsCodeGraphProvision(ctx, stage, req.Experience); err != nil {
 		return result, err
 	}
+	fmt.Fprintln(os.Stderr, "Windows install phase: codegraph-ready")
 	selection, _ := json.Marshal(req)
 	if err := userWindowsWrite(filepath.Join(stage, "selection.json"), selection); err != nil {
 		return result, err

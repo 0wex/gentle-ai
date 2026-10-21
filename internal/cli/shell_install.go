@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"flag"
@@ -145,7 +146,12 @@ func RunShellInstallInline(ctx context.Context, selection ShellInstallSelection,
 			return err
 		}
 		workerLog := &boundedWorkerLog{limit: 8192}
-		runErr := shellinstaller.RunUserEntry(ctx, self, args, nil, workerLog, workerLog)
+		progress := &shellProgressWriter{log: workerLog, report: report}
+		if report != nil {
+			report(shellinstaller.UserInstallProgress{Index: 1, Total: 5, State: "done"})
+			report(shellinstaller.UserInstallProgress{Index: 2, Total: 5, State: "running"})
+		}
+		runErr := shellinstaller.RunUserEntry(ctx, self, args, nil, progress, progress)
 		if runErr != nil {
 			if output := strings.TrimSpace(workerLog.String()); output != "" {
 				return fmt.Errorf("%w; worker output: %s", runErr, output)
@@ -213,6 +219,66 @@ func (w *boundedWorkerLog) String() string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	return string(w.data)
+}
+
+type shellProgressWriter struct {
+	log    *boundedWorkerLog
+	report func(shellinstaller.UserInstallProgress)
+	buffer []byte
+	step   int
+}
+
+func (w *shellProgressWriter) Write(p []byte) (int, error) {
+	_, _ = w.log.Write(p)
+	if w.report == nil {
+		return len(p), nil
+	}
+	w.buffer = append(w.buffer, p...)
+	for {
+		index := bytes.IndexByte(w.buffer, '\n')
+		if index < 0 {
+			break
+		}
+		line := string(w.buffer[:index])
+		w.buffer = w.buffer[index+1:]
+		w.observe(line)
+	}
+	return len(p), nil
+}
+
+func (w *shellProgressWriter) observe(line string) {
+	if !strings.HasPrefix(line, "Windows install phase: ") {
+		return
+	}
+	phase := strings.TrimSpace(strings.TrimPrefix(line, "Windows install phase: "))
+	if w.step < 2 {
+		w.step = 2
+	}
+	switch {
+	case strings.HasPrefix(phase, "acquire"), strings.HasPrefix(phase, "unpack"):
+		if w.step == 2 {
+			w.report(shellinstaller.UserInstallProgress{Index: 2, Total: 5, State: "done"})
+			w.step = 3
+			w.report(shellinstaller.UserInstallProgress{Index: 3, Total: 5, State: "running"})
+		}
+		w.report(shellinstaller.UserInstallProgress{Index: 3, Total: 5, State: "detail", Detail: phase})
+	case strings.HasPrefix(phase, "runtimes-ready"):
+		if w.step == 3 {
+			w.report(shellinstaller.UserInstallProgress{Index: 3, Total: 5, State: "done"})
+			w.step = 4
+			w.report(shellinstaller.UserInstallProgress{Index: 4, Total: 5, State: "running"})
+		}
+		w.report(shellinstaller.UserInstallProgress{Index: 4, Total: 5, State: "detail", Detail: phase})
+	case strings.HasPrefix(phase, "provision"):
+		if w.step == 3 {
+			w.report(shellinstaller.UserInstallProgress{Index: 3, Total: 5, State: "done"})
+			w.step = 4
+			w.report(shellinstaller.UserInstallProgress{Index: 4, Total: 5, State: "running"})
+		}
+		w.report(shellinstaller.UserInstallProgress{Index: 4, Total: 5, State: "detail", Detail: phase})
+	default:
+		w.report(shellinstaller.UserInstallProgress{Index: w.step, Total: 5, State: "detail", Detail: phase})
+	}
 }
 
 // shellDetailLine parses the worker's ordered internal task marker: "~ i/n label".
