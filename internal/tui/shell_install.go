@@ -499,17 +499,14 @@ func (m Model) updateShellInstallRun(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			if event.err == nil {
-				return m, tea.Tick(screens.ShellRoseDelay(0), func(time.Time) tea.Msg { return shellInstallTick{} })
-			}
-			if event.err != nil {
-				for index := range run.steps {
-					if run.steps[index].State == "running" {
-						run.steps[index].State = "failed"
-					}
-				}
-			} else {
 				for index := range run.steps {
 					run.steps[index].State = "done"
+				}
+				return m, tea.Tick(screens.ShellRoseDelay(0), func(time.Time) tea.Msg { return shellInstallTick{} })
+			}
+			for index := range run.steps {
+				if run.steps[index].State == "running" {
+					run.steps[index].State = "failed"
 				}
 			}
 			return m, nil

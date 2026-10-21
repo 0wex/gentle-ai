@@ -3,6 +3,7 @@
 package shellinstaller
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -571,5 +572,43 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	if err := userWindowsVerify(ctx, req.Destination, io.Discard, io.Discard); err != nil {
 		return result, errors.Join(err, errors.New("published Windows installation remains unqualified; preserved, no success reported"))
 	}
+	if err := userWindowsPublishLauncher(req.Destination); err != nil {
+		return result, errors.Join(err, errors.New("published Windows installation could not publish the gentle-shell command"))
+	}
 	return UserInstallResult{req.Destination, filepath.Join(req.Destination, "prefix"), filepath.Join(req.Destination, "agent"), "installed"}, nil
+}
+
+// userWindowsPublishLauncher puts a tiny .cmd shim in the user's WindowsApps
+// PATH directory. It never overwrites a foreign command.
+func userWindowsPublishLauncher(destination string) error {
+	local := os.Getenv("LOCALAPPDATA")
+	if local == "" {
+		return errors.New("LOCALAPPDATA is not set; cannot publish the gentle-shell command")
+	}
+	apps := filepath.Join(local, "Microsoft", "WindowsApps")
+	if info, err := os.Stat(apps); err != nil || !info.IsDir() {
+		return errors.Join(err, errors.New("WindowsApps PATH directory is unavailable"))
+	}
+	target := filepath.Join(destination, "bin", "gentle-shell.cmd")
+	if _, err := os.Stat(target); err != nil {
+		return err
+	}
+	link := filepath.Join(apps, "gentle-shell.cmd")
+	data := []byte("@echo off\r\ncall \"" + target + "\" %*\r\n")
+	if existing, err := os.ReadFile(link); err == nil {
+		if bytes.Equal(existing, data) {
+			return nil
+		}
+		return errors.New("a foreign gentle-shell command already exists in WindowsApps")
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	file, err := os.OpenFile(link, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0700)
+	if err != nil {
+		return err
+	}
+	_, writeErr := file.Write(data)
+	syncErr := file.Sync()
+	closeErr := file.Close()
+	return errors.Join(writeErr, syncErr, closeErr)
 }
