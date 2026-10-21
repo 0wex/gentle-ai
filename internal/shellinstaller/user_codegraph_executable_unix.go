@@ -30,12 +30,6 @@ func userCodeGraphLaunchEnv(root string, manifest userManifest, cmd *exec.Cmd) {
 	cmd.Env = append(cmd.Env, "CODEGRAPH_NO_DOWNLOAD=1", "CODEGRAPH_TELEMETRY=0", "DO_NOT_TRACK=1")
 }
 
-// The same authenticated Shell Node executes the pinned platform CLI directly;
-// the omitted package/node is neither needed nor acquired by this command.
-func userCodeGraphCommand(root string) string {
-	return userCodeGraphCommandWithNode(root, "runtime/node/bin/node")
-}
-
 func userCodeGraphCommandWithNode(root, node string) string {
 	node = strings.ReplaceAll(filepath.Join(root, node), "'", "'\\''")
 	root = strings.ReplaceAll(root, "'", "'\\''")

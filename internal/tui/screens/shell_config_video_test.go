@@ -42,7 +42,7 @@ func TestShellConfigVideoGroupHeadings(t *testing.T) {
 func TestShellConfigVideoFocusedPanels(t *testing.T) {
 	profile := shellinstaller.DefaultUserExperience()
 	profile.GGA = "on" // Keep the explicit provider's contextual panel covered.
-	for _, entry := range ShellExperienceOptions(profile) {
+	for _, entry := range ShellExperienceOptionsWithUninstall(profile, false) {
 		if entry.Kind == "action" {
 			continue
 		}
@@ -117,7 +117,7 @@ func TestShellConfigVideoActionsHaveShortPanels(t *testing.T) {
 
 func shellConfigVideoPanel(t *testing.T, profile shellinstaller.UserExperience, control ShellExperienceControl, choice string) string {
 	t.Helper()
-	for _, entry := range ShellExperienceOptions(profile) {
+	for _, entry := range ShellExperienceOptionsWithUninstall(profile, false) {
 		if entry.Control == control && entry.Choice == choice {
 			_, right := shellConfigVideoColumns(RenderShellExperience(profile, entry.Cursor, nil, 209, 61))
 			return right

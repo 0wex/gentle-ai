@@ -83,7 +83,7 @@ func TestUserNativeInstallFresh(t *testing.T) {
 	if runErr == nil && location != nil {
 		req, runErr = userCanonicalRequest(req)
 		if runErr == nil {
-			installed, runErr = PublishNativePNPMInstallationWithExperience(ctx, w.root, stage, req.Destination, *location, req.Experience)
+			installed, runErr = publishNativePNPMInstallationWithExperienceForTest(ctx, w.root, stage, req.Destination, *location, req.Experience)
 		}
 	}
 	message := ""

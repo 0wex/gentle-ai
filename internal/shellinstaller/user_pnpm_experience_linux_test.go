@@ -46,7 +46,7 @@ func TestUserPNPMExperience(t *testing.T) {
 				t.Fatal(err)
 			}
 			stage, root := filepath.Join(parent, "stage"), filepath.Join(parent, "final")
-			got, err := PublishNativePNPMInstallationWithExperience(ctx, "/out", stage, root, location, &profile)
+			got, err := publishNativePNPMInstallationWithExperienceForTest(ctx, "/out", stage, root, location, &profile)
 			if err != nil || got.State != "ComponentInstalled" || got.Destination != root {
 				t.Fatal("profiled publication failed", got, err)
 			}
@@ -131,7 +131,7 @@ func TestUserPNPMExperienceRefusal(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			got, err := PublishNativePNPMInstallationWithExperience(context.Background(), parent+"/missing", parent+"/stage", parent+"/final", NativeInstallationLocation{}, &profile)
+			got, err := publishNativePNPMInstallationWithExperienceForTest(context.Background(), parent+"/missing", parent+"/stage", parent+"/final", NativeInstallationLocation{}, &profile)
 			if err == nil || got.State != "" {
 				t.Fatal("unsupported profile accepted", got, err)
 			}

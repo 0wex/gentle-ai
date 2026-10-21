@@ -127,7 +127,8 @@ func RenderShellInstall(steps []ShellInstallStep, failure string, done bool, fra
 	if done {
 		bloom = min(max(0, bloom), ShellBloomFrames-1)
 		lines = append(lines, "  "+styles.SubtextStyle.Render(strings.Repeat("─", max(0, width-4))))
-		if width >= 54 && height >= 35 {
+		roseWidth, roseHeight := styles.RoseSize()
+		if width >= roseWidth+14 && height >= roseHeight+13 {
 			for _, line := range shellRoseFrameLines(bloom) {
 				lines = append(lines, shellRoseCentered(line, width))
 			}

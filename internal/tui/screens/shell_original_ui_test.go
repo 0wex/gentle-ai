@@ -42,7 +42,7 @@ func TestShellOriginalPresentationViewportMatrix(t *testing.T) {
 			for _, selected := range []bool{false, true} {
 				assertShellOriginalViewport(t, RenderShellInstallHero(selected, width, height), width, height)
 			}
-			for _, entry := range ShellExperienceOptions(profile) {
+			for _, entry := range ShellExperienceOptionsWithUninstall(profile, false) {
 				assertShellOriginalViewport(t, RenderShellExperience(profile, entry.Cursor, nil, width, height), width, height)
 			}
 		}

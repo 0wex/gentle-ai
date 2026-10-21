@@ -82,7 +82,7 @@ func TestShellExperienceEditingDoesNotEraseExplicitProvider(t *testing.T) {
 	if m.shellExperience.profile.GGAProvider != "" || m.shellExperience.profile.GGA != "off" || m.shellExperience.profile.Validate() != nil || m.ShellInstallSelection().Confirmed {
 		t.Fatal("clearing the retained provider lost GGA choice or acquired consent")
 	}
-	for _, entry := range screens.ShellExperienceOptions(m.shellExperience.profile) {
+	for _, entry := range screens.ShellExperienceOptionsWithUninstall(m.shellExperience.profile, false) {
 		if entry.Control == screens.ShellExperienceProvider {
 			t.Fatal("cleared inactive provider row did not disappear")
 		}

@@ -10,18 +10,6 @@ import (
 	"strings"
 )
 
-// PublishNativePNPMInstallationWithExperience stages the original producer's
-// retained DATA and publishes it without replacing an existing destination.
-// The caller must own the qualified private execution boundary and the source's
-// custody. This does not execute suppliers or establish installed/launcher health.
-// Reviewed preferences apply only to the copied, unpublished stage: canonical
-// SDK config must be absent; RDD/MCP selected fields merge into safe producer
-// preimages. The retained producer and existing destinations are never changed.
-// Unsupported effects refuse before staging; nil preserves the unprofiled contract.
-func PublishNativePNPMInstallationWithExperience(ctx context.Context, source, stage, destination string, location NativeInstallationLocation, profile *UserExperience) (UserInstallResult, error) {
-	return userPublishNativePNPMPrepared(ctx, source, stage, destination, location, profile, nil)
-}
-
 // Prepared archives are acquired by the capped coordinator before production.
 // Missing or unrequested library DATA never turns a valid DTO into admission.
 func userPublishNativePNPMPrepared(ctx context.Context, source, stage, destination string, location NativeInstallationLocation, profile *UserExperience, archives [][]byte, modeAgent ...string) (result UserInstallResult, err error) {

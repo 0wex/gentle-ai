@@ -24,7 +24,7 @@ func TestShellGGAInlineProvider(t *testing.T) {
 			profile := shellinstaller.DefaultUserExperience()
 			profile.GGA, profile.GGAProvider = tt.choice, tt.provider
 			before := profile
-			options := ShellExperienceOptions(profile)
+			options := ShellExperienceOptionsWithUninstall(profile, false)
 			provider, gga, next := -1, -1, -1
 			for i, entry := range options {
 				if entry.Cursor != i {

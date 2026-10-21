@@ -29,7 +29,7 @@ func TestPrivateNativeDirectoryAcceptsGroupReadOnlyHome(t *testing.T) {
 
 func TestUserProgressEnvironmentCrossesServiceHops(t *testing.T) {
 	t.Setenv("GENTLE_AI_SHELL_STEPS", "")
-	ctx := WithUserInstallProgress(context.Background(), func(UserInstallProgress) {})
+	ctx := withUserInstallProgressForTest(context.Background(), func(UserInstallProgress) {})
 	if got := userProgressEnvironment(ctx); len(got) != 1 || got[0] != "GENTLE_AI_SHELL_STEPS=1" {
 		t.Fatalf("observer context env = %v", got)
 	}
@@ -44,7 +44,7 @@ func TestUserProgressEnvironmentCrossesServiceHops(t *testing.T) {
 
 func TestUserShellProgressReportsOrderedStates(t *testing.T) {
 	var got []UserInstallProgress
-	ctx := WithUserInstallProgress(context.Background(), func(progress UserInstallProgress) {
+	ctx := withUserInstallProgressForTest(context.Background(), func(progress UserInstallProgress) {
 		got = append(got, progress)
 	})
 	for index := 1; index <= 5; index++ {

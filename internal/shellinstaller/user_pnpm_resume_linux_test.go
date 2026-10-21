@@ -26,7 +26,7 @@ func TestUserPNPMResume(t *testing.T) {
 	}
 	parent := filepath.Dir(installStagePath(t))
 	root := filepath.Join(parent, "final")
-	want, err := PublishNativePNPMInstallationWithExperience(ctx, "/out", filepath.Join(parent, "stage"), root, location, nil)
+	want, err := publishNativePNPMInstallationWithExperienceForTest(ctx, "/out", filepath.Join(parent, "stage"), root, location, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

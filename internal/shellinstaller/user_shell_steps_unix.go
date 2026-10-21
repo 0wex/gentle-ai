@@ -19,15 +19,6 @@ type UserInstallProgress struct {
 
 type userInstallProgressKey struct{}
 
-// WithUserInstallProgress attaches an ordered progress observer. The callback
-// runs synchronously on the installer goroutine and must not block.
-func WithUserInstallProgress(ctx context.Context, report func(UserInstallProgress)) context.Context {
-	if report == nil {
-		return ctx
-	}
-	return context.WithValue(ctx, userInstallProgressKey{}, report)
-}
-
 func userProgressEnvironment(ctx context.Context) []string {
 	if os.Getenv("GENTLE_AI_SHELL_STEPS") == "1" {
 		return []string{"GENTLE_AI_SHELL_STEPS=1"}

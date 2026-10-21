@@ -129,11 +129,6 @@ func shellExperienceEntries(p shellinstaller.UserExperience, uninstall bool, tar
 	return entries
 }
 
-// ShellExperienceOptions is the same selectable projection used by every layout.
-func ShellExperienceOptions(p shellinstaller.UserExperience, targets ...ShellExperienceEntry) []ShellExperienceEntry {
-	return ShellExperienceOptionsWithUninstall(p, false, targets...)
-}
-
 func ShellExperienceOptionsWithUninstall(p shellinstaller.UserExperience, uninstall bool, targets ...ShellExperienceEntry) []ShellExperienceEntry {
 	var options []ShellExperienceEntry
 	for _, entry := range shellExperienceEntries(p, uninstall, targets...) {

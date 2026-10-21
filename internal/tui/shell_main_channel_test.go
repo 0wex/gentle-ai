@@ -14,7 +14,7 @@ func focusMainPreview(t *testing.T, m Model) (Model, int) {
 	if m.shellExperience == nil {
 		t.Fatal("configuration is not open")
 	}
-	options := screens.ShellExperienceOptions(m.shellExperience.profile)
+	options := screens.ShellExperienceOptionsWithUninstall(m.shellExperience.profile, false)
 	for index, option := range options {
 		if option.Control == screens.ShellExperienceSDK && option.Choice == "main-preview" {
 			m.shellExperience.cursor = index
