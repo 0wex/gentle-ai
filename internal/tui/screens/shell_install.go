@@ -139,10 +139,11 @@ func RenderShellInstall(steps []ShellInstallStep, failure string, done bool, fra
 		}
 		command := lipgloss.NewStyle().Foreground(styles.ColorPeach).Bold(true).Render(launchCommand)
 		if bloom >= ShellBloomFrames-1 {
+			start := styles.SubtextStyle.Render("To start using our agent, execute the ") + `"` + command + `"` + styles.SubtextStyle.Render(" command")
 			lines = append(lines,
 				"",
 				styles.TitleStyle.Render("Welcome to the gentle-tailored experience"),
-				styles.SubtextStyle.Render("Start with: ")+command,
+				start,
 				"",
 				styles.HelpStyle.Render("Enter: finish"),
 			)
