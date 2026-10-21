@@ -137,7 +137,7 @@ func userWindowsEnvironment(root string) ([]string, error) {
 		// Go's own defaults below the private HOME/LOCALAPPDATA, made explicit
 		// because launch verification classifies them as mutable runtime state.
 		"GOPATH="+filepath.Join(root, "home/go"), "GOMODCACHE="+filepath.Join(root, "home/go/pkg/mod"), "GOCACHE="+filepath.Join(root, "state/go-build"),
-		"PATH="+strings.Join([]string{filepath.Join(root, "runtime/node"), filepath.Join(root, "runtime/go/bin"), filepath.Join(system, "System32")}, string(os.PathListSeparator)),
+		"PATH="+strings.Join([]string{filepath.Join(root, "runtime/node"), filepath.Join(root, "runtime/go/bin"), filepath.Join(root, "runtime/codegraph/bin"), filepath.Join(system, "System32")}, string(os.PathListSeparator)),
 		"NPM_CONFIG_PREFIX="+prefix, "NPM_CONFIG_IGNORE_SCRIPTS=true", "NPM_CONFIG_AUDIT=false", "NPM_CONFIG_FUND=false",
 		"NPM_CONFIG_USERCONFIG="+filepath.Join(root, "config/user.npmrc"), "NPM_CONFIG_GLOBALCONFIG="+filepath.Join(root, "config/global.npmrc"),
 		"NPM_CONFIG_CACHE="+filepath.Join(root, "runtime/cache"), "NODE_USE_SYSTEM_CA=1"), nil
@@ -308,7 +308,7 @@ func userWindowsInventory(root string, mode userWindowsInventoryMode) error {
 			}
 			total += info.Size()
 			bound := int64(32 << 20)
-			if strings.HasPrefix(path, filepath.Join(root, "runtime/node")+string(filepath.Separator)) || strings.HasPrefix(path, filepath.Join(root, "runtime/go")+string(filepath.Separator)) || path == filepath.Join(root, "runtime/archives/go.zip") || path == filepath.Join(root, "runtime/archives/node.zip") || path == filepath.Join(root, "supervisor.exe") {
+			if strings.HasPrefix(path, filepath.Join(root, "runtime/node")+string(filepath.Separator)) || strings.HasPrefix(path, filepath.Join(root, "runtime/go")+string(filepath.Separator)) || strings.HasPrefix(path, filepath.Join(root, "runtime/codegraph")+string(filepath.Separator)) || path == filepath.Join(root, "runtime/archives/go.zip") || path == filepath.Join(root, "runtime/archives/node.zip") || path == filepath.Join(root, "supervisor.exe") {
 				bound = 256 << 20
 			}
 			if info.Size() > bound || total > 2<<30 {
@@ -401,6 +401,9 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 		}
 	}
 	if err := userStageExperience(ctx, stage, req.Experience); err != nil {
+		return result, err
+	}
+	if err := userWindowsCodeGraphProvision(ctx, stage, req.Experience); err != nil {
 		return result, err
 	}
 	selection, _ := json.Marshal(req)

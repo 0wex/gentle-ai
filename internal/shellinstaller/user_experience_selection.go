@@ -82,7 +82,10 @@ func userExperienceSupported(profile *UserExperience) error {
 	if (profile.GlobalRDD != "" || profile.Context7 != "" || profile.StrictTDD != "") && runtime.GOOS != "windows" && !userQualifiedStockExperience(profile) && !userQualifiedLegacyExperience(profile) {
 		return experienceError("selected additional experience preferences require a compatible installed runtime")
 	}
-	if (profile.GGA != "" || profile.CodeGraph != "") && !userQualifiedStockExperience(profile) && !userQualifiedLegacyExperience(profile) {
+	if profile.CodeGraph != "" && runtime.GOOS != "windows" && !userQualifiedStockExperience(profile) && !userQualifiedLegacyExperience(profile) {
+		return experienceError("selected additional experience preferences require a compatible installed runtime")
+	}
+	if profile.GGA != "" && !userQualifiedStockExperience(profile) && !userQualifiedLegacyExperience(profile) {
 		return experienceError("selected additional experience preferences require a compatible installed runtime")
 	}
 	return nil

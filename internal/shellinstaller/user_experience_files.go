@@ -15,7 +15,7 @@ func userValidateStageExperience(profile *UserExperience) error {
 	if profile != nil && profile.SDKSource == "main-preview" && runtime.GOOS != "windows" {
 		return experienceError("Main SDK requires its authenticated runtime producer")
 	}
-	if profile != nil && profile.CodeGraph != "" {
+	if profile != nil && profile.CodeGraph != "" && runtime.GOOS != "windows" {
 		return experienceError("explicit CodeGraph requires a qualified private library/runtime stage")
 	}
 	if profile != nil && profile.GGA != "" {
