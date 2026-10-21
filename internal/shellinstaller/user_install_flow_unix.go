@@ -437,8 +437,18 @@ func userPublishManifest(ctx context.Context, root, prefix, agent string, manife
 			return result, fmt.Errorf("installation published but launcher registration failed: %w", err)
 		}
 	}
+	// The publication is renamed, read back and registered; drop only the
+	// ephemeral caches. Failure is reported but never retracts the install.
+	if cleanupErr := userPublishEphemeralCleanup(manifest.Destination); cleanupErr != nil {
+		fmt.Fprintf(os.Stderr, "Installation is published and verified, but ephemeral cleanup failed; installer caches may remain in %q: %v\n", manifest.Destination, cleanupErr)
+	}
 	return UserInstallResult{manifest.Destination, manifest.Prefix, manifest.Agent, "ComponentInstalled"}, nil
 }
+
+// userPublishEphemeralCleanup drops the installer's ephemeral caches after a
+// verified publication. It is a variable only so tests can observe whether
+// the publish tail calls it; production always uses userInstallEphemeralCleanup.
+var userPublishEphemeralCleanup = userInstallEphemeralCleanup
 
 // userRecover restores the saved Shared preimages of ROOT after a fresh printed
 // confirmation. The restore command runs as an owned installer command:

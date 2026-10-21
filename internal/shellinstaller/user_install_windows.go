@@ -596,6 +596,12 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	if err := userWindowsPublishLauncher(req.Destination); err != nil {
 		return result, errors.Join(err, errors.New("published Windows installation could not publish the gentle-shell command"))
 	}
+	// The installation is published and verified; drop only the ephemeral
+	// caches. runtime/archives stays: launch verification re-reads it.
+	// Failure is reported but never retracts the published installation.
+	if cleanupErr := userWindowsEphemeralCleanup(req.Destination); cleanupErr != nil {
+		fmt.Fprintf(os.Stderr, "Windows installation is published and verified, but ephemeral cleanup failed; installer caches may remain in %q: %v\n", req.Destination, cleanupErr)
+	}
 	return UserInstallResult{req.Destination, filepath.Join(req.Destination, "prefix"), filepath.Join(req.Destination, "agent"), "installed"}, nil
 }
 

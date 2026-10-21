@@ -44,8 +44,14 @@ func UninstallUserShellInstall(home string, install UserShellInstall) (string, e
 		_ = directory.Sync()
 		_ = directory.Close()
 	}
+	// The active install is already fully moved aside; prune the backup to
+	// the minimal retained set. A pruning failure never deletes the backup.
+	pruneErr := userPruneRemovedBackup(backup)
 	if err := RemoveUserShellInstall(home, install.Target); err != nil {
-		return backup, fmt.Errorf("installation moved to %s but registry cleanup failed: %w", backup, err)
+		return backup, fmt.Errorf("installation moved to %s but registry cleanup failed: %w", backup, errors.Join(err, pruneErr))
+	}
+	if pruneErr != nil {
+		return backup, fmt.Errorf("installation moved to %s but minimal-backup pruning failed; the backup keeps more than config, agent, home and the manifest: %w", backup, pruneErr)
 	}
 	return backup, nil
 }

@@ -79,7 +79,84 @@ func TestUninstallAgentRestoresUnchangedPreimages(t *testing.T) {
 	if _, err := os.Lstat(target); !os.IsNotExist(err) {
 		t.Fatal("target still exists after agent uninstall")
 	}
+	entries, err := os.ReadDir(backup)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if !userUnixBackupKeep[entry.Name()] {
+			t.Fatalf("agent uninstall backup retains unpruned entry %q", entry.Name())
+		}
+	}
+	if _, err := os.Lstat(filepath.Join(backup, "installation.json")); err != nil {
+		t.Fatalf("agent uninstall backup lost the manifest: %v", err)
+	}
 	if got := DiscoverUserShellInstalls(home); len(got) != 0 {
 		t.Fatalf("agent uninstall left registry: %+v", got)
+	}
+}
+
+func TestUninstallSeparateLeavesMinimalBackup(t *testing.T) {
+	home := t.TempDir()
+	target, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = os.Chmod(target, 0700)
+	for _, relative := range []string{
+		"config", "agent", "agent/bin", "home", "home/.gentle-ai", "home/go", "home/go/pkg/mod", "prefix", "prefix/lib", "runtime/node", "runtime/node/bin", "runtime/cache",
+		"runtime/tools", "state", "tmp", "bin", "pnpm", "source",
+	} {
+		if err := os.MkdirAll(filepath.Join(target, relative), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for name, data := range map[string]string{
+		"config/user.npmrc": "x", "agent/mcp.json": "x", "agent/bin/fd": "x",
+		"home/.gentle-ai/state.json": "x", "prefix/lib/x.js": "x", "runtime/node/bin/node": "x",
+		"runtime/cache/x": "x", "runtime/tools/fd.tgz": "x", "state/old": "x", "tmp/scratch": "x",
+		"bin/gentle-shell": "x", "pnpm/store": "x", "source/package-lock.json": "x",
+		"provision.mjs": "x", "supervisor": "x", "main.json": "x",
+		"complete-generated-lock-sri.mjs": "x", "home/go/pkg/mod/m": "x",
+	} {
+		if err := os.WriteFile(filepath.Join(target, name), []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeInstallFixture(t, target, userManifest{Schema: userSchema, Destination: target, Prefix: filepath.Join(target, "prefix"), Agent: filepath.Join(target, "agent"), Mode: "separate"})
+	if err := RecordUserShellInstall(home, UserShellInstall{Target: target, Mode: "separate", Channel: "stable"}); err != nil {
+		t.Fatal(err)
+	}
+	backup, err := UninstallUserShellInstall(home, UserShellInstall{Target: target, Mode: "separate"})
+	if err != nil || backup == "" {
+		t.Fatalf("separate uninstall failed: %v %q", err, backup)
+	}
+	if _, err := os.Lstat(target); !os.IsNotExist(err) {
+		t.Fatal("target still exists after separate uninstall")
+	}
+	entries, readErr := os.ReadDir(backup)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	seen := map[string]bool{}
+	for _, entry := range entries {
+		if !userUnixBackupKeep[entry.Name()] {
+			t.Fatalf("separate uninstall backup retains unpruned entry %q", entry.Name())
+		}
+		seen[entry.Name()] = true
+	}
+	for _, name := range []string{"config", "agent", "home", "installation.json"} {
+		if !seen[name] {
+			t.Fatalf("minimal backup lost %q", name)
+		}
+	}
+	if _, err := os.Lstat(filepath.Join(backup, "home", "go")); !os.IsNotExist(err) {
+		t.Fatalf("backup retained the Go module cache inside home: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(backup, "home", ".gentle-ai", "state.json")); err != nil {
+		t.Fatalf("uninstall lost the retained home state: %v", err)
+	}
+	if got := DiscoverUserShellInstalls(home); len(got) != 0 {
+		t.Fatalf("separate uninstall left registry: %+v", got)
 	}
 }

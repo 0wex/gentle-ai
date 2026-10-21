@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -160,8 +161,12 @@ func UninstallUserShellInstall(_ string, install UserShellInstall) (string, erro
 	if err := os.Rename(install.Target, backup); err != nil {
 		return "", err
 	}
-	if err := userWindowsRemoveLauncher(install.Target); err != nil {
-		return "", err
+	// The active install is already fully moved aside; prune the backup to
+	// the minimal retained set. A pruning failure never deletes the backup.
+	pruneErr := userWindowsPruneRemovedBackup(backup)
+	launcherErr := userWindowsRemoveLauncher(install.Target)
+	if pruneErr != nil || launcherErr != nil {
+		return backup, fmt.Errorf("installation moved to %s but minimal-backup cleanup failed; the backup keeps more than config, agent, home, selection.json and manifest.json: %w", backup, errors.Join(pruneErr, launcherErr))
 	}
 	return backup, nil
 }
