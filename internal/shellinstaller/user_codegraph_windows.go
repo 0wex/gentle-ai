@@ -66,10 +66,12 @@ func userWindowsCodeGraphProvision(ctx context.Context, root string, profile *Us
 			URL: source.url, SHA: source.sha, Archive: source.archive,
 			Prefix: "", Bound: 64 << 20, Size: source.size,
 		}
+		fmt.Fprintf(os.Stderr, "Windows install phase: codegraph-download %s\n", source.name)
 		data, err := userWindowsAcquire(ctx, artifact, filepath.Join(archives, source.archive))
 		if err != nil {
 			return err
 		}
+		fmt.Fprintf(os.Stderr, "Windows install phase: codegraph-extract %s\n", source.name)
 		if err := userWindowsCodeGraphExtract(ctx, root, source, data); err != nil {
 			return err
 		}
