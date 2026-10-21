@@ -482,7 +482,7 @@ func (m Model) updateShellInstallRun(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.shellInstallRun.done {
 			if m.shellInstallRun.err == nil && m.shellInstallRun.bloom < screens.ShellBloomFrames-1 {
 				m.shellInstallRun.bloom++
-				return m, tea.Tick(250*time.Millisecond, func(time.Time) tea.Msg { return shellInstallTick{} })
+				return m, tea.Tick(screens.ShellRoseDelay(m.shellInstallRun.bloom), func(time.Time) tea.Msg { return shellInstallTick{} })
 			}
 			return m, nil
 		}
@@ -504,7 +504,7 @@ func (m Model) updateShellInstallRun(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			if event.err == nil {
-				return m, tea.Tick(250*time.Millisecond, func(time.Time) tea.Msg { return shellInstallTick{} })
+				return m, tea.Tick(screens.ShellRoseDelay(0), func(time.Time) tea.Msg { return shellInstallTick{} })
 			}
 			if event.err != nil {
 				for index := range run.steps {
@@ -592,7 +592,7 @@ func (m Model) ShellInstallSelection() cli.ShellInstallSelection {
 func (m Model) beginShellPreview(config shellExperienceConfig) (tea.Model, tea.Cmd) {
 	m.shellPreview = &shellPreviewState{config: config}
 	m.shellExperience = nil
-	return m, tea.Tick(250*time.Millisecond, func(time.Time) tea.Msg { return shellInstallTick{} })
+	return m, tea.Tick(screens.ShellRoseDelay(0), func(time.Time) tea.Msg { return shellInstallTick{} })
 }
 
 func (m Model) updateShellPreview(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -603,7 +603,7 @@ func (m Model) updateShellPreview(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if _, ok := msg.(shellInstallTick); ok {
 		if preview.frame < screens.ShellBloomFrames-1 {
 			preview.frame++
-			return m, tea.Tick(250*time.Millisecond, func(time.Time) tea.Msg { return shellInstallTick{} })
+			return m, tea.Tick(screens.ShellRoseDelay(preview.frame), func(time.Time) tea.Msg { return shellInstallTick{} })
 		}
 		return m, nil
 	}
