@@ -361,7 +361,7 @@ func (m Model) shellInstallView() string {
 			if manage.uninstallErr != nil {
 				errText = manage.uninstallErr.Error()
 			}
-			return screens.RenderShellUninstall(manage.install.Target, manage.install.Mode, manage.uninstalled, manage.backup, errText, manage.cursor, m.Width, m.Height)
+			return screens.RenderShellUninstall(manage.install.Target, manage.install.Mode, manage.uninstalled, manage.working, manage.backup, errText, manage.cursor, m.Width, m.Height)
 		}
 		errText := ""
 		if manage.err != nil {

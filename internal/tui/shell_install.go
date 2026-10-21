@@ -128,6 +128,11 @@ func shellUpdateCommand(install shellinstaller.UserShellInstall) tea.Cmd {
 	}
 }
 
+type shellUninstallResult struct {
+	backup string
+	err    error
+}
+
 type shellManageState struct {
 	install      shellinstaller.UserShellInstall
 	config       shellExperienceConfig
@@ -138,6 +143,7 @@ type shellManageState struct {
 	err          error
 	confirm      bool
 	uninstalled  bool
+	working      bool
 	backup       string
 	uninstallErr error
 	fromConfig   bool
@@ -332,12 +338,24 @@ func (m Model) beginUninstallFromConfig(config shellExperienceConfig) Model {
 }
 
 func (m Model) updateShellManage(msg tea.Msg) (tea.Model, tea.Cmd) {
+	manage := m.shellManage
+	if manage == nil {
+		return m, nil
+	}
+	if result, ok := msg.(shellUninstallResult); ok {
+		manage.working = false
+		if result.err != nil {
+			manage.uninstallErr = result.err
+			return m, nil
+		}
+		manage.backup, manage.uninstalled = result.backup, true
+		return m, nil
+	}
 	key, ok := msg.(tea.KeyMsg)
 	if !ok {
 		return m, nil
 	}
-	manage := m.shellManage
-	if manage == nil {
+	if manage.working {
 		return m, nil
 	}
 	backToMenu := func() (tea.Model, tea.Cmd) {
@@ -375,14 +393,17 @@ func (m Model) updateShellManage(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			home, err := os.UserHomeDir()
-			if err == nil {
-				manage.backup, err = shellinstaller.UninstallUserShellInstall(home, manage.install)
-			}
 			if err != nil {
 				manage.uninstallErr = err
 				return m, nil
 			}
-			manage.uninstalled = true
+			manage.working = true
+			manage.uninstallErr = nil
+			install := manage.install
+			return m, func() tea.Msg {
+				backup, err := shellinstaller.UninstallUserShellInstall(home, install)
+				return shellUninstallResult{backup: backup, err: err}
+			}
 		}
 		return m, nil
 	}

@@ -155,7 +155,16 @@ func TestShellUninstallSeparateKeepsBackup(t *testing.T) {
 	if !m.shellManage.confirm || !strings.Contains(m.View(), "Uninstall (keep backup)") {
 		t.Fatalf("uninstall confirmation is missing:\n%s", m.View())
 	}
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	next, uninstallCmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Model)
+	if !m.shellManage.working || !strings.Contains(m.View(), "Working: uninstalling") {
+		t.Fatalf("uninstall did not show a working state: %+v\n%s", m.shellManage, m.View())
+	}
+	if uninstallCmd == nil {
+		t.Fatal("uninstall did not schedule a command")
+	}
+	next, _ = m.Update(uninstallCmd())
+	m = next.(Model)
 	if m.shellManage == nil || !m.shellManage.uninstalled || m.shellManage.backup == "" {
 		t.Fatalf("uninstall did not complete: %+v", m.shellManage)
 	}

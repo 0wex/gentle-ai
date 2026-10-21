@@ -76,7 +76,7 @@ func RenderShellManage(target, mode string, preferences, components []ShellManag
 }
 
 // RenderShellUninstall asks for explicit confirmation and preserves the tree.
-func RenderShellUninstall(target, mode string, uninstalled bool, backup, applyErr string, cursor, width, height int) string {
+func RenderShellUninstall(target, mode string, uninstalled, working bool, backup, applyErr string, cursor, width, height int) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
@@ -86,6 +86,10 @@ func RenderShellUninstall(target, mode string, uninstalled bool, backup, applyEr
 		detectedSubtleStyle.Render(shellDetectedTarget(target)),
 		detectedLabelStyle.Render("TYPE") + detectedValueStyle.Render(kind) + detectedSubtleStyle.Render("  ·  opens with "+launcher),
 		"",
+	}
+	if working {
+		lines = append(lines, styles.WarningStyle.Render("Working: uninstalling and pruning the backup..."), detectedSubtleStyle.Render("Do not close this terminal."))
+		return strings.Join(lines, "\n")
 	}
 	if uninstalled {
 		lines = append(lines, styles.SuccessStyle.Render("Installation uninstalled."), detectedSubtleStyle.Render("Backup: "+backup), "", detectedSubtleStyle.Render("Enter: back to menu"))
