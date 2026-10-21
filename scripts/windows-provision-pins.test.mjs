@@ -135,8 +135,9 @@ function nativeFixture(version) {
 
 scenario('native-directory-dynamic', () => {
   const root = nativeFixture('4.3.0');
-  assert.equal(run('(nativeRoot, version) => stockNativeDirectory(nativeRoot, version)',
-    path.join(root, '.gentle-ai'), '4.3.0'), path.join(root, '.gentle-ai', 'v4.3.0'), 'dynamic version directory located');
+  const located = run('(nativeRoot) => stockNativeDirectory(nativeRoot)', path.join(root, '.gentle-ai'));
+  assert.equal(located.directory, path.join(root, '.gentle-ai', 'v4.3.0'), 'dynamic version directory located');
+  assert.equal(located.version, '4.3.0', 'dynamic version read from the directory');
 });
 
 for (const [name, versions] of [
@@ -148,14 +149,14 @@ for (const [name, versions] of [
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'provision-pins-'));
     fs.mkdirSync(path.join(root, '.gentle-ai'), { recursive: true });
     for (const label of versions) fs.mkdirSync(path.join(root, '.gentle-ai', label));
-    assert.throws(() => run('(nativeRoot, version) => stockNativeDirectory(nativeRoot, version)', path.join(root, '.gentle-ai'), '4.3.0'),
+    assert.throws(() => run('(nativeRoot, version) => stockNativeDirectory(nativeRoot)', path.join(root, '.gentle-ai')),
       /Windows provision refused: stock native source layout/, `${name} native directory refused`);
   });
 }
 
 scenario('native-directory-absent-refused', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'provision-pins-'));
-  assert.throws(() => run('(nativeRoot, version) => stockNativeDirectory(nativeRoot, version)', path.join(root, '.gentle-ai'), '4.3.0'),
+  assert.throws(() => run('(nativeRoot, version) => stockNativeDirectory(nativeRoot)', path.join(root, '.gentle-ai')),
     /Windows provision refused: stock native source layout/, 'absent .gentle-ai refused');
 });
 
@@ -163,7 +164,7 @@ scenario('native-directory-file-refused', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'provision-pins-'));
   fs.mkdirSync(path.join(root, '.gentle-ai'), { recursive: true });
   fs.writeFileSync(path.join(root, '.gentle-ai', 'v4.3.0'), 'not a directory');
-  assert.throws(() => run('(nativeRoot, version) => stockNativeDirectory(nativeRoot, version)', path.join(root, '.gentle-ai'), '4.3.0'),
+  assert.throws(() => run('(nativeRoot, version) => stockNativeDirectory(nativeRoot)', path.join(root, '.gentle-ai')),
     /Windows provision refused: stock native source layout/, 'non-directory version entry refused');
 });
 

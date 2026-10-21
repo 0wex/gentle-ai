@@ -37,7 +37,8 @@ func ReadNativePNPMInstallation(ctx context.Context, root string, location Nativ
 	if _, err := privateDirectory(root); err != nil {
 		return fail(err)
 	}
-	if location.PNPMHome != home || location.GlobalBin != filepath.Join(home, "bin") || location.ShellVersion != "4.0.0" {
+	if location.PNPMHome != home || location.GlobalBin != filepath.Join(home, "bin") ||
+		!userNativeSemver(location.ShellVersion) || !userNativeSemver(location.PiVersion) {
 		return fail(nil)
 	}
 	if err := privateNativeDirectory(home); err != nil {
@@ -63,8 +64,17 @@ func ReadNativePNPMInstallation(ctx context.Context, root string, location Nativ
 			Name, Version string
 			Bin           map[string]string
 		}
-		if err != nil || json.Unmarshal(data, &pkg) != nil || pkg.Name != name || pkg.Version != version || pkg.Bin[bin] != entry {
+		if err != nil || json.Unmarshal(data, &pkg) != nil || pkg.Name != name || pkg.Bin[bin] != entry {
 			return "", privateError("readback", err)
+		}
+		// An empty expected version admits any canonical stock release: the
+		// independent CLI version is read from the producer metadata, never frozen.
+		if version == "" {
+			if !userNativeSemver(pkg.Version) {
+				return "", privateError("readback", nil)
+			}
+		} else if pkg.Version != version {
+			return "", privateError("readback", nil)
 		}
 		rel, _ := filepath.Rel(root, metadata)
 		result.Files[rel] = stamp
@@ -74,7 +84,7 @@ func ReadNativePNPMInstallation(ctx context.Context, root string, location Nativ
 		bin, name, version, entry string
 		target                    *string
 	}{
-		{"pi", "@earendil-works/pi-coding-agent", "1.0.0", "dist/bundle/cli.js", &result.PiCLI},
+		{"pi", "@earendil-works/pi-coding-agent", "", "dist/bundle/cli.js", &result.PiCLI},
 		{"gentle-shell", "gentle-pi", location.ShellVersion, "bin/gentle-shell.mjs", &result.ShellCLI},
 	} {
 		shim := filepath.Join(location.GlobalBin, spec.bin)

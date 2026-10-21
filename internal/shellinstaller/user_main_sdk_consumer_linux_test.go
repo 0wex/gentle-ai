@@ -66,8 +66,8 @@ func TestUserMainFrozenSDKConsumer(t *testing.T) {
 	}
 	pin := lock.Packages["node_modules/@earendil-works/pi-coding-agent"]
 	hash := sha512.Sum512(archive)
-	if pin.Version != "1.0.0" ||
-		pin.Resolved != "https://registry.npmjs.org/@earendil-works/pi-coding-agent/-/pi-coding-agent-1.0.0.tgz" ||
+	if pin.Version == "" ||
+		pin.Resolved != "https://registry.npmjs.org/@earendil-works/pi-coding-agent/-/pi-coding-agent-"+pin.Version+".tgz" ||
 		pin.Integrity != "sha512-"+base64.StdEncoding.EncodeToString(hash[:]) {
 		t.Fatal("SDK fixture differs from committed npm SRI")
 	}

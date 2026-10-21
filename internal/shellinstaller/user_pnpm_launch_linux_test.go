@@ -80,9 +80,9 @@ func TestUserPNPMLaunch(t *testing.T) {
 			if err != nil || len(output) == 0 {
 				t.Fatalf("%s %s: %v %s", role, arg, err, output)
 			}
-			version := "1.0.0"
+			version := "1.3.0"
 			if role == "gentle-shell" {
-				version = "4.0.0"
+				version = "4.3.0"
 			}
 			if arg == "--version" && !strings.Contains(string(output), version) {
 				t.Fatalf("wrong role version: %s", output)

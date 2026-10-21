@@ -3,8 +3,10 @@
 package shellinstaller
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,6 +15,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -537,8 +541,8 @@ func userRecover(ctx context.Context, args []string, stdout io.Writer) error {
 	return err
 }
 
-const userInstallerSHA = "bc2da0585026fa538f0c6ae0cf50463767c175b71d0dfdb582a88cbe894c84ca"
-const privateNativeResolverSHA = "cbdf5deac8b7a85ab1253dbd049953aeb192a7d1f7987f9206916ab449c10a92"
+const userInstallerSHA = "8679f49d3675323bf7ff5c24321f08016bb0f8e79ded307b5900c37648f52470"
+const privateNativeResolverSHA = "61bb8e7e23864a15243882fc029f25f64118d593088cd7f64c3bb519dcf80b80"
 const privateNativeInvoke = `import {installGentleAi} from './scripts/gentle-ai-installer.mjs'; const packageRoot=process.cwd(); await installGentleAi({packageRoot});`
 
 func userBootstrap(ctx context.Context, root, workspace string) error {
@@ -752,28 +756,107 @@ func userVerifyGlobalAction(ctx context.Context, root, prefix, agent, finalPrefi
 }
 
 func userNativeReadback(ctx context.Context, root string) error {
-	version := filepath.Join(root, "v4.0.0")
-	for _, directory := range []string{root, version} {
-		if _, err := privateDirectory(directory); err != nil {
-			return err
-		}
+	if _, err := privateDirectory(root); err != nil {
+		return err
 	}
 	entries, err := privateNativeEntries(root)
-	if err != nil || len(entries) != 1 || entries[0].Name() != "v4.0.0" {
+	if err != nil || len(entries) != 1 || !strings.HasPrefix(entries[0].Name(), "v") {
 		return privateError("readback", err)
 	}
-	binary := filepath.Join(version, "gentle-ai")
-	if _, err := privateNativeFile(ctx, binary, 0700, userBinarySize, userBinarySHA); err != nil {
+	// The stock installer names the bundle after its own pinned Gentle AI
+	// release; the version is derived from the layout and cross-checked against
+	// the manifest instead of a frozen literal.
+	version := strings.TrimPrefix(entries[0].Name(), "v")
+	if !userNativeSemver(version) {
+		return privateError("readback", nil)
+	}
+	bundle := filepath.Join(root, entries[0].Name())
+	if _, err := privateDirectory(bundle); err != nil {
 		return err
 	}
-	if _, err := privateNativeFile(ctx, filepath.Join(version, "integrity.json"), 0600, int64(len(userNativeManifest)), fmt.Sprintf("%x", sha256.Sum256([]byte(userNativeManifest)))); err != nil {
-		return err
-	}
-	entries, err = privateNativeEntries(version)
-	if err != nil || len(entries) != 2 || !((entries[0].Name() == "gentle-ai" && entries[1].Name() == "integrity.json") || (entries[1].Name() == "gentle-ai" && entries[0].Name() == "integrity.json")) {
+	members, err := privateNativeEntries(bundle)
+	if err != nil || len(members) != 2 {
 		return privateError("readback", err)
+	}
+	var manifest struct {
+		Version      string `json:"version"`
+		Asset        string `json:"asset"`
+		AssetSha256  string `json:"assetSha256"`
+		Method       string `json:"method"`
+		BinarySha256 string `json:"binarySha256"`
+	}
+	integrity := filepath.Join(bundle, "integrity.json")
+	if _, err := privateNativeFile(ctx, integrity, 0600, -1, ""); err != nil {
+		return err
+	}
+	data, err := os.ReadFile(integrity)
+	if err != nil || len(data) > 4096 || !strings.HasSuffix(string(data), "}\n") || strings.Contains(strings.TrimSuffix(string(data), "\n"), "\n") || json.Unmarshal(data, &manifest) != nil {
+		return privateError("readback", err)
+	}
+	digest := func(value string) bool {
+		decoded, err := hex.DecodeString(value)
+		return err == nil && len(decoded) == sha256.Size
+	}
+	if manifest.Version != version || !digest(manifest.BinarySha256) {
+		return privateError("readback", nil)
+	}
+	canonical := func(shape any) bool {
+		var buffer bytes.Buffer
+		encoder := json.NewEncoder(&buffer)
+		encoder.SetEscapeHTML(false)
+		return encoder.Encode(shape) == nil && bytes.Equal(data, buffer.Bytes())
+	}
+	if manifest.Method == "" {
+		// Stock signed-release shape: the pinned archive and its extracted
+		// binary, in the installer's exact canonical byte form.
+		release := map[string]string{"linux": "linux_amd64", "darwin": "darwin_arm64"}[runtime.GOOS]
+		canonicalSigned := struct {
+			Version      string `json:"version"`
+			Asset        string `json:"asset"`
+			AssetSha256  string `json:"assetSha256"`
+			BinarySha256 string `json:"binarySha256"`
+		}{manifest.Version, manifest.Asset, manifest.AssetSha256, manifest.BinarySha256}
+		if manifest.Asset != "gentle-ai_"+version+"_"+release+".tar.gz" || !digest(manifest.AssetSha256) || !canonical(canonicalSigned) {
+			return privateError("readback", nil)
+		}
+	} else {
+		// The stock Windows Go SumDB source-build shape is also admitted, again
+		// only in its exact canonical byte form; any other method or field set
+		// is a foreign manifest.
+		var canonicalSource struct {
+			Version        string          `json:"version"`
+			Method         string          `json:"method"`
+			Package        string          `json:"package"`
+			Module         string          `json:"module"`
+			Tag            string          `json:"tag"`
+			Architecture   string          `json:"architecture"`
+			BinarySha256   string          `json:"binarySha256"`
+			ModuleChecksum string          `json:"moduleChecksum"`
+			GoVersion      string          `json:"goVersion"`
+			Goos           string          `json:"goos"`
+			Goarch         string          `json:"goarch"`
+			BuildMode      string          `json:"buildMode"`
+			Compiler       string          `json:"compiler"`
+			CgoEnabled     json.RawMessage `json:"cgoEnabled"`
+		}
+		if manifest.Method != "go-sumdb-source-build" || json.Unmarshal(data, &canonicalSource) != nil || !canonical(canonicalSource) {
+			return privateError("readback", nil)
+		}
+	}
+	if _, err := privateNativeFile(ctx, filepath.Join(bundle, "gentle-ai"), 0700, -1, manifest.BinarySha256); err != nil {
+		return err
 	}
 	return nil
+}
+
+// userNativeSemver admits only canonical stock release versions: three
+// dot-separated unsigned integer components with an optional prerelease,
+// rejecting leading zeros, build metadata and every other spelling.
+func userNativeSemver(version string) bool {
+	const component = "(0|[1-9][0-9]*)"
+	pattern := "^" + component + "\\." + component + "\\." + component + "(?:-[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$"
+	matched, err := regexp.MatchString(pattern, version)
+	return err == nil && matched
 }
 
 func userReadManifest(ctx context.Context, root string) (userManifest, error) {

@@ -69,7 +69,7 @@ func TestIndependentNativeReceiptPrivate(t *testing.T) {
 			t.Fatal("unmapped supervisor ownership accepted")
 		}
 		native := NativeInstallerResult{Details: json.RawMessage(`{"outcome":"terminal-action-required","action":"open-new-terminal","completed":["synthetic-no-original"]}`)}
-		loc := NativeInstallationLocation{PackageRoot: root + "/pnpm/store/v11/links/package/node_modules/gentle-pi", PNPMHome: root + "/pnpm", GlobalBin: root + "/pnpm/bin", ShellVersion: "4.0.0", PiVersion: "1.2.0"}
+		loc := NativeInstallationLocation{PackageRoot: root + "/pnpm/store/v11/links/package/node_modules/gentle-pi", PNPMHome: root + "/pnpm", GlobalBin: root + "/pnpm/bin", ShellVersion: "4.3.0", PiVersion: "1.3.0"}
 		if err := userWriteNativeReceipt(root, native, &loc); err != nil {
 			t.Fatal(err)
 		}

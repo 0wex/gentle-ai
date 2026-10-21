@@ -23,7 +23,8 @@ func userReadPNPMManifest(ctx context.Context, root string, manifest userManifes
 	if manifest.Mode == "agent" && (!privateHierarchyPath(manifest.Agent) || strings.HasPrefix(manifest.Agent, root+"/")) {
 		return fail(nil)
 	}
-	if !filepath.IsLocal(p.PackageRoot) || filepath.Clean(p.PackageRoot) != p.PackageRoot || !strings.HasPrefix(p.PackageRoot, "pnpm/") || p.ShellVersion != "4.0.0" || p.PeerVersion != "1.2.0" {
+	if !filepath.IsLocal(p.PackageRoot) || filepath.Clean(p.PackageRoot) != p.PackageRoot || !strings.HasPrefix(p.PackageRoot, "pnpm/") ||
+		!userNativeSemver(p.ShellVersion) || !userNativeSemver(p.PeerVersion) {
 		return fail(nil)
 	}
 	for _, pin := range []string{p.CodeSeal, manifest.SupervisorSHA} {

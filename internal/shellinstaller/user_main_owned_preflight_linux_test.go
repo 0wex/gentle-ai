@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -116,13 +117,20 @@ func userMainSDKOwnedStockPreflight(t *testing.T, selected, worker bool) {
 		}
 	}
 	native := filepath.Join(modules, "gentle-pi/.gentle-ai")
-	for _, name := range []string{native, filepath.Join(native, "v4.0.0")} {
+	// The retained stock bundle's version is producer data; derive the single
+	// v<version> directory from the layout instead of a frozen literal.
+	bundles, err := os.ReadDir(native)
+	if err != nil || len(bundles) != 1 || !strings.HasPrefix(bundles[0].Name(), "v") {
+		t.Fatal("authentic native bundle layout required", err)
+	}
+	bundleVersion := bundles[0].Name()
+	for _, name := range []string{native, filepath.Join(native, bundleVersion)} {
 		if err := os.Chmod(name, 0700); err != nil {
 			t.Fatal("authentic native DATA required", err)
 		}
 	}
 	for name, mode := range map[string]os.FileMode{"gentle-ai": 0700, "integrity.json": 0600} {
-		if err := os.Chmod(filepath.Join(native, "v4.0.0", name), mode); err != nil {
+		if err := os.Chmod(filepath.Join(native, bundleVersion, name), mode); err != nil {
 			t.Fatal(err)
 		}
 	}

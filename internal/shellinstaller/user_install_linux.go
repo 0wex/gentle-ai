@@ -406,9 +406,9 @@ func userDirectKernelCheck() error {
 	return userKernelStatus(string(status), os.Getuid())
 }
 
-const userBinarySize int64 = 17109176
-const userBinarySHA = "50ba217b5138c1a9c7d5bf2f79931b1bb89b89c4cf650dcd7ee037657c88158d"
-const userNativeManifest = `{"version":"4.0.0","asset":"gentle-ai_4.0.0_linux_amd64.tar.gz","assetSha256":"5f4417cf29c969c86da4799942fd673368840901be1bb09c779a12d7ed6096ea","binarySha256":"50ba217b5138c1a9c7d5bf2f79931b1bb89b89c4cf650dcd7ee037657c88158d"}` + "\n"
+const userBinarySize int64 = 18559160
+const userBinarySHA = "9212c7b16ea9abfe93e3a16b29d8390e7762b5c07730cf05df1f3e7892ff96a4"
+const userNativeManifest = `{"version":"4.2.0","asset":"gentle-ai_4.2.0_linux_amd64.tar.gz","assetSha256":"552c1642fd10f5d96cfe9bb1cc3b66b30eb47d3074cc7ca0559b598eb086defc","binarySha256":"9212c7b16ea9abfe93e3a16b29d8390e7762b5c07730cf05df1f3e7892ff96a4"}` + "\n"
 
 // The bootstrap publishes Node itself with mv -T --no-clobber.
 func userBootstrapPublish(context.Context, string, string) error {

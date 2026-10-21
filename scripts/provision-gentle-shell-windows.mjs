@@ -74,19 +74,20 @@ function rootAuthorities(lock, names) {
 // Locate the single supported native bundle directory under .gentle-ai: exactly
 // one entry, named v<resolved gentle-pi version>, a physical directory. A
 // missing, duplicate, foreign or non-directory version layout fails closed.
-function stockNativeDirectory(nativeRoot, version) {
+function stockNativeDirectory(nativeRoot) {
   let entries;
   try { entries = fs.readdirSync(nativeRoot); }
   catch { return reject('stock native source layout'); }
-  const label = `v${version}`;
-  if (entries.length !== 1 || entries[0] !== label) reject('stock native source layout');
-  const directory = path.join(nativeRoot, label);
-  if (!fs.lstatSync(directory).isDirectory()) reject('stock native source layout');
-  return directory;
+  const match = entries.length === 1 ? /^v((0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*))$/.exec(entries[0]) : null;
+  if (!match) reject('stock native source layout');
+  const directory = path.join(nativeRoot, entries[0]);
+  if (!fs.lstatSync(directory).isDirectory() || !fs.existsSync(path.join(directory, 'integrity.json'))) reject('stock native source layout');
+  return { directory, version: match[1] };
 }
-// The stock installer's Windows source-build manifest: dynamic version matching
-// the resolved gentle-pi version, the supported go-sumdb source-build method, a
-// well-formed Go module checksum, and the digest of the produced executable.
+// The stock installer's Windows source-build manifest: the dynamic native bundle
+// version (which can differ from the gentle-pi version), the supported go-sumdb
+// source-build method, a well-formed Go module checksum, and the digest of the
+// produced executable.
 function stockNativeIntegrity(manifest, native, version) {
   if (manifest === null || typeof manifest !== 'object' || Array.isArray(manifest) ||
       manifest.version !== version || manifest.method !== 'go-sumdb-source-build' ||
@@ -253,8 +254,9 @@ if (action === 'install') {
   console.error('Windows install phase: provision-native'); // Explicit, authenticated stock API, no postinstall/fullscreen hook.
   await installGentleAi({ packageRoot: gentle });
 }
-const nativeVersion = resolved['gentle-pi'];
-const native = stockNativeDirectory(path.join(gentle, '.gentle-ai'), nativeVersion);
+const nativeBundle = stockNativeDirectory(path.join(gentle, '.gentle-ai'));
+const nativeVersion = nativeBundle.version;
+const native = nativeBundle.directory;
 stockNativeIntegrity(JSON.parse(read(path.join(native, 'integrity.json'))), native, nativeVersion);
 const configPath = path.join(root, 'config/gentle-shell.json');
 const homeKey = path.join(finalRoot, 'agent');

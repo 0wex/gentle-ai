@@ -33,7 +33,7 @@ func TestUserContext7FrozenBuiltinMCPCLI(t *testing.T) {
 		t.Fatal(err)
 	}
 	pin := lock.Packages["node_modules/@earendil-works/pi-coding-agent"]
-	if pin.Version != "1.0.0" || pin.Resolved != "https://registry.npmjs.org/@earendil-works/pi-coding-agent/-/pi-coding-agent-1.0.0.tgz" {
+	if pin.Version == "" || pin.Resolved != "https://registry.npmjs.org/@earendil-works/pi-coding-agent/-/pi-coding-agent-"+pin.Version+".tgz" {
 		t.Fatal("fixture must use the committed frozen Pi package")
 	}
 	data, err := os.ReadFile("/frozen-pi.tgz")

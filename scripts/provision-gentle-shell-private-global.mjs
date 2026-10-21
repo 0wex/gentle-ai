@@ -230,7 +230,7 @@ if (action === 'restore') {
     if (!entry || seed.dependencies[name] !== entry.version) reject('frozen root declaration');
     return [name, [entry.version, entry.integrity]];
   }));
-  if (pins['@earendil-works/pi-coding-agent'][0] !== (prior ? '0.99.2' : '1.0.0')) reject('frozen coding profile');
+  if (prior && pins['@earendil-works/pi-coding-agent'][0] !== '0.99.2') reject('frozen coding profile');
   if (prior && lock.packages['node_modules/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-tui']?.version !== '0.99.2') reject('prior nested TUI placement');
   if (action === 'install') {
     physical(agent, true);
@@ -394,26 +394,41 @@ if (action === 'restore') {
   function nativeState(native = path.join(modules, 'gentle-pi/.gentle-ai'), required = false) {
     if (!fs.existsSync(native)) {
       if (required) reject('required stock native absent');
-      return;
+      return null;
     }
     physical(native, true);
     const entries = fs.readdirSync(native).sort();
     if (entries.length === 0) {
-      if (required) reject('required stock native empty');
-      return;
+      if (required) reject('required stock native absent');
+      return null;
     }
-    if (JSON.stringify(entries) !== '["v4.0.0"]') reject('foreign native recovery state');
-    const version = path.join(native, 'v4.0.0');
-    physical(version, true);
-    if (JSON.stringify(fs.readdirSync(version).sort()) !== '["gentle-ai","integrity.json"]') reject('native file set');
-    const binary = read(path.join(version, 'gentle-ai'));
-    if (process.platform === 'darwin') {
-      const manifest = '{"version":"4.0.0","asset":"gentle-ai_4.0.0_darwin_arm64.tar.gz","assetSha256":"d2159caf6d68f367b18830ece6af71ef26963d5f5320d7df6a794773f45cc7e9","binarySha256":"18a9f7fae55d85c95684b6d512a4a148d0cb24a856325f72573c34caf65159eb"}\n';
-      if (binary.length !== 16047186 || digest(binary) !== '18a9f7fae55d85c95684b6d512a4a148d0cb24a856325f72573c34caf65159eb' || !read(path.join(version, 'integrity.json')).equals(Buffer.from(manifest))) reject('native independent readback');
-      return;
+    // The stock installer publishes exactly one version bundle named after its
+    // own pinned Gentle AI release; the version is read, never frozen here.
+    if (entries.length !== 1 || !versionPattern.test(entries[0].slice(1)) || !entries[0].startsWith('v')) reject('foreign native recovery state');
+    const version = entries[0].slice(1);
+    const bundle = path.join(native, entries[0]);
+    physical(bundle, true);
+    if (JSON.stringify(fs.readdirSync(bundle).sort()) !== '["gentle-ai","integrity.json"]') reject('native file set');
+    const binary = read(path.join(bundle, 'gentle-ai'));
+    const manifestBytes = read(path.join(bundle, 'integrity.json'));
+    const manifest = JSON.parse(manifestBytes);
+    if (manifest === null || typeof manifest !== 'object' || Array.isArray(manifest) || manifest.version !== version ||
+        typeof manifest.binarySha256 !== 'string' || !/^[0-9a-f]{64}$/.test(manifest.binarySha256) ||
+        manifestBytes.toString() !== `${JSON.stringify(manifest)}\n`) reject('native manifest version');
+    if (manifest.method === undefined) {
+      // Stock signed-release shape: the pinned archive and its extracted binary.
+      const release = process.platform === 'darwin' ? 'darwin_arm64' : 'linux_amd64';
+      if (JSON.stringify(Object.keys(manifest).sort()) !== '["asset","assetSha256","binarySha256","version"]' ||
+          manifest.asset !== `gentle-ai_${version}_${release}.tar.gz` ||
+          typeof manifest.assetSha256 !== 'string' || !/^[0-9a-f]{64}$/.test(manifest.assetSha256)) reject('native manifest shape');
+    } else {
+      // Stock Windows Go SumDB source-build shape; never published on POSIX.
+      if (manifest.method !== 'go-sumdb-source-build' ||
+          JSON.stringify(Object.keys(manifest).sort()) !==
+            '["architecture","binarySha256","buildMode","cgoEnabled","compiler","goVersion","goarch","goos","method","module","moduleChecksum","package","tag","version"]') reject('native manifest shape');
     }
-    const manifest = '{"version":"4.0.0","asset":"gentle-ai_4.0.0_linux_amd64.tar.gz","assetSha256":"5f4417cf29c969c86da4799942fd673368840901be1bb09c779a12d7ed6096ea","binarySha256":"50ba217b5138c1a9c7d5bf2f79931b1bb89b89c4cf650dcd7ee037657c88158d"}\n';
-    if (binary.length !== 17109176 || digest(binary) !== '50ba217b5138c1a9c7d5bf2f79931b1bb89b89c4cf650dcd7ee037657c88158d' || !read(path.join(version, 'integrity.json')).equals(Buffer.from(manifest))) reject('native independent readback');
+    if (digest(binary) !== manifest.binarySha256) reject('native independent readback');
+    return version;
   }
   function materializeGlobal() {
     const parent = path.dirname(modules);
@@ -510,8 +525,8 @@ if (action === 'restore') {
   }
   const supplier = path.join(modules, 'gentle-pi');
   for (const [relative, expected] of [
-    ['scripts/gentle-ai-installer.mjs', 'bc2da0585026fa538f0c6ae0cf50463767c175b71d0dfdb582a88cbe894c84ca'],
-    ['runtime/gentle-ai-binary.mjs', 'cbdf5deac8b7a85ab1253dbd049953aeb192a7d1f7987f9206916ab449c10a92'],
+    ['scripts/gentle-ai-installer.mjs', '8679f49d3675323bf7ff5c24321f08016bb0f8e79ded307b5900c37648f52470'],
+    ['runtime/gentle-ai-binary.mjs', '61bb8e7e23864a15243882fc029f25f64118d593088cd7f64c3bb519dcf80b80'],
   ]) {
     if (digest(read(path.join(supplier, relative))) !== expected) reject('stock supplier pin');
   }
@@ -604,7 +619,7 @@ if (action === 'restore') {
           }
         }
         const remaining = new Map(expected);
-        const nativeBinary = '.gentle-ai/v4.0.0/gentle-ai';
+        let nativeBinary = null;
         function compare(directory, relative = '') {
           const before = physical(directory, true);
           if ((before.mode & 0o7777) !== 0o700 || !remaining.has(relative) || remaining.get(relative) !== null) reject('Main composition directory differs');
@@ -639,11 +654,12 @@ if (action === 'restore') {
             compare(composed);
             if (remaining.size !== 0) reject('Main composition missing member');
           }
-          nativeState(nativeSource, true); // Existing independent pins, mandatory.
+          const nativeVersion = nativeState(nativeSource, true); // Existing independent pins, mandatory.
+          nativeBinary = `.gentle-ai/v${nativeVersion}/gentle-ai`;
           const nativeMembers = new Map([
-            ['.gentle-ai', null], ['.gentle-ai/v4.0.0', null],
-            [nativeBinary, read(path.join(nativeSource, 'v4.0.0/gentle-ai'))],
-            ['.gentle-ai/v4.0.0/integrity.json', read(path.join(nativeSource, 'v4.0.0/integrity.json'))],
+            ['.gentle-ai', null], [`.gentle-ai/v${nativeVersion}`, null],
+            [nativeBinary, read(path.join(nativeSource, `v${nativeVersion}/gentle-ai`))],
+            [`.gentle-ai/v${nativeVersion}/integrity.json`, read(path.join(nativeSource, `v${nativeVersion}/integrity.json`))],
           ]);
           const nativeBytes = [...nativeMembers.values()].reduce((sum, content) => sum + (content?.length ?? 0), 0);
           if (expected.size + nativeMembers.size > 32768 || bytes + nativeBytes > 1073741824) reject('Main runtime byte/member bound');

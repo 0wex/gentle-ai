@@ -37,7 +37,7 @@ func TestUserMainDeclaredStockBindings(t *testing.T) {
 	}
 	pin := lock.Packages["node_modules/gentle-pi"]
 	hash := sha512.Sum512(archive)
-	if pin.Version != "4.0.0" || pin.Resolved != "https://registry.npmjs.org/gentle-pi/-/gentle-pi-4.0.0.tgz" ||
+	if pin.Version == "" || pin.Resolved != "https://registry.npmjs.org/gentle-pi/-/gentle-pi-"+pin.Version+".tgz" ||
 		pin.Integrity != "sha512-"+base64.StdEncoding.EncodeToString(hash[:]) {
 		t.Fatal("stock fixture differs from committed SRI")
 	}

@@ -209,9 +209,9 @@ func TestIndependentCacheOrdinaryLaunch(t *testing.T) {
 		if err != nil {
 			t.Fatal(role, err, string(out))
 		}
-		version := "1.0.0"
+		version := "1.3.0"
 		if role == "gentle-shell" {
-			version = "4.0.0"
+			version = "4.3.0"
 		}
 		if !strings.Contains(string(out), version) {
 			t.Fatal("wrong ordinary version", role, string(out))
