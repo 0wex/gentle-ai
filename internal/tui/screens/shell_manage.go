@@ -57,6 +57,9 @@ func RenderShellManage(target, mode string, preferences, components []ShellManag
 		return strings.Join(lines, "\n")
 	}
 	for index, action := range actions {
+		if action == "Uninstall this installation" {
+			lines = append(lines, "")
+		}
 		marker, style := "   ", detectedValueStyle
 		if index == cursor {
 			marker, style = " ▸ ", detectedAccentStyle
