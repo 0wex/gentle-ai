@@ -28,6 +28,9 @@ func TestShellExperienceActionsPutUninstallLast(t *testing.T) {
 		if option.Control == ShellExperienceContinue && option.Label != "Update installation" {
 			t.Fatalf("continue label = %q", option.Label)
 		}
+		if option.Control == ShellExperienceUninstall && !option.SeparatorBefore {
+			t.Fatal("uninstall action has no visual separator")
+		}
 	}
 }
 

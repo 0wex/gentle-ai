@@ -34,6 +34,7 @@ type ShellExperienceEntry struct {
 	Control                                           ShellExperienceControl
 	Cursor                                            int
 	Current, Checked, Selectable, Locked              bool
+	SeparatorBefore                                   bool
 }
 
 func shellExperienceCategories() []string {
@@ -131,7 +132,7 @@ func shellExperienceEntries(p shellinstaller.UserExperience, uninstall bool, con
 	add(ShellExperienceEntry{Control: ShellExperienceContinue, Category: "Actions", Kind: "action", Label: continueLabel, Description: continueDescription})
 	add(ShellExperienceEntry{Control: ShellExperienceCancel, Category: "Actions", Kind: "action", Label: "Cancel", Description: "Cancel configuration without applying changes."})
 	if uninstall {
-		add(ShellExperienceEntry{Control: ShellExperienceUninstall, Category: "Actions", Kind: "action", Label: "Uninstall this installation", Description: "Moves this managed installation to a timestamped backup and removes it from detection. Your personal Pi is untouched."})
+		add(ShellExperienceEntry{Control: ShellExperienceUninstall, Category: "Actions", Kind: "action", Label: "Uninstall this installation", Description: "Moves this managed installation to a timestamped backup and removes it from detection. Your personal Pi is untouched.", SeparatorBefore: true})
 	}
 	return entries
 }

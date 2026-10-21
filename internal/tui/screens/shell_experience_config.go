@@ -21,6 +21,9 @@ func renderShellExperienceConfigWithUninstall(p shellinstaller.UserExperience, c
 	}
 	rows := len(entries) + 2 // Title and keyboard help.
 	for i, entry := range entries {
+		if i > 0 && entry.SeparatorBefore {
+			rows++ // Visual separator before a dangerous action.
+		}
 		if i == 0 || entry.Category != entries[i-1].Category {
 			rows++ // Group heading.
 			if i > 0 {
@@ -39,6 +42,9 @@ func renderShellExperienceConfigWide(entries []ShellExperienceEntry, cursor, wid
 	rightWidth := width - leftWidth - 1
 	left := make([]string, 0, len(entries)+2*len(shellExperienceCategories()))
 	for index, entry := range entries {
+		if index > 0 && entry.SeparatorBefore {
+			left = append(left, "")
+		}
 		if index == 0 || entry.Category != entries[index-1].Category {
 			if index > 0 {
 				left = append(left, "")
@@ -94,6 +100,9 @@ func renderShellExperienceConfigCompact(entries []ShellExperienceEntry, cursor, 
 	listRows = min(listRows, len(entries))
 	start := min(max(0, shellExperienceConfigEntryIndex(entries, cursor)-listRows/2), len(entries)-listRows)
 	for _, entry := range entries[start : start+listRows] {
+		if entry.SeparatorBefore {
+			lines = append(lines, "")
+		}
 		lines = append(lines, renderShellExperienceConfigEntry(entry, entry.Selectable && entry.Cursor == cursor, width))
 	}
 	if showHint {
