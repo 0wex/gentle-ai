@@ -13,6 +13,7 @@ import (
 	"github.com/gentleman-programming/gentle-ai/v4/internal/cli"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/shellinstaller"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/system"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/tui/screens"
 )
 
 func openInstallationPlan(t *testing.T) (Model, shellinstaller.UserInstallRequest) {
@@ -85,16 +86,18 @@ func TestShellPlanEnterRunsInstallationInsideTUI(t *testing.T) {
 			t.Fatalf("step was not completed in order: %+v", m.shellInstallRun.steps)
 		}
 	}
-	if view := m.View(); !strings.Contains(view, "Installation complete") || !strings.Contains(view, "Welcome to the gentle-tailored experience") || !strings.Contains(view, "gentle-shell") || !strings.Contains(view, "Enter: finish") {
+	if view := m.View(); !strings.Contains(view, "Installation complete") || strings.Contains(view, "Welcome to the gentle-tailored experience") {
 		t.Fatalf("completion screen differs:\n%s", view)
 	}
 	if cmd == nil {
 		t.Fatal("completion did not start the rose animation")
 	}
-	next, _ = m.Update(cmd())
-	m = next.(Model)
-	if m.shellInstallRun.bloom != 1 {
-		t.Fatalf("rose animation did not advance: %d", m.shellInstallRun.bloom)
+	for m.shellInstallRun.bloom < screens.ShellBloomFrames-1 {
+		next, cmd = m.Update(cmd())
+		m = next.(Model)
+	}
+	if view := m.View(); !strings.Contains(view, "Welcome to the gentle-tailored experience") || !strings.Contains(view, "gentle-shell") || !strings.Contains(view, "Enter: finish") {
+		t.Fatalf("completion copy did not appear after the animation:\n%s", view)
 	}
 	if _, cmd = m.Update(tea.KeyMsg{Type: tea.KeyEnter}); cmd == nil {
 		t.Fatal("completion enter did not leave the TUI")

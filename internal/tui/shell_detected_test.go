@@ -243,8 +243,15 @@ func TestShellDetectsManagedInstallAndManage(t *testing.T) {
 	}
 	m = experienceFocus(t, m, screens.ShellExperiencePreview, "")
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	if m.shellPreview == nil || !strings.Contains(m.View(), "Welcome to the gentle-tailored experience") {
+	if m.shellPreview == nil || !strings.Contains(m.View(), "Installation complete") {
 		t.Fatalf("completion preview did not render:\n%s", m.View())
+	}
+	for m.shellPreview.frame < screens.ShellBloomFrames-1 {
+		next, _ := m.Update(shellInstallTick{})
+		m = next.(Model)
+	}
+	if !strings.Contains(m.View(), "Welcome to the gentle-tailored experience") {
+		t.Fatalf("completion copy did not appear after the animation:\n%s", m.View())
 	}
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEsc})
 	if m.shellPreview != nil || m.shellExperience == nil {

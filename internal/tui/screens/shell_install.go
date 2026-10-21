@@ -32,6 +32,9 @@ func shellRoseFrameLines(frame int) []string {
 
 // ShellRoseDelay returns the dwell time for a frame.
 func ShellRoseDelay(frame int) time.Duration {
+	if frame <= 0 {
+		return 0
+	}
 	return styles.RoseFrameDelay(frame)
 }
 
@@ -135,13 +138,15 @@ func RenderShellInstall(steps []ShellInstallStep, failure string, done bool, fra
 			launchCommand = "gentle-shell"
 		}
 		command := lipgloss.NewStyle().Foreground(styles.ColorPeach).Bold(true).Render(launchCommand)
-		lines = append(lines,
-			"",
-			styles.TitleStyle.Render("Welcome to the gentle-tailored experience"),
-			styles.SubtextStyle.Render("Start with: ")+command,
-			"",
-			styles.HelpStyle.Render("Enter: finish"),
-		)
+		if bloom >= ShellBloomFrames-1 {
+			lines = append(lines,
+				"",
+				styles.TitleStyle.Render("Welcome to the gentle-tailored experience"),
+				styles.SubtextStyle.Render("Start with: ")+command,
+				"",
+				styles.HelpStyle.Render("Enter: finish"),
+			)
+		}
 		return finishShellLines(lines, width, height)
 	}
 	if current != "" {
