@@ -269,6 +269,13 @@ func (w *shellProgressWriter) observe(line string) {
 			w.report(shellinstaller.UserInstallProgress{Index: 4, Total: 5, State: "running"})
 		}
 		w.report(shellinstaller.UserInstallProgress{Index: 4, Total: 5, State: "detail", Detail: phase})
+	case strings.HasPrefix(phase, "provision-ready"):
+		if w.step <= 4 {
+			w.report(shellinstaller.UserInstallProgress{Index: 4, Total: 5, State: "done"})
+			w.step = 5
+			w.report(shellinstaller.UserInstallProgress{Index: 5, Total: 5, State: "running"})
+		}
+		w.report(shellinstaller.UserInstallProgress{Index: 5, Total: 5, State: "detail", Detail: phase})
 	case strings.HasPrefix(phase, "provision"):
 		if w.step == 3 {
 			w.report(shellinstaller.UserInstallProgress{Index: 3, Total: 5, State: "done"})
@@ -276,6 +283,13 @@ func (w *shellProgressWriter) observe(line string) {
 			w.report(shellinstaller.UserInstallProgress{Index: 4, Total: 5, State: "running"})
 		}
 		w.report(shellinstaller.UserInstallProgress{Index: 4, Total: 5, State: "detail", Detail: phase})
+	case strings.HasPrefix(phase, "publish"), strings.HasPrefix(phase, "verify"), strings.HasPrefix(phase, "overlay"):
+		if w.step < 5 {
+			w.report(shellinstaller.UserInstallProgress{Index: 4, Total: 5, State: "done"})
+			w.step = 5
+			w.report(shellinstaller.UserInstallProgress{Index: 5, Total: 5, State: "running"})
+		}
+		w.report(shellinstaller.UserInstallProgress{Index: 5, Total: 5, State: "detail", Detail: phase})
 	case strings.HasPrefix(phase, "codegraph-ready"):
 		if w.step == 2 {
 			w.report(shellinstaller.UserInstallProgress{Index: 2, Total: 5, State: "done"})

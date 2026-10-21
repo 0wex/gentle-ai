@@ -494,6 +494,7 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	}
 	phase("provision-ready", "stock")
 	if channel == "main" {
+		fmt.Fprintln(os.Stderr, "Windows install phase: overlay main")
 		if err := userWindowsInventory(stage, userWindowsInventoryInstalled); err != nil {
 			return result, err
 		}
@@ -521,6 +522,7 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 		if err := userWindowsProvision(ctx, stage, "overlay", io.Discard, io.Discard); err != nil {
 			return result, err
 		}
+		fmt.Fprintln(os.Stderr, "Windows install phase: overlay-ready main")
 	}
 	for _, product := range []string{"pi", "gentle-shell"} {
 		if err := userWindowsWrite(filepath.Join(stage, "bin", product+".cmd"), userWindowsBinding(req.Destination, product)); err != nil {
@@ -558,12 +560,14 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	if err := userWindowsWrite(filepath.Join(stage, "manifest.json"), append(encoded, '\n')); err != nil {
 		return result, err
 	}
+	fmt.Fprintln(os.Stderr, "Windows install phase: publish")
 	from, _ := windows.UTF16PtrFromString(stage)
 	to, _ := windows.UTF16PtrFromString(req.Destination)
 	if err := windows.MoveFileEx(from, to, windows.MOVEFILE_WRITE_THROUGH); err != nil {
 		return result, err
 	} // No replace-existing flag.
 	published = true
+	fmt.Fprintln(os.Stderr, "Windows install phase: verify")
 	if err := userWindowsVerify(ctx, req.Destination, io.Discard, io.Discard); err != nil {
 		return result, errors.Join(err, errors.New("published Windows installation remains unqualified; preserved, no success reported"))
 	}
