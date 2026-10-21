@@ -511,7 +511,7 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 		return result, err
 	}
 	phase("provision", "stock")
-	if err := userWindowsProvision(ctx, stage, "install", io.Discard, io.Discard); err != nil {
+	if err := userWindowsProvision(ctx, stage, "install", io.Discard, os.Stderr); err != nil {
 		return result, err
 	}
 	phase("provision-ready", "stock")
@@ -541,7 +541,7 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 		if err := userWindowsCompareMain(ctx, mainData, mainArtifact, gentle); err != nil {
 			return result, err
 		}
-		if err := userWindowsProvision(ctx, stage, "overlay", io.Discard, io.Discard); err != nil {
+		if err := userWindowsProvision(ctx, stage, "overlay", io.Discard, os.Stderr); err != nil {
 			return result, err
 		}
 		fmt.Fprintln(os.Stderr, "Windows install phase: overlay-ready main")

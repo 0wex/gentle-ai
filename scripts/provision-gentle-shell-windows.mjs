@@ -50,6 +50,59 @@ function exclusive(file, value) {
   fs.writeFileSync(file, value, { flag: 'wx' });
   if (!read(file).equals(Buffer.from(value))) reject('exclusive readback');
 }
+function absent(absolute) {
+  try { fs.lstatSync(absolute); reject('occupied path'); }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
+}
+// Whole-tree materialization digest adapted from the private-global provisioner's
+// inventory: bounded entry/byte counts, physical regular files only, every entry
+// content-addressed. Symlinks and special files fail closed before any copy.
+function treeDigest(directory) {
+  const records = [];
+  let bytes = 0;
+  function visit(absolute) {
+    if (records.length >= 250000) reject('inventory entry bound');
+    const relative = path.relative(directory, absolute);
+    const info = fs.lstatSync(absolute);
+    if (info.isSymbolicLink()) reject('inventory alias');
+    if (info.isDirectory()) {
+      records.push([relative, 'dir']);
+      for (const name of fs.readdirSync(absolute).sort()) visit(path.join(absolute, name));
+    } else {
+      if (!info.isFile()) reject('inventory special file');
+      const raw = read(absolute);
+      bytes += raw.length;
+      if (bytes > 1073741824) reject('inventory aggregate bound');
+      records.push([relative, 'file', info.size, digest(raw)]);
+    }
+  }
+  visit(directory);
+  return digest(JSON.stringify(records));
+}
+// Single materialization: the authenticated source/node_modules tree is verified,
+// staged on the prefix filesystem, and promoted by rename. Stock npm rebuild only
+// recreates bin links; the registry is never consulted for a second install.
+function materializeGlobal() {
+  fs.mkdirSync(prefix, { recursive: true });
+  // Sibling staging keeps the promotion on the prefix filesystem.
+  const staged = path.join(prefix, `.gentle-shell-staged-${crypto.randomUUID()}`);
+  const previous = path.join(prefix, `.previous-${crypto.randomUUID()}`);
+  absent(staged);
+  absent(previous);
+  const acquired = path.join(source, 'node_modules');
+  const acquiredSHA = treeDigest(acquired);
+  fs.cpSync(acquired, staged, { recursive: true, force: false, errorOnExist: true, dereference: false, verbatimSymlinks: true });
+  if (treeDigest(acquired) !== acquiredSHA || treeDigest(staged) !== acquiredSHA) reject('materialized source differs');
+  // The hidden CI lock is source acquisition evidence; do not publish its projection.
+  const hidden = path.join(staged, '.package-lock.json');
+  if (fs.existsSync(hidden)) fs.unlinkSync(hidden);
+  // Never delete an old tree or uncertain new evidence on a failed promotion:
+  // an existing modules tree is preserved as a sibling before the promotion rename.
+  if (fs.existsSync(modules)) {
+    fs.renameSync(modules, previous);
+  }
+  fs.renameSync(staged, modules);
+}
 function npmCommand(args) {
   const child = spawnSync(node, [npm, ...args], { cwd: source, env: process.env, shell: false, timeout: 180000, maxBuffer: 8388608 });
   if (child.error || child.status !== 0 || child.signal) {
@@ -63,6 +116,7 @@ function npmCommand(args) {
 }
 const lockPath = path.join(source, 'package-lock.json');
 if (action === 'install') {
+  console.error('Windows install phase: provision-lock');
   fs.mkdirSync(source);
   exclusive(path.join(source, 'package.json'), JSON.stringify({ name: 'gentle-shell-windows-private', private: true, version: '1.0.0', dependencies: Object.fromEntries(Object.entries(pins).map(([name, [version]]) => [name, version])) }));
   npmCommand(['install', '--package-lock-only', '--ignore-scripts', '--engine-strict', '--no-audit', '--no-fund', '--min-release-age=0', '--registry=https://registry.npmjs.org/']);
@@ -82,8 +136,12 @@ for (const [relative, record] of Object.entries(lock.packages)) {
   if (record.resolved !== `https://registry.npmjs.org/${name}/-/${name.split('/').at(-1)}-${record.version}.tgz` || !/^sha512-[A-Za-z0-9+/]{86}==$/.test(record.integrity)) reject('locked supplier');
 }
 if (action === 'install') {
+  console.error('Windows install phase: provision-ci');
   npmCommand(['ci', '--ignore-scripts', '--engine-strict', '--no-audit', '--no-fund', '--min-release-age=0', '--registry=https://registry.npmjs.org/']);
-  npmCommand(['install', '--global', '--prefix', prefix, '--offline', '--ignore-scripts', '--engine-strict', '--no-audit', '--no-fund', ...Object.entries(pins).map(([name, [version]]) => `${name}@${version}`)]);
+  console.error('Windows install phase: provision-copy');
+  materializeGlobal();
+  console.error('Windows install phase: provision-rebuild');
+  npmCommand(['rebuild', '--global', '--prefix', prefix, '--offline', '--ignore-scripts', '--bin-links=true', '--engine-strict', '--no-audit', '--no-fund']);
 }
 const authority = new Map();
 for (const [relative, record] of Object.entries(lock.packages)) {
@@ -142,6 +200,7 @@ function packages(directory) {
     if (fs.existsSync(path.join(absolute, 'node_modules'))) packages(path.join(absolute, 'node_modules'));
   }
 }
+console.error('Windows install phase: provision-compare');
 packages(modules);
 const gentle = path.join(modules, 'gentle-pi');
 const piMetadata = JSON.parse(read(path.join(modules, '@earendil-works/pi-coding-agent/package.json')));
@@ -156,7 +215,8 @@ if (action === 'install' || !mainOverlay) for (const [name, expected] of [
 ]) if (digest(read(path.join(gentle, name))) !== expected) reject('stock native supplier source pin');
 if (action === 'install') {
   const { installGentleAi } = await import(pathToFileURL(path.join(gentle, 'scripts/gentle-ai-installer.mjs')).href);
-  await installGentleAi({ packageRoot: gentle }); // Explicit, authenticated stock API, no postinstall/fullscreen hook.
+  console.error('Windows install phase: provision-native'); // Explicit, authenticated stock API, no postinstall/fullscreen hook.
+  await installGentleAi({ packageRoot: gentle });
 }
 const native = path.join(gentle, '.gentle-ai/v4.0.0');
 const manifest = JSON.parse(read(path.join(native, 'integrity.json')));
