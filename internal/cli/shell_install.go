@@ -144,7 +144,14 @@ func RunShellInstallInline(ctx context.Context, selection ShellInstallSelection,
 		if err != nil {
 			return err
 		}
-		return shellinstaller.RunUserEntry(ctx, self, args, nil, io.Discard, io.Discard)
+		workerLog := &boundedWorkerLog{limit: 8192}
+		runErr := shellinstaller.RunUserEntry(ctx, self, args, nil, workerLog, workerLog)
+		if runErr != nil {
+			if output := strings.TrimSpace(workerLog.String()); output != "" {
+				return fmt.Errorf("%w; worker output: %s", runErr, output)
+			}
+		}
+		return runErr
 	}
 	self, err := os.Executable()
 	if err != nil {
