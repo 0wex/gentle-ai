@@ -86,6 +86,7 @@ jobs:
         run: |
           go build -trimpath -o "$RUNNER_TEMP/gentle-ai" ./cmd/gentle-ai
           "$RUNNER_TEMP/gentle-ai-bench" run --binary "$RUNNER_TEMP/gentle-ai" --out "$RUNNER_TEMP/bench-portable.json"
+          jq -r '.journeys[] | .id + " " + .status' "$RUNNER_TEMP/bench-portable.json" | grep -E "^(j51-|j59-|j60-|j75-|j89-|j104-|j110-|j111-|j113-|j114-|j116-|j123-|j4435-)" | sort | uniq -c || true
           jq -e '
             def completed_once($id):
               [.journeys[] | select(.id == $id)] as $matches
