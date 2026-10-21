@@ -12,7 +12,7 @@ func userValidateStageExperience(profile *UserExperience) error {
 	if userQualifiedStockExperience(profile) {
 		return nil
 	}
-	if profile != nil && profile.SDKSource == "main-preview" {
+	if profile != nil && profile.SDKSource == "main-preview" && runtime.GOOS != "windows" {
 		return experienceError("Main SDK requires its authenticated runtime producer")
 	}
 	if profile != nil && profile.CodeGraph != "" {
