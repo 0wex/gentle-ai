@@ -39,7 +39,7 @@ func ShellRoseDelay(frame int) time.Duration {
 }
 
 func shellRoseCentered(line string, width int) string {
-	pad := (width-lipgloss.Width(line))/2 - 6
+	pad := 0 // keep the rose aligned with the completion copy below
 	if pad <= 0 {
 		return line
 	}
