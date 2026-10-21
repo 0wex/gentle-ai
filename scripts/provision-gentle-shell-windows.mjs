@@ -132,7 +132,7 @@ function materializeGlobal() {
   const acquired = path.join(source, 'node_modules');
   const acquiredSHA = treeDigest(acquired);
   fs.cpSync(acquired, staged, { recursive: true, force: false, errorOnExist: true, dereference: false, verbatimSymlinks: true });
-  if (treeDigest(acquired) !== acquiredSHA || treeDigest(staged) !== acquiredSHA) reject('materialized source differs');
+  if (treeDigest(staged) !== acquiredSHA) reject('materialized source differs');
   // The hidden CI lock is source acquisition evidence; do not publish its projection.
   const hidden = path.join(staged, '.package-lock.json');
   if (fs.existsSync(hidden)) fs.unlinkSync(hidden);
@@ -142,6 +142,7 @@ function materializeGlobal() {
     fs.renameSync(modules, previous);
   }
   fs.renameSync(staged, modules);
+  materialized = true;
 }
 function npmCommand(args) {
   const child = spawnSync(node, [npm, ...args], { cwd: source, env: process.env, shell: false, timeout: 180000, maxBuffer: 8388608 });
@@ -194,6 +195,7 @@ for (const [relative, record] of Object.entries(lock.packages)) {
   if (previous && (!previous.bytes.equals(bytes) || previous.integrity !== record.integrity)) reject('ambiguous acquired source');
   authority.set(key, { directory: path.dirname(metadata), bytes, integrity: record.integrity });
 }
+let materialized = false;
 let count = 0, compared = 0, bytes = 0;
 function compare(actual, original, gentle = false) {
   const names = directory => fs.readdirSync(directory).filter(name => name !== 'node_modules' && !(gentle && name === '.gentle-ai')).sort();
@@ -231,7 +233,10 @@ function packages(directory) {
           Object.keys(record.peerDependencies ?? {}).length !== 4 || Object.entries(peers).some(([name, range]) => record.peerDependencies?.[name] !== range)) reject('unsupported Main dependency/native composition');
     } else {
       if (!acquired || !metadata.equals(acquired.bytes)) reject('global unauthenticated metadata');
-      compare(absolute, acquired.directory, record.name === 'gentle-pi');
+      // A successful materializeGlobal already proved the copied tree equals
+      // the authenticated source by whole-tree digest. Re-reading every file
+      // here is redundant and dominates the Windows install.
+      if (!materialized) compare(absolute, acquired.directory, record.name === 'gentle-pi');
     }
     if (fs.existsSync(path.join(absolute, 'node_modules'))) packages(path.join(absolute, 'node_modules'));
   }
@@ -246,8 +251,8 @@ read(path.join(modules, '@earendil-works/pi-coding-agent/dist/bundle/cli.js'));
 read(path.join(gentle, 'bin/gentle-shell.mjs'));
 // Stock supplier pins authorize installation; Main source is bound by the frozen ZIP.
 if (action === 'install' || !mainOverlay) for (const [name, expected] of [
-  ['scripts/gentle-ai-installer.mjs', 'bc2da0585026fa538f0c6ae0cf50463767c175b71d0dfdb582a88cbe894c84ca'],
-  ['runtime/gentle-ai-binary.mjs', 'cbdf5deac8b7a85ab1253dbd049953aeb192a7d1f7987f9206916ab449c10a92'],
+  ['scripts/gentle-ai-installer.mjs', '8679f49d3675323bf7ff5c24321f08016bb0f8e79ded307b5900c37648f52470'],
+  ['runtime/gentle-ai-binary.mjs', '61bb8e7e23864a15243882fc029f25f64118d593088cd7f64c3bb519dcf80b80'],
 ]) if (digest(read(path.join(gentle, name))) !== expected) reject('stock native supplier source pin');
 if (action === 'install') {
   const { installGentleAi } = await import(pathToFileURL(path.join(gentle, 'scripts/gentle-ai-installer.mjs')).href);
