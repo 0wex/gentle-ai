@@ -122,6 +122,7 @@ function treeDigest(directory) {
 // Single materialization: the authenticated source/node_modules tree is verified,
 // staged on the prefix filesystem, and promoted by rename. Stock npm rebuild only
 // recreates bin links; the registry is never consulted for a second install.
+let materialized = false;
 function materializeGlobal() {
   fs.mkdirSync(prefix, { recursive: true });
   // Sibling staging keeps the promotion on the prefix filesystem.
@@ -195,7 +196,6 @@ for (const [relative, record] of Object.entries(lock.packages)) {
   if (previous && (!previous.bytes.equals(bytes) || previous.integrity !== record.integrity)) reject('ambiguous acquired source');
   authority.set(key, { directory: path.dirname(metadata), bytes, integrity: record.integrity });
 }
-let materialized = false;
 let count = 0, compared = 0, bytes = 0;
 function compare(actual, original, gentle = false) {
   const names = directory => fs.readdirSync(directory).filter(name => name !== 'node_modules' && !(gentle && name === '.gentle-ai')).sort();

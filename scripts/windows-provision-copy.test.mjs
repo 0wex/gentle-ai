@@ -23,6 +23,10 @@ for (const phase of ['provision-lock', 'provision-ci', 'provision-copy', 'provis
 assert.ok(source.includes(`'rebuild', '--global', '--prefix', prefix, '--offline', '--ignore-scripts', '--bin-links=true', '--engine-strict', '--no-audit', '--no-fund'`), 'stock rebuild flags');
 assert.ok(source.includes('`' + '.gentle-shell-staged-${crypto.randomUUID()}' + '`'), 'staging sibling under prefix');
 assert.ok(source.includes('`' + '.previous-${crypto.randomUUID()}' + '`'), 'old modules tree preserved as .previous-<uuid> sibling');
+const materializedDecl = source.indexOf('let materialized = false;');
+assert.ok(materializedDecl >= 0, 'materialized state declared');
+assert.ok(materializedDecl < source.indexOf('function materializeGlobal('), 'materialized declared before materializeGlobal');
+assert.ok(materializedDecl < source.indexOf('materializeGlobal();'), 'materialized declared before the install call');
 
 function extract(name) {
   const begin = `function ${name}(`;
