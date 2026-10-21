@@ -19,9 +19,10 @@ func shellWelcomeExperience() shellinstaller.UserExperience {
 	profile := shellinstaller.DefaultUserExperience()
 	profile.BackgroundSubagents = "on"
 	if runtime.GOOS == "windows" {
-		// Windows stages persona, background, Strict TDD, RDD and Context7.
+		// Windows stages persona, background, Strict TDD, RDD, CodeGraph and Context7.
 		profile.StrictTDD = "on"
 		profile.GlobalRDD = "on"
+		profile.CodeGraph = "on"
 		profile.Context7 = "on"
 		return profile
 	}

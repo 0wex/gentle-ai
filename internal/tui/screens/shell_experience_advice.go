@@ -20,7 +20,7 @@ func shellExperienceRecommendation(entry ShellExperienceEntry) (string, string) 
 	case ShellExperienceRDD:
 		return "ON", "Independent review preserves evidence; it applies globally and costs extra reviewer-agent tokens."
 	case ShellExperienceCodeGraph:
-		return "ON", "Use only on Linux amd64; the runtime stays private to this install (Separate or launcher-owned Shared). Project overrides remain."
+		return "ON", "Supported on Linux amd64 and Windows x64; the runtime stays private to this install. Project overrides remain."
 	case ShellExperienceContext7:
 		return "ON", "Use current library references through MCP."
 	case ShellExperienceInstallTarget:
