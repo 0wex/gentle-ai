@@ -35,6 +35,14 @@ func ShellRoseDelay(frame int) time.Duration {
 	return styles.RoseFrameDelay(frame)
 }
 
+func shellRoseCentered(line string, width int) string {
+	pad := (width - lipgloss.Width(line)) / 2
+	if pad <= 0 {
+		return line
+	}
+	return strings.Repeat(" ", pad) + line
+}
+
 func RenderShellInstall(steps []ShellInstallStep, failure string, done bool, frame, bloom int, destinationPublished, fallbackAvailable bool, mode, launchCommand string, width, height int) string {
 	if width <= 0 || height <= 0 {
 		return ""
@@ -57,24 +65,26 @@ func RenderShellInstall(steps []ShellInstallStep, failure string, done bool, fra
 	if len(steps) > 0 {
 		filled = barWidth * completed / len(steps)
 	}
-	bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
-	lines := []string{styles.TitleStyle.Render(fmt.Sprintf("%s  [%s] %d/%d", title, bar, completed, len(steps)))}
-	if !(done && failure == "") {
-		lines = append(lines, "")
+	bar := styles.ProgressFilled.Render(strings.Repeat("█", filled)) + styles.ProgressEmpty.Render(strings.Repeat("░", barWidth-filled))
+	lines := []string{styles.TitleStyle.Render(fmt.Sprintf("%s  [%s] %d/%d", title, bar, completed, len(steps))), ""}
+	labelWidth := 0
+	for _, step := range steps {
+		labelWidth = max(labelWidth, lipgloss.Width(step.Label))
 	}
 	current := ""
 	for _, step := range steps {
-		icon, suffix := "[ ]", ""
+		icon, state := "[ ]", "pending"
+		iconStyle, stateStyle := styles.SubtextStyle, styles.SubtextStyle
 		switch step.State {
 		case "running":
 			icon = "[" + shellInstallSpinner[frame%len(shellInstallSpinner)] + "]"
-			suffix = "  running"
+			state, iconStyle, stateStyle = "running", styles.WarningStyle, styles.WarningStyle
 		case "done":
-			icon, suffix = "[x]", "  done"
+			icon, state, iconStyle, stateStyle = "[x]", "done", styles.SuccessStyle, styles.SuccessStyle
 		case "failed":
-			icon, suffix = "[!]", "  failed"
+			icon, state, iconStyle, stateStyle = "[!]", "failed", styles.ErrorStyle, styles.ErrorStyle
 		}
-		lines = append(lines, fmt.Sprintf("  %s %s%s", icon, step.Label, suffix))
+		lines = append(lines, fmt.Sprintf("  %s %-*s  %s", iconStyle.Render(icon), labelWidth, step.Label, stateStyle.Render(state)))
 		if step.State == "running" {
 			for _, detail := range step.Details {
 				lines = append(lines, "        › "+detail)
@@ -103,12 +113,20 @@ func RenderShellInstall(steps []ShellInstallStep, failure string, done bool, fra
 			}
 			lines = append(lines, "  "+line)
 		}
+		lines = append(lines, "")
+		if fallbackAvailable {
+			lines = append(lines, styles.HelpStyle.Render("Enter: try last qualified Main  •  esc: back to menu"))
+		} else {
+			lines = append(lines, styles.HelpStyle.Render("Enter: back to menu"))
+		}
+		return finishShellLines(lines, width, height)
 	}
-	if done && failure == "" {
+	if done {
 		bloom = min(max(0, bloom), ShellBloomFrames-1)
+		lines = append(lines, "")
 		if width >= 54 && height >= 35 {
 			for _, line := range shellRoseFrameLines(bloom) {
-				lines = append(lines, "    "+line)
+				lines = append(lines, shellRoseCentered(line, width))
 			}
 		} else {
 			lines = append(lines, "        ✿")
@@ -118,25 +136,22 @@ func RenderShellInstall(steps []ShellInstallStep, failure string, done bool, fra
 		}
 		command := lipgloss.NewStyle().Foreground(styles.ColorPeach).Bold(true).Render(launchCommand)
 		lines = append(lines,
+			"",
 			styles.TitleStyle.Render("Welcome to the gentle-tailored experience"),
-			styles.SubtextStyle.Render("To use gentle-shell, execute"),
-			"  "+command,
-			styles.SubtextStyle.Render("to start using gentle-shell"),
+			styles.SubtextStyle.Render("Start with: ")+command,
+			"",
+			styles.HelpStyle.Render("Enter: finish"),
 		)
+		return finishShellLines(lines, width, height)
 	}
-	lines = append(lines, "")
-	if !done {
-		if current != "" {
-			lines = append(lines, styles.TitleStyle.Render("CURRENT TASK"), "  "+current, "")
-		}
-		lines = append(lines, styles.HelpStyle.Render("The worker is running; do not close the terminal"))
-	} else if failure != "" && fallbackAvailable {
-		lines = append(lines, styles.HelpStyle.Render("Enter: try last qualified Main  •  esc: back to menu"))
-	} else if failure != "" {
-		lines = append(lines, styles.HelpStyle.Render("Enter: back to menu"))
-	} else {
-		lines = append(lines, styles.HelpStyle.Render("Enter: finish"))
+	if current != "" {
+		lines = append(lines, styles.TitleStyle.Render("CURRENT TASK"), "  "+current, "")
 	}
+	lines = append(lines, styles.HelpStyle.Render("The worker is running; do not close the terminal"))
+	return finishShellLines(lines, width, height)
+}
+
+func finishShellLines(lines []string, width, height int) string {
 	if len(lines) > height {
 		lines = lines[:height]
 	}
