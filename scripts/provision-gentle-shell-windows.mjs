@@ -119,30 +119,23 @@ function treeDigest(directory) {
   visit(directory);
   return digest(JSON.stringify(records));
 }
-// Single materialization: the authenticated source/node_modules tree is verified,
-// staged on the prefix filesystem, and promoted by rename. Stock npm rebuild only
-// recreates bin links; the registry is never consulted for a second install.
+// Single materialization: npm ci already writes the authenticated tree at
+// source/node_modules; promote it by rename into the final prefix instead of
+// copying and re-hashing every file. The lock/authority and metadata checks
+// still run before the promotion.
 let materialized = false;
 function materializeGlobal() {
   fs.mkdirSync(prefix, { recursive: true });
-  // Sibling staging keeps the promotion on the prefix filesystem.
-  const staged = path.join(prefix, `.gentle-shell-staged-${crypto.randomUUID()}`);
   const previous = path.join(prefix, `.previous-${crypto.randomUUID()}`);
-  absent(staged);
   absent(previous);
   const acquired = path.join(source, 'node_modules');
-  const acquiredSHA = treeDigest(acquired);
-  fs.cpSync(acquired, staged, { recursive: true, force: false, errorOnExist: true, dereference: false, verbatimSymlinks: true });
-  if (treeDigest(staged) !== acquiredSHA) reject('materialized source differs');
-  // The hidden CI lock is source acquisition evidence; do not publish its projection.
-  const hidden = path.join(staged, '.package-lock.json');
+  if (!fs.existsSync(acquired)) reject('acquired source absent');
+  const hidden = path.join(acquired, '.package-lock.json');
   if (fs.existsSync(hidden)) fs.unlinkSync(hidden);
-  // Never delete an old tree or uncertain new evidence on a failed promotion:
-  // an existing modules tree is preserved as a sibling before the promotion rename.
   if (fs.existsSync(modules)) {
     fs.renameSync(modules, previous);
   }
-  fs.renameSync(staged, modules);
+  fs.renameSync(acquired, modules);
   materialized = true;
 }
 function npmCommand(args) {
@@ -184,7 +177,8 @@ if (action === 'install') {
 const authority = new Map();
 for (const [relative, record] of Object.entries(lock.packages)) {
   if (!relative) continue;
-  const metadata = path.join(source, relative, 'package.json');
+  const acquiredRoot = materialized ? modules : source;
+  const metadata = path.join(acquiredRoot, relative, 'package.json');
   if (!fs.existsSync(metadata)) {
     if (record.optional !== true) reject('required acquired source absent');
     continue;

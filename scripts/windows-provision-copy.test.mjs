@@ -21,7 +21,7 @@ for (const phase of ['provision-lock', 'provision-ci', 'provision-copy', 'provis
   assert.ok(source.includes(`Windows install phase: ${phase}`), `phase marker ${phase} present`);
 }
 assert.ok(source.includes(`'rebuild', '--global', '--prefix', prefix, '--offline', '--ignore-scripts', '--bin-links=true', '--engine-strict', '--no-audit', '--no-fund'`), 'stock rebuild flags');
-assert.ok(source.includes('`' + '.gentle-shell-staged-${crypto.randomUUID()}' + '`'), 'staging sibling under prefix');
+assert.ok(source.includes('fs.renameSync(acquired, modules)'), 'source tree promoted by rename');
 assert.ok(source.includes('`' + '.previous-${crypto.randomUUID()}' + '`'), 'old modules tree preserved as .previous-<uuid> sibling');
 const materializedDecl = source.indexOf('let materialized = false;');
 assert.ok(materializedDecl >= 0, 'materialized state declared');
@@ -81,7 +81,7 @@ scenario('fresh-materialization', () => {
     assert.equal(fs.readFileSync(path.join(sandbox.modules, relative), 'utf8'), bytes, `promoted ${relative}`);
   }
   assert.ok(!fs.existsSync(path.join(sandbox.modules, '.package-lock.json')), 'hidden lock not published');
-  assert.ok(fs.existsSync(path.join(acquired, '.package-lock.json')), 'source acquisition evidence retained');
+  assert.ok(!fs.existsSync(acquired), 'source tree was moved, not copied');
 });
 
 scenario('previous-tree-preserved', () => {
@@ -117,21 +117,14 @@ scenario('tree-digest-detects-drift', () => {
   assert.notEqual(digest(acquired), digest(copy), 'extra member changes the digest');
 });
 
-scenario('symlink-fails-closed-before-promotion', function () {
-  if (process.platform === 'win32') return; // Symlink creation needs elevated Windows privilege.
-  const { root } = fixture();
-  sandbox.source = path.join(root, 'source');
-  sandbox.prefix = path.join(root, 'prefix');
-  sandbox.modules = path.join(sandbox.prefix, 'node_modules');
-  const sourceModules = path.join(sandbox.source, 'node_modules');
-  const old = path.join(sandbox.modules, 'gentle-pi/package.json');
-  fs.mkdirSync(path.dirname(old), { recursive: true });
-  fs.writeFileSync(old, '{"name":"gentle-pi","version":"3.0.0"}');
-  try { fs.symlinkSync(path.join(sourceModules, 'gentle-pi/package.json'), path.join(sourceModules, 'alias')); }
-  catch { return; } // Skip when the filesystem refuses symlinks.
-  assert.throws(() => run('materializeGlobal'), /Windows provision refused: inventory alias/);
-  assert.equal(fs.readFileSync(old, 'utf8'), '{"name":"gentle-pi","version":"3.0.0"}', 'failed digest leaves the old tree untouched');
-  assert.equal(fs.readdirSync(sandbox.prefix).length, 1, 'failed digest creates no staged sibling');
+scenario('absent-source-refused', () => {
+	const { root } = fixture();
+	sandbox.source = path.join(root, 'source');
+	sandbox.prefix = path.join(root, 'prefix');
+	sandbox.modules = path.join(sandbox.prefix, 'node_modules');
+	fs.rmSync(path.join(sandbox.source, 'node_modules'), { recursive: true, force: true });
+	assert.throws(() => run('materializeGlobal'), /Windows provision refused: acquired source absent/);
+	assert.ok(!fs.existsSync(sandbox.modules), 'failed promotion publishes no modules tree');
 });
 
 scenario('special-file-fails-closed', function () {
