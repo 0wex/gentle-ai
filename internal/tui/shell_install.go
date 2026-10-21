@@ -105,11 +105,6 @@ func (m Model) launchShellInstall(request shellinstaller.UserInstallRequest, fal
 	return m, waitShellInstallEvent(events)
 }
 
-type shellPreviewState struct {
-	config shellExperienceConfig
-	frame  int
-}
-
 type shellUpdateState struct {
 	install  shellinstaller.UserShellInstall
 	config   shellExperienceConfig
@@ -589,39 +584,7 @@ func (m Model) ShellInstallSelection() cli.ShellInstallSelection {
 	return m.shellInstallSelection
 }
 
-func (m Model) beginShellPreview(config shellExperienceConfig) (tea.Model, tea.Cmd) {
-	m.shellPreview = &shellPreviewState{config: config}
-	m.shellExperience = nil
-	return m, tea.Tick(screens.ShellRoseDelay(0), func(time.Time) tea.Msg { return shellInstallTick{} })
-}
-
-func (m Model) updateShellPreview(msg tea.Msg) (tea.Model, tea.Cmd) {
-	preview := m.shellPreview
-	if preview == nil {
-		return m, nil
-	}
-	if _, ok := msg.(shellInstallTick); ok {
-		if preview.frame < screens.ShellBloomFrames-1 {
-			preview.frame++
-			return m, tea.Tick(screens.ShellRoseDelay(preview.frame), func(time.Time) tea.Msg { return shellInstallTick{} })
-		}
-		return m, nil
-	}
-	key, ok := msg.(tea.KeyMsg)
-	if !ok {
-		return m, nil
-	}
-	switch key.String() {
-	case "enter", "esc", "ctrl+c":
-		m.shellExperience, m.shellPreview = &preview.config, nil
-	}
-	return m, nil
-}
-
 func (m Model) updateShellInstall(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if m.shellPreview != nil {
-		return m.updateShellPreview(msg)
-	}
 	if len(m.shellDetected) > 0 {
 		return m.updateShellDetected(msg)
 	}

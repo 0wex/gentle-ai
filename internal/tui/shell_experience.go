@@ -273,8 +273,6 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 						}
 					}
 				}
-			case screens.ShellExperiencePreview:
-				return m.beginShellPreview(config)
 			case screens.ShellExperienceUpdate:
 				return m.beginShellUpdate(config)
 			case screens.ShellExperienceUninstall:
@@ -330,17 +328,6 @@ func (m Model) shellInstallView() string {
 			entries[index] = screens.ShellDetectedEntry{Target: install.Target, Mode: shellDetectedMode(install.Mode), Channel: shellDetectedChannel(install.Channel)}
 		}
 		return screens.RenderShellDetectedList(entries, m.shellDetectedCursor, m.Width, m.Height)
-	}
-	if m.shellPreview != nil {
-		steps := make([]screens.ShellInstallStep, len(shellInstallStepLabels))
-		for index, label := range shellInstallStepLabels {
-			steps[index] = screens.ShellInstallStep{Label: label, State: "done"}
-		}
-		launch := "pi"
-		if m.shellPreview.config.mode == "separate" {
-			launch = "gentle-shell"
-		}
-		return screens.RenderShellInstall(steps, "", true, 0, m.shellPreview.frame, false, false, m.shellPreview.config.mode, launch, m.Width, m.Height)
 	}
 	if m.shellUpdate != nil {
 		update := m.shellUpdate

@@ -34,8 +34,6 @@ func shellExperienceRecommendation(entry ShellExperienceEntry) (string, string) 
 			return "Separate install", "Reuse a detected Pi prefix only when you want the defaults applied over it; Main is available with On my existing Pi or Separate, not the retained Shared prefix."
 		}
 		return "Separate install", "Keeps your personal Pi untouched and installs its own prefix, agent and launchers."
-	case ShellExperiencePreview:
-		return "Preview", "Plays the success animation locally. It installs, changes or uninstalls nothing."
 	case ShellExperienceUpdate:
 		return "Check", "Looks only at this installation's installed channel. Stable and Main are never mixed."
 	case ShellExperienceUninstall:
