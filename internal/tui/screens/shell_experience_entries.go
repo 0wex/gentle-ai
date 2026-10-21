@@ -1,6 +1,7 @@
 package screens
 
 import (
+	"runtime"
 	"strings"
 
 	"github.com/gentleman-programming/gentle-ai/v4/internal/shellinstaller"
@@ -95,20 +96,27 @@ func shellExperienceEntries(p shellinstaller.UserExperience, uninstall bool, tar
 		add(ShellExperienceEntry{Control: control, Category: category, Kind: "toggle", Label: label, Description: description, Value: caption, Checked: value == "on"})
 	}
 	addToggle(ShellExperienceBackground, "Recommended", "Background subagents", "Independent work without blocking terminal", p.BackgroundSubagents)
-	addToggle(ShellExperienceTDD, "Recommended", "Strict TDD", "Prove behavior with a failing test before implementation", p.StrictTDD)
-	addToggle(ShellExperienceRDD, "Recommended", "Global RDD", "Independent reviewers preserve evidence; extra reviewer-agent tokens; applies globally", p.GlobalRDD)
-	addToggle(ShellExperienceCodeGraph, "Recommended", "CodeGraph", "Structural indexing/navigation; project overrides and explicit qualification remain.", p.CodeGraph)
-	addToggle(ShellExperienceContext7, "Recommended", "Context7", "Current library docs through MCP", p.Context7)
+	if runtime.GOOS != "windows" {
+		addToggle(ShellExperienceTDD, "Recommended", "Strict TDD", "Prove behavior with a failing test before implementation", p.StrictTDD)
+		addToggle(ShellExperienceRDD, "Recommended", "Global RDD", "Independent reviewers preserve evidence; extra reviewer-agent tokens; applies globally", p.GlobalRDD)
+		addToggle(ShellExperienceCodeGraph, "Recommended", "CodeGraph", "Structural indexing/navigation; project overrides and explicit qualification remain.", p.CodeGraph)
+		addToggle(ShellExperienceContext7, "Recommended", "Context7", "Current library docs through MCP", p.Context7)
+	}
 	for _, choice := range [][3]string{
 		{"stable", "Stable", "Stock SDK source; native installer and pins remain unchanged. Backspace inherits the stock default."},
 		{"main-preview", "Main preview", "SDK Main + stock provider. Works with On my existing Pi or Separate installs; native installer and pins remain stock. Linux amd64 is qualified today; Windows and macOS support is being completed."},
 	} {
+		if runtime.GOOS == "windows" && choice[0] == "main-preview" {
+			continue
+		}
 		add(ShellExperienceEntry{Control: ShellExperienceSDK, Category: "SDK source", Kind: "radio", Label: choice[1], Description: choice[2], Choice: choice[0], Value: shellSDKSourceLabel(&p), Current: p.SDKSource == choice[0] || p.SDKSource == "" && choice[0] == "stable"})
 	}
 	for _, target := range targets {
 		add(target)
 	}
-	addToggle(ShellExperienceGGA, "Optional workflows", "GGA", "Off by default. A provider is optional; leave it empty and GGA configures it later. Inheritance does not write an OFF override.", p.GGA)
+	if runtime.GOOS != "windows" {
+		addToggle(ShellExperienceGGA, "Optional workflows", "GGA", "Off by default. A provider is optional; leave it empty and GGA configures it later. Inheritance does not write an OFF override.", p.GGA)
+	}
 	// A retained provider stays editable so invalid OFF/inherit combinations
 	// can be corrected without silently discarding an explicit selection.
 	if p.GGA == "on" || p.GGAProvider != "" {

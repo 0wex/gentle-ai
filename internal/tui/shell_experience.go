@@ -17,6 +17,13 @@ import (
 // retain their explicit OFF/inherited choices; the transport defaults stay inert.
 func shellWelcomeExperience() shellinstaller.UserExperience {
 	profile := shellinstaller.DefaultUserExperience()
+	profile.BackgroundSubagents = "on"
+	if runtime.GOOS == "windows" {
+		// The first Windows slice stages persona and background preferences.
+		// Leave unsupported choices inherited instead of sending a profile the
+		// native installer must refuse at the plan boundary.
+		return profile
+	}
 	profile.StrictTDD = "on"
 	profile.GlobalRDD = "on"
 	profile.CodeGraph = "on"
