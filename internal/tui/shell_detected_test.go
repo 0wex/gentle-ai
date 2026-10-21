@@ -151,6 +151,7 @@ func TestShellUninstallSeparateKeepsBackup(t *testing.T) {
 	if view := m.View(); !strings.Contains(view, "Uninstall this installation") {
 		t.Fatalf("managed install hides uninstall:\n%s", view)
 	}
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyDown})  // Back is first; Uninstall is last.
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // Uninstall.
 	if !m.shellManage.confirm || !strings.Contains(m.View(), "Uninstall (keep backup)") {
 		t.Fatalf("uninstall confirmation is missing:\n%s", m.View())

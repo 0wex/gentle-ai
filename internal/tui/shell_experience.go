@@ -400,7 +400,7 @@ func (m Model) shellInstallView() string {
 		targets := screens.ShellInstallTargetEntries(m.shellExperience.mode, m.shellExperience.piFound, m.shellExperience.piNote, reuseAgent, m.shellExperience.existing, m.shellExperience.reconfigure)
 		canUninstall := m.shellExperience.reconfigure && (m.shellExperience.mode == "separate" || m.shellExperience.mode == "agent")
 		if canUninstall {
-			return screens.RenderShellExperienceWithUninstall(m.shellExperience.profile, m.shellExperience.cursor, m.shellExperience.err, m.Width, m.Height, true, targets...)
+			return screens.RenderShellExperienceWithUninstallAction(m.shellExperience.profile, m.shellExperience.cursor, m.shellExperience.err, m.Width, m.Height, true, manageContinueLabel(*m.shellExperience), targets...)
 		}
 		return screens.RenderShellExperience(m.shellExperience.profile, m.shellExperience.cursor, m.shellExperience.err, m.Width, m.Height, targets...)
 	}

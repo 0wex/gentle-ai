@@ -312,6 +312,24 @@ func manageChanges(current, selected shellinstaller.UserExperience, inPlace bool
 	return preferences, components
 }
 
+func manageContinueLabel(config shellExperienceConfig) string {
+	if !config.reconfigure || len(config.existing) != 1 {
+		return "Continue"
+	}
+	current, err := shellinstaller.LoadUserShellExperience(config.existing[0])
+	if err != nil {
+		return "Continue"
+	}
+	preferences, components := manageChanges(current, config.profile, config.mode == "separate")
+	if len(components) > 0 {
+		return "Update installation"
+	}
+	if len(preferences) > 0 {
+		return "Apply changes to installation"
+	}
+	return "Continue"
+}
+
 func manageActions(manage *shellManageState) []string {
 	if manage.uninstalled || manage.applied {
 		return []string{"Back"}
@@ -320,10 +338,11 @@ func manageActions(manage *shellManageState) []string {
 	if len(manage.preferences) > 0 {
 		actions = append(actions, "Apply preferences")
 	}
+	actions = append(actions, "Back")
 	if manage.install.Mode == "separate" || manage.install.Mode == "agent" {
 		actions = append(actions, "Uninstall this installation")
 	}
-	return append(actions, "Back")
+	return actions
 }
 
 func (m Model) beginUninstallFromConfig(config shellExperienceConfig) Model {

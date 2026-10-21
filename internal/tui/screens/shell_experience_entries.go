@@ -60,7 +60,7 @@ func ShellInstallTargetEntries(mode string, piFound bool, piNote string, agent s
 	}
 }
 
-func shellExperienceEntries(p shellinstaller.UserExperience, uninstall bool, targets ...ShellExperienceEntry) []ShellExperienceEntry {
+func shellExperienceEntries(p shellinstaller.UserExperience, uninstall bool, continueLabel string, targets ...ShellExperienceEntry) []ShellExperienceEntry {
 	var entries []ShellExperienceEntry
 	cursor := 0
 	add := func(e ShellExperienceEntry) {
@@ -120,16 +120,29 @@ func shellExperienceEntries(p shellinstaller.UserExperience, uninstall bool, tar
 	}
 	if uninstall {
 		add(ShellExperienceEntry{Control: ShellExperienceUpdate, Category: "Actions", Kind: "action", Label: "Check for updates", Description: "Checks this installation's Stable or Main channel for component updates."})
+	}
+	if continueLabel == "" {
+		continueLabel = "Continue"
+	}
+	continueDescription := "Continue with this Gentle-Shell profile. Installation still requires physical confirmation."
+	if continueLabel != "Continue" {
+		continueDescription = "Review and apply the selected changes to this installation."
+	}
+	add(ShellExperienceEntry{Control: ShellExperienceContinue, Category: "Actions", Kind: "action", Label: continueLabel, Description: continueDescription})
+	add(ShellExperienceEntry{Control: ShellExperienceCancel, Category: "Actions", Kind: "action", Label: "Cancel", Description: "Cancel configuration without applying changes."})
+	if uninstall {
 		add(ShellExperienceEntry{Control: ShellExperienceUninstall, Category: "Actions", Kind: "action", Label: "Uninstall this installation", Description: "Moves this managed installation to a timestamped backup and removes it from detection. Your personal Pi is untouched."})
 	}
-	add(ShellExperienceEntry{Control: ShellExperienceContinue, Category: "Actions", Kind: "action", Label: "Continue", Description: "Continue with this Gentle-Shell profile. Installation still requires physical confirmation."})
-	add(ShellExperienceEntry{Control: ShellExperienceCancel, Category: "Actions", Kind: "action", Label: "Cancel", Description: "Cancel configuration without applying changes."})
 	return entries
 }
 
 func ShellExperienceOptionsWithUninstall(p shellinstaller.UserExperience, uninstall bool, targets ...ShellExperienceEntry) []ShellExperienceEntry {
+	return ShellExperienceOptionsWithUninstallAction(p, uninstall, "Continue", targets...)
+}
+
+func ShellExperienceOptionsWithUninstallAction(p shellinstaller.UserExperience, uninstall bool, continueLabel string, targets ...ShellExperienceEntry) []ShellExperienceEntry {
 	var options []ShellExperienceEntry
-	for _, entry := range shellExperienceEntries(p, uninstall, targets...) {
+	for _, entry := range shellExperienceEntries(p, uninstall, continueLabel, targets...) {
 		if entry.Selectable {
 			options = append(options, entry)
 		}

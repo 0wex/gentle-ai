@@ -13,9 +13,9 @@ const shellExperienceConfigHelp = "j/k: navigate • enter: select • End: cont
 
 // These layouts restore the original configuration hierarchy and contextual
 // help. Entries project UserExperience, not the retired profile or controller.
-func renderShellExperienceConfigWithUninstall(p shellinstaller.UserExperience, cursor, width, height int, uninstall bool, targets ...ShellExperienceEntry) string {
-	entries := shellExperienceEntries(p, uninstall, targets...)
-	cursor = min(max(0, cursor), len(ShellExperienceOptionsWithUninstall(p, uninstall, targets...))-1)
+func renderShellExperienceConfigWithUninstall(p shellinstaller.UserExperience, cursor, width, height int, uninstall bool, continueLabel string, targets ...ShellExperienceEntry) string {
+	entries := shellExperienceEntries(p, uninstall, continueLabel, targets...)
+	cursor = min(max(0, cursor), len(ShellExperienceOptionsWithUninstallAction(p, uninstall, continueLabel, targets...))-1)
 	if width <= 5 || height <= 4 {
 		return renderShellExperienceConfigMinimum(entries, cursor, width, height)
 	}

@@ -17,8 +17,12 @@ func RenderShellExperience(p shellinstaller.UserExperience, cursor int, err erro
 }
 
 func RenderShellExperienceWithUninstall(p shellinstaller.UserExperience, cursor int, err error, width, height int, uninstall bool, targets ...ShellExperienceEntry) string {
+	return RenderShellExperienceWithUninstallAction(p, cursor, err, width, height, uninstall, "Continue", targets...)
+}
+
+func RenderShellExperienceWithUninstallAction(p shellinstaller.UserExperience, cursor int, err error, width, height int, uninstall bool, continueLabel string, targets ...ShellExperienceEntry) string {
 	width, height = shellViewport(width, height)
-	view := renderShellExperienceConfigWithUninstall(p, cursor, width, height, uninstall, targets...)
+	view := renderShellExperienceConfigWithUninstall(p, cursor, width, height, uninstall, continueLabel, targets...)
 	if err != nil {
 		warning := wrapShellExperienceConfigText(err.Error(), width)
 		warning = warning[:min(len(warning), max(1, min(3, height-1)))]
