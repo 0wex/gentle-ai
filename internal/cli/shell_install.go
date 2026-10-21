@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -137,6 +138,13 @@ func RunShellInstallInline(ctx context.Context, selection ShellInstallSelection,
 	args := ShellInstallArguments(selection)
 	if len(args) < 2 {
 		return errors.New("invalid or oversized experience selection; run gentle-ai shell install to review it again")
+	}
+	if runtime.GOOS != "linux" {
+		self, err := os.Executable()
+		if err != nil {
+			return err
+		}
+		return shellinstaller.RunUserEntry(ctx, self, args, nil, io.Discard, io.Discard)
 	}
 	self, err := os.Executable()
 	if err != nil {

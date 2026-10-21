@@ -48,11 +48,18 @@ func shellDefaultDestination() (string, error) {
 		return "", err
 	}
 	base := filepath.Join(home, ".local", "share", "gentle-shell")
+	if runtime.GOOS == "windows" {
+		local := os.Getenv("LOCALAPPDATA")
+		if local == "" {
+			return "", errors.New("LOCALAPPDATA is not set")
+		}
+		base = filepath.Join(local, "gentle-shell")
+	}
 	if err := os.MkdirAll(base, 0700); err != nil {
 		return "", err
 	}
 	info, err := os.Lstat(base)
-	if err != nil || !info.IsDir() || info.Mode().Perm() != 0700 {
+	if err != nil || !info.IsDir() || (runtime.GOOS != "windows" && info.Mode().Perm() != 0700) {
 		return "", errors.New("default install parent is not a private 0700 directory: " + base)
 	}
 	destination := filepath.Join(base, "install")
