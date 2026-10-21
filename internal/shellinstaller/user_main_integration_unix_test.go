@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -60,17 +59,6 @@ func TestUserMainIntegrationPreservesContextCauses(t *testing.T) {
 			t.Fatal("stopped preparer touched its destination", err)
 		}
 	}
-}
-
-type userMainCloseErrorBody struct {
-	io.Reader
-	cause  error
-	closed *int
-}
-
-func (b userMainCloseErrorBody) Close() error {
-	(*b.closed)++
-	return b.cause
 }
 
 func TestUserMainIntegrationRejectsBodyCloseFailure(t *testing.T) {

@@ -39,6 +39,9 @@ func shellEntryValues(req shellinstaller.UserInstallRequest) []string {
 		return nil // Unsupported preferences must never become legacy worker arguments.
 	}
 	channel, _ := shellinstaller.UserInstallChannel(req.Channel) // Worker rejects invalid values.
+	if req.Experience != nil && req.Experience.SDKSource == "main-preview" {
+		channel = "main"
+	}
 	return []string{req.Destination, req.Mode, req.SharedPrefix, req.SharedAgent, req.Confirmation, "--channel", channel}
 }
 

@@ -1,6 +1,9 @@
 package shellinstaller
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"runtime"
+)
 
 func userValidateStageExperience(profile *UserExperience) error {
 	if err := userValidateStagePreferences(profile); err != nil {
@@ -18,10 +21,10 @@ func userValidateStageExperience(profile *UserExperience) error {
 	if profile != nil && profile.GGA != "" {
 		return experienceError("explicit GGA requires a qualified optional private CLI/config stage")
 	}
-	if profile != nil && profile.StrictTDD != "" {
+	if profile != nil && profile.StrictTDD != "" && runtime.GOOS != "windows" {
 		return experienceError("explicit Strict TDD requires a supported private SDK stage")
 	}
-	if profile != nil && profile.Context7 != "" {
+	if profile != nil && profile.Context7 != "" && runtime.GOOS != "windows" {
 		return experienceError("explicit Context7 requires a supported private MCP stage")
 	}
 	return nil
@@ -36,7 +39,7 @@ func userValidateStagePreferences(profile *UserExperience) error {
 	if err := profile.Validate(); err != nil {
 		return err
 	}
-	if profile.GlobalRDD != "" && !userQualifiedPrivateChoices(profile) && !userQualifiedLegacyExperience(profile) {
+	if profile.GlobalRDD != "" && runtime.GOOS != "windows" && !userQualifiedPrivateChoices(profile) && !userQualifiedLegacyExperience(profile) {
 		return experienceError("explicit global RDD requires a supported native distribution")
 	}
 	return nil

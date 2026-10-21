@@ -58,10 +58,13 @@ func userQualifiedLegacyExperience(profile *UserExperience) bool {
 }
 
 func userValidateMainExperience(profile *UserExperience) error {
-	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
-		return experienceError("SDK Main + stock provider is qualified on Linux amd64 today; Windows and macOS support is being completed")
+	if runtime.GOOS == "linux" && runtime.GOARCH == "amd64" {
+		return nil
 	}
-	return nil
+	if runtime.GOOS == "windows" {
+		return nil // The Windows native installer consumes the Main channel.
+	}
+	return experienceError("SDK Main + stock provider is qualified on Linux amd64 today; macOS support is being completed")
 }
 
 // A valid DTO alone is not admission: unsupported distributions/combinations
@@ -76,7 +79,10 @@ func userExperienceSupported(profile *UserExperience) error {
 	if profile.SDKSource == "main-preview" {
 		return userValidateMainExperience(profile)
 	}
-	if (profile.GlobalRDD != "" || profile.Context7 != "" || profile.StrictTDD != "" || profile.GGA != "" || profile.CodeGraph != "") && !userQualifiedStockExperience(profile) && !userQualifiedLegacyExperience(profile) {
+	if (profile.GlobalRDD != "" || profile.Context7 != "" || profile.StrictTDD != "") && runtime.GOOS != "windows" && !userQualifiedStockExperience(profile) && !userQualifiedLegacyExperience(profile) {
+		return experienceError("selected additional experience preferences require a compatible installed runtime")
+	}
+	if (profile.GGA != "" || profile.CodeGraph != "") && !userQualifiedStockExperience(profile) && !userQualifiedLegacyExperience(profile) {
 		return experienceError("selected additional experience preferences require a compatible installed runtime")
 	}
 	return nil

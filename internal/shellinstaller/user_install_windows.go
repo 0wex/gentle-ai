@@ -69,6 +69,9 @@ func userWindowsJobOwned() error {
 }
 
 func InspectUserInstall(req UserInstallRequest) (string, error) {
+	if req.Experience != nil && req.Experience.SDKSource == "main-preview" {
+		req.Channel = "main"
+	}
 	if err := userExperienceSupported(req.Experience); err != nil {
 		return "", err
 	}

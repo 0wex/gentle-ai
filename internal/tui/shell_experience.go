@@ -19,9 +19,10 @@ func shellWelcomeExperience() shellinstaller.UserExperience {
 	profile := shellinstaller.DefaultUserExperience()
 	profile.BackgroundSubagents = "on"
 	if runtime.GOOS == "windows" {
-		// The first Windows slice stages persona and background preferences.
-		// Leave unsupported choices inherited instead of sending a profile the
-		// native installer must refuse at the plan boundary.
+		// Windows stages persona, background, Strict TDD, RDD and Context7.
+		profile.StrictTDD = "on"
+		profile.GlobalRDD = "on"
+		profile.Context7 = "on"
 		return profile
 	}
 	profile.StrictTDD = "on"
@@ -458,10 +459,13 @@ func (m Model) shellExperienceNavigation(key tea.KeyMsg) (Model, bool) {
 
 // This visible choice gate never grants worker or physical-selection authority.
 func shellMainPlatformError() error {
-	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
-		return errors.New("SDK Main + stock provider is qualified on Linux amd64 today; Windows and macOS support is being completed")
+	if runtime.GOOS == "linux" && runtime.GOARCH == "amd64" {
+		return nil
 	}
-	return nil
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	return errors.New("SDK Main + stock provider is qualified on Linux amd64 today; macOS support is being completed")
 }
 
 func shellMainSDKChoiceError(p shellinstaller.UserExperience) error {
