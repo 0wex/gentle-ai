@@ -18,7 +18,7 @@ func userValidateStageExperience(profile *UserExperience) error {
 	if profile != nil && profile.CodeGraph != "" && runtime.GOOS != "windows" {
 		return experienceError("explicit CodeGraph requires a qualified private library/runtime stage")
 	}
-	if profile != nil && profile.GGA != "" {
+	if profile != nil && profile.GGA != "" && !(runtime.GOOS == "windows" && profile.GGA == "off") {
 		return experienceError("explicit GGA requires a qualified optional private CLI/config stage")
 	}
 	if profile != nil && profile.StrictTDD != "" && runtime.GOOS != "windows" {

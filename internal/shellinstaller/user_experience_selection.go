@@ -85,7 +85,7 @@ func userExperienceSupported(profile *UserExperience) error {
 	if profile.CodeGraph != "" && runtime.GOOS != "windows" && !userQualifiedStockExperience(profile) && !userQualifiedLegacyExperience(profile) {
 		return experienceError("selected additional experience preferences require a compatible installed runtime")
 	}
-	if profile.GGA != "" && !userQualifiedStockExperience(profile) && !userQualifiedLegacyExperience(profile) {
+	if profile.GGA != "" && profile.GGA != "off" && !userQualifiedStockExperience(profile) && !userQualifiedLegacyExperience(profile) {
 		return experienceError("selected additional experience preferences require a compatible installed runtime")
 	}
 	return nil

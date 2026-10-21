@@ -24,6 +24,7 @@ func shellWelcomeExperience() shellinstaller.UserExperience {
 		profile.GlobalRDD = "on"
 		profile.CodeGraph = "on"
 		profile.Context7 = "on"
+		profile.GGA = "off"
 		return profile
 	}
 	profile.StrictTDD = "on"
