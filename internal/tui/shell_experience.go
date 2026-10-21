@@ -336,7 +336,11 @@ func (m Model) shellInstallView() string {
 		for index, label := range shellInstallStepLabels {
 			steps[index] = screens.ShellInstallStep{Label: label, State: "done"}
 		}
-		return screens.RenderShellInstall(steps, "", true, 0, m.shellPreview.frame, false, false, m.shellPreview.config.mode, m.Width, m.Height)
+		launch := "pi"
+		if m.shellPreview.config.mode == "separate" {
+			launch = "gentle-shell"
+		}
+		return screens.RenderShellInstall(steps, "", true, 0, m.shellPreview.frame, false, false, m.shellPreview.config.mode, launch, m.Width, m.Height)
 	}
 	if m.shellUpdate != nil {
 		update := m.shellUpdate
@@ -375,7 +379,11 @@ func (m Model) shellInstallView() string {
 				published = statErr == nil
 			}
 		}
-		return screens.RenderShellInstall(steps, failure, m.shellInstallRun.done, m.shellInstallRun.spinner, m.shellInstallRun.bloom, published, m.shellInstallRun.fallbackAvailable, m.shellInstallSelection.Request.Mode, m.Width, m.Height)
+		launch := "pi"
+		if m.shellInstallSelection.Request.Mode == "separate" {
+			launch = "gentle-shell"
+		}
+		return screens.RenderShellInstall(steps, failure, m.shellInstallRun.done, m.shellInstallRun.spinner, m.shellInstallRun.bloom, published, m.shellInstallRun.fallbackAvailable, m.shellInstallSelection.Request.Mode, launch, m.Width, m.Height)
 	}
 	if m.shellPlan != nil {
 		return screens.RenderShellPlan(m.shellPlan, m.Width, m.Height)

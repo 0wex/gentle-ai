@@ -85,7 +85,7 @@ func TestShellPlanEnterRunsInstallationInsideTUI(t *testing.T) {
 			t.Fatalf("step was not completed in order: %+v", m.shellInstallRun.steps)
 		}
 	}
-	if view := m.View(); !strings.Contains(view, "Installation complete") || !strings.Contains(view, "Welcome to the gentle-tailored experience") || !strings.Contains(view, "Enter: finish") {
+	if view := m.View(); !strings.Contains(view, "Installation complete") || !strings.Contains(view, "Welcome to the gentle-tailored experience") || !strings.Contains(view, "gentle-shell") || !strings.Contains(view, "Enter: finish") {
 		t.Fatalf("completion screen differs:\n%s", view)
 	}
 	if cmd == nil {

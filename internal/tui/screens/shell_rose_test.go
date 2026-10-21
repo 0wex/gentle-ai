@@ -16,8 +16,8 @@ func TestShellRoseFramesDecode(t *testing.T) {
 		}
 	}
 	steps := []ShellInstallStep{{Label: "Validate", State: "done"}, {Label: "Prepare", State: "done"}, {Label: "Runtime", State: "done"}, {Label: "Optional", State: "done"}, {Label: "Publish", State: "done"}}
-	view := RenderShellInstall(steps, "", true, 0, ShellBloomFrames-1, true, false, "separate", 120, 35)
-	if !strings.Contains(view, "Welcome to the gentle-tailored experience") || !strings.Contains(view, "▀") || !strings.Contains(view, "Enter: finish") {
+	view := RenderShellInstall(steps, "", true, 0, ShellBloomFrames-1, true, false, "separate", "gentle-shell", 120, 35)
+	if !strings.Contains(view, "Welcome to the gentle-tailored experience") || !strings.Contains(view, "gentle-shell") || !strings.Contains(view, "▀") || !strings.Contains(view, "Enter: finish") {
 		t.Fatalf("truecolor rose or completion help is missing:\n%s", view)
 	}
 }

@@ -234,7 +234,7 @@ func shellRoseFrameLines(frame int) []string {
 	return out
 }
 
-func RenderShellInstall(steps []ShellInstallStep, failure string, done bool, frame, bloom int, destinationPublished, fallbackAvailable bool, mode string, width, height int) string {
+func RenderShellInstall(steps []ShellInstallStep, failure string, done bool, frame, bloom int, destinationPublished, fallbackAvailable bool, mode, launchCommand string, width, height int) string {
 	if width <= 0 || height <= 0 {
 		return ""
 	}
@@ -310,7 +310,17 @@ func RenderShellInstall(steps []ShellInstallStep, failure string, done bool, fra
 		} else {
 			lines = append(lines, "        ✿")
 		}
-		lines = append(lines, "", styles.TitleStyle.Render("Welcome to the gentle-tailored experience"), styles.SubtextStyle.Render("Your Gentle Shell is ready."))
+		if launchCommand == "" {
+			launchCommand = "gentle-shell"
+		}
+		command := lipgloss.NewStyle().Foreground(styles.ColorPeach).Bold(true).Render(launchCommand)
+		lines = append(lines,
+			"",
+			styles.TitleStyle.Render("Welcome to the gentle-tailored experience"),
+			styles.SubtextStyle.Render("To use gentle-shell, execute"),
+			"  "+command,
+			styles.SubtextStyle.Render("to start using gentle-shell"),
+		)
 	}
 	lines = append(lines, "")
 	if !done {

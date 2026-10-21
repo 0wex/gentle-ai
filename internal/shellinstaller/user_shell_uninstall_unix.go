@@ -28,6 +28,10 @@ func UninstallUserShellInstall(home string, install UserShellInstall) (string, e
 		if err := userRestoreAgentImages(install.Target, manifest.Agent); err != nil {
 			return "", err
 		}
+	} else if install.Mode == "separate" {
+		if err := RemoveUserShellLauncher(install.Target); err != nil {
+			return "", err
+		}
 	}
 	backup := install.Target + ".removed-" + time.Now().UTC().Format("20060102T150405.000000000Z")
 	if _, err := os.Lstat(backup); !os.IsNotExist(err) {
