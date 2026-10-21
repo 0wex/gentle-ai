@@ -172,17 +172,17 @@ func UninstallUserShellInstall(_ string, install UserShellInstall) (string, erro
 }
 
 func userWindowsRemoveLauncher(target string) error {
-	local := os.Getenv("LOCALAPPDATA")
-	if local == "" {
-		return nil
-	}
-	link := filepath.Join(local, "Microsoft", "WindowsApps", "gentle-shell.cmd")
-	data, err := os.ReadFile(link)
-	if os.IsNotExist(err) {
-		return nil
-	}
+	local, err := userWindowsLocalAppData()
 	if err != nil {
 		return err
+	}
+	link := filepath.Join(local, "Microsoft", "WindowsApps", "gentle-shell.cmd")
+	data, readErr := os.ReadFile(link)
+	if os.IsNotExist(readErr) {
+		return nil
+	}
+	if readErr != nil {
+		return readErr
 	}
 	if !bytes.Contains(data, []byte(target)) {
 		return nil

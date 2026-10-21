@@ -359,6 +359,14 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 		if err != nil || selectionErr != nil || selected.Channel != channel {
 			return result, errors.Join(err, selectionErr, errors.New("existing installation channel differs; no replacement"))
 		}
+		// A previous attempt can publish and verify the target before the
+		// launcher is registered. Repair that tail on an idempotent run.
+		if err := userWindowsPublishLauncher(req.Destination); err != nil {
+			return result, errors.Join(err, errors.New("existing Windows installation could not publish the gentle-shell command"))
+		}
+		if cleanupErr := userWindowsEphemeralCleanup(req.Destination); cleanupErr != nil {
+			fmt.Fprintf(os.Stderr, "Windows installation is verified, but ephemeral cleanup failed; installer caches may remain in %q: %v\n", req.Destination, cleanupErr)
+		}
 		return UserInstallResult{req.Destination, filepath.Join(req.Destination, "prefix"), filepath.Join(req.Destination, "agent"), "already-installed"}, nil
 	}
 	var mainArtifact userWindowsArtifact
@@ -607,10 +615,23 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 
 // userWindowsPublishLauncher puts a tiny .cmd shim in the user's WindowsApps
 // PATH directory. It never overwrites a foreign command.
+func userWindowsLocalAppData() (string, error) {
+	if local := os.Getenv("LOCALAPPDATA"); local != "" {
+		return local, nil
+	}
+	// The worker environment is deliberately private and may omit
+	// LOCALAPPDATA. Resolve the real per-user folder from the token instead.
+	local, err := windows.KnownFolderPath(windows.FOLDERID_LocalAppData, windows.KF_FLAG_DEFAULT)
+	if err != nil || local == "" {
+		return "", errors.Join(err, errors.New("LOCALAPPDATA is unavailable"))
+	}
+	return local, nil
+}
+
 func userWindowsPublishLauncher(destination string) error {
-	local := os.Getenv("LOCALAPPDATA")
-	if local == "" {
-		return errors.New("LOCALAPPDATA is not set; cannot publish the gentle-shell command")
+	local, err := userWindowsLocalAppData()
+	if err != nil {
+		return errors.Join(err, errors.New("cannot publish the gentle-shell command"))
 	}
 	apps := filepath.Join(local, "Microsoft", "WindowsApps")
 	if info, err := os.Stat(apps); err != nil || !info.IsDir() {
