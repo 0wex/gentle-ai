@@ -55,8 +55,6 @@ type AcknowledgedBoundary struct {
 // consumption is a deduplication fact, never authority: callers must not
 // derive a receipt or a delivery gate from it, must prefer live authority, and
 // must keep a live lineage visible.
-//
-// guard:population acknowledged-passive-delta too-loose: only a committed HEAD base-diff whose nearest acknowledged first-parent ancestor (same base tree, exact recomputed identity) is reported, with the delta to the live candidate classified by the shared risk assessor; code, tests, configuration, operational markdown, and any lookup failure keep the review offer
 func AcknowledgedBoundaryCommit(ctx context.Context, repo string, live Snapshot) (AcknowledgedBoundary, bool, error) {
 	if live.Kind != TargetBaseDiff || len(live.IntendedUntracked) != 0 || len(live.Paths) == 0 {
 		return AcknowledgedBoundary{}, false, nil
@@ -111,6 +109,7 @@ func AcknowledgedBoundaryCommit(ctx context.Context, repo string, live Snapshot)
 		if err != nil {
 			return AcknowledgedBoundary{}, false, err
 		}
+		// guard:population acknowledged-passive-delta too-loose: only a committed HEAD base-diff whose nearest acknowledged first-parent ancestor (same base tree, exact recomputed identity) is reported, with the delta to the live candidate classified by the shared risk assessor; code, tests, configuration, operational markdown, and any lookup failure keep the review offer
 		return AcknowledgedBoundary{
 			Commit: ancestor.commit, Tree: ancestor.tree,
 			DeltaPaths: deltaPaths, Passive: assessment.Level == RiskLow,
