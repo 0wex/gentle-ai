@@ -57,11 +57,10 @@ func WelcomeOptionsWithShellInstaller(updateResults []update.UpdateResult, updat
 	opts = append(opts, "Receipt-Driven Development")
 	opts = append(opts, "Managed uninstall")
 	opts = append(opts, "Community Tools")
-	if shellInstaller {
-		opts = append(opts, ShellInstallWelcomeOption)
-	}
 	opts = append(opts, "Quit")
-
+	if shellInstaller {
+		return append([]string{ShellInstallWelcomeOption}, opts...)
+	}
 	return opts
 }
 
@@ -82,15 +81,14 @@ func RenderShellWelcomeWithAdvisory(cursor int, version string, updateBanner str
 }
 
 func renderWelcomeWithInstaller(cursor int, version string, updateBanner string, updateResults []update.UpdateResult, updateCheckDone bool, hasEngines bool, width int, height int, advisory WelcomeAdvisory, shellInstaller bool) string {
-	var options []string
+	options := WelcomeOptions(updateResults, updateCheckDone, hasEngines)
+	menuCursor := cursor
 	if shellInstaller {
-		options = WelcomeOptionsWithShellInstaller(updateResults, updateCheckDone, hasEngines, true)
-	} else {
-		options = WelcomeOptions(updateResults, updateCheckDone, hasEngines)
+		menuCursor--
 	}
 	minimum := func() string {
-		if shellInstaller && cursor >= 0 && cursor < len(options) {
-			return renderWelcomeMinimumLabel(width, height, options[cursor], true)
+		if shellInstaller {
+			return renderShellWelcomeMinimum(width, height, cursor, options)
 		}
 		return renderWelcomeMinimum(width, height, cursor)
 	}
@@ -117,8 +115,24 @@ func renderWelcomeWithInstaller(cursor int, version string, updateBanner string,
 			}
 		}
 
-		if !compact && includeLogo {
+		if !compact && includeLogo && !shellInstaller {
 			b.WriteString("\n")
+		}
+		if shellInstaller {
+			heroHeight, heroWidth := height, width
+			if compact {
+				heroHeight = 1
+			} else {
+				heroWidth = welcomeContentWidth(width)
+			}
+			if hero := renderShellWelcomeHero(cursor == 0, heroWidth, heroHeight); hero != "" {
+				b.WriteString(hero)
+				if compact {
+					b.WriteByte('\n')
+				} else {
+					b.WriteString("\n\n")
+				}
+			}
 		}
 		if compact {
 			b.WriteString(renderWelcomeText(styles.HeadingStyle, "Menu", width))
@@ -131,9 +145,9 @@ func renderWelcomeWithInstaller(cursor int, version string, updateBanner string,
 			b.WriteString("\n\n")
 		}
 		if compact {
-			b.WriteString(renderWelcomeOptions(options, cursor, width))
+			b.WriteString(renderWelcomeOptions(options, menuCursor, width))
 		} else {
-			b.WriteString(renderOptions(options, cursor))
+			b.WriteString(renderOptions(options, menuCursor))
 		}
 		if !compact && includeLogo {
 			b.WriteString("\n")
@@ -174,6 +188,88 @@ func renderWelcomeWithInstaller(cursor int, version string, updateBanner string,
 		view = minimum()
 	}
 	return view
+}
+
+func renderShellWelcomeHero(selected bool, width, height int) string {
+	if width <= 0 {
+		width = 80
+	}
+	if height <= 0 || height > 8 {
+		height = 8
+	}
+	return RenderShellInstallHero(selected, width, height)
+}
+
+func renderShellWelcomeMinimum(width, height, cursor int, options []string) string {
+	if width <= 0 {
+		width = 80
+	}
+	if height <= 0 {
+		height = 8
+	}
+
+	atomic := func() string {
+		label := ShellInstallHeroTitle
+		if cursor > 0 && cursor-1 < len(options) {
+			label = options[cursor-1]
+		}
+		return renderWelcomeMinimumLabel(width, height, label, true)
+	}
+
+	// There is no room for meaningful hero content at these dimensions. Keep
+	// the legacy atomic fallback bounded rather than pretending a clipped title
+	// is an actionable hero.
+	if width <= styles.FrameStyle.GetHorizontalBorderSize() || height <= 2 {
+		return atomic()
+	}
+
+	const compactHelp = "j/k, enter, q"
+	helpLabel := compactHelp
+	if lipgloss.Width(helpLabel) > width {
+		helpLabel = "q"
+	}
+	helpLines := wrapWelcomeLine(helpLabel, width)
+
+	var actionLines []string
+	if cursor > 0 {
+		ordinaryCursor := cursor - 1
+		if ordinaryCursor >= 0 && ordinaryCursor < len(options) {
+			actionLines = wrapWelcomeLine(styles.Cursor+shellWelcomeMinimumLabel(options[ordinaryCursor], width), width)
+		}
+	}
+	reserved := len(helpLines) + len(actionLines)
+	if reserved >= height {
+		return atomic()
+	}
+
+	heroHeight := height - reserved
+	hero := renderShellWelcomeHero(cursor == 0, width, heroHeight)
+	lines := strings.Split(hero, "\n")
+	if len(lines) > heroHeight {
+		lines = lines[:heroHeight]
+	}
+	if len(actionLines) > 0 {
+		renderedAction := make([]string, len(actionLines))
+		for i, line := range actionLines {
+			if i > 0 {
+				line = "  " + line
+			}
+			renderedAction[i] = styles.SelectedStyle.Render(line)
+		}
+		lines = append(lines, renderedAction...)
+	}
+	lines = append(lines, styles.HelpStyle.Render(strings.Join(helpLines, "\n")))
+	if len(lines) > height {
+		lines = lines[:height]
+	}
+	return strings.Join(lines, "\n")
+}
+
+func shellWelcomeMinimumLabel(label string, width int) string {
+	if width > 0 && lipgloss.Width(styles.Cursor+label) > width {
+		return "Go"
+	}
+	return label
 }
 
 func renderWelcomeText(style lipgloss.Style, text string, width int) string {

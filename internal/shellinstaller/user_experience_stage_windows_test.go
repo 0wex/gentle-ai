@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -54,6 +55,30 @@ func TestUserWindowsStageExperienceCanonicalFiles(t *testing.T) {
 					}
 				}
 			})
+		}
+	}
+}
+
+func TestUserWindowsStageExperienceAdvancedChoices(t *testing.T) {
+	root := windowsExperienceStage(t)
+	profile := DefaultUserExperience()
+	profile.StrictTDD = "on"
+	profile.GlobalRDD = "off"
+	profile.Context7 = "on"
+	if err := userStageExperience(context.Background(), root, &profile); err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range []struct {
+		path string
+		want string
+	}{
+		{filepath.Join(root, "config", "strict-tdd.json"), `"policy": "on"`},
+		{filepath.Join(root, "home", ".gentle-ai", "state.json"), `"rdd_mode": "off"`},
+		{filepath.Join(root, "agent", "mcp.json"), `"enabled": true`},
+	} {
+		data, err := userWindowsRead(item.path, 1<<20)
+		if err != nil || !strings.Contains(string(data), item.want) {
+			t.Fatalf("advanced preference %q = %q, %v", item.path, data, err)
 		}
 	}
 }
@@ -111,7 +136,8 @@ func TestUserWindowsStageExperienceRefusesBeforeWrites(t *testing.T) {
 		profile UserExperience
 	}{
 		{"invalid", context.Background(), UserExperience{}},
-		{"explicit RDD", context.Background(), UserExperience{Persona: "neutral", BackgroundSubagents: "on", GlobalRDD: "off"}},
+		{"explicit CodeGraph", context.Background(), UserExperience{Persona: "neutral", BackgroundSubagents: "on", CodeGraph: "on"}},
+		{"explicit GGA", context.Background(), UserExperience{Persona: "neutral", BackgroundSubagents: "on", GGA: "on"}},
 		{"canceled", canceled, DefaultUserExperience()},
 		{"nil context", nil, DefaultUserExperience()},
 	} {

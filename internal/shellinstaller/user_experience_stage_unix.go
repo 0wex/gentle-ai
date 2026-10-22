@@ -23,7 +23,10 @@ func userStageExperience(ctx context.Context, root string, profile *UserExperien
 	if err != nil {
 		return err
 	}
-	return userStageExperienceConfig(ctx, root, files)
+	if err := userStageExperienceConfig(ctx, root, files); err != nil {
+		return err
+	}
+	return userStagePrivateChoices(ctx, root, "separate", profile)
 }
 
 // Reuse the native config writer after the preparer validates the full profile

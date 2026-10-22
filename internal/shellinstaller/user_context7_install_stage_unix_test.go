@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -41,7 +40,7 @@ func TestUserPrepareInstallStageContext7(t *testing.T) {
 							t.Fatal("absent preference became MCP policy", err)
 						}
 					} else {
-						assertExperienceFile(t, mcp, fmt.Sprintf("{\n  \"mcpServers\": {\n    \"context7\": {\n      \"url\": \"https://mcp.context7.com/mcp\",\n      \"enabled\": %t,\n      \"exposure\": \"codemode\"\n    }\n  }\n}\n", choice == "on"))
+						assertExperienceFile(t, mcp, fmt.Sprintf("{\n  \"mcpServers\": {\n    \"context7\": {\n      \"enabled\": %t,\n      \"exposure\": \"codemode\",\n      \"url\": \"https://mcp.context7.com/mcp\"\n    }\n  }\n}\n", choice == "on"))
 					}
 					if _, err := os.Lstat(filepath.Join(root, "config/mcp.json")); !os.IsNotExist(err) {
 						t.Fatal("stage created an unused config-home MCP policy", err)
@@ -58,18 +57,14 @@ func TestUserPrepareInstallStageContext7(t *testing.T) {
 
 func TestUserPrepareInstallStageContext7ModeRefusals(t *testing.T) {
 	for _, tc := range []struct {
-		name, mode, choice, rdd string
-		nilProfile              bool
+		name, mode, choice string
+		nilProfile         bool
 	}{
-		{name: "shared-on", mode: "shared", choice: "on"},
-		{name: "shared-off", mode: "shared", choice: "off"},
 		{name: "unknown-mode", mode: "auto"},
 		{name: "empty-mode"},
 		{name: "nil-unknown-mode", mode: "auto", nilProfile: true},
 		{name: "nil-empty-mode", nilProfile: true},
 		{name: "invalid-choice", mode: "separate", choice: "auto"},
-		{name: "rdd-on-with-context7", mode: "separate", choice: "on", rdd: "on"},
-		{name: "rdd-off-with-context7", mode: "separate", choice: "off", rdd: "off"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := installStagePath(t)
@@ -88,14 +83,14 @@ func TestUserPrepareInstallStageContext7ModeRefusals(t *testing.T) {
 				t.Fatal(err)
 			}
 			profile := UserExperience{Persona: "gentleman", BackgroundSubagents: "on"}
-			profile.Context7, profile.GlobalRDD = tc.choice, tc.rdd
+			profile.Context7 = tc.choice
 			selected := &profile
 			if tc.nilProfile {
 				selected = nil
 			}
 			err = userPrepareInstallStage(context.Background(), root, tc.mode, selected)
-			if err == nil || (tc.mode == "shared" && !strings.Contains(err.Error(), "Context7")) || (tc.rdd != "" && !strings.Contains(err.Error(), "RDD")) {
-				t.Fatal("invalid mode or Shared Context7 was not refused by policy", err)
+			if err == nil {
+				t.Fatal("invalid mode or Context7 preference was admitted", err)
 			}
 			if _, err := os.Lstat(root); !os.IsNotExist(err) {
 				t.Fatal("refusal created the stage", err)

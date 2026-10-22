@@ -69,17 +69,17 @@ def send(text):
  global phaseStart
  phaseStart=len(raw);os.write(master,text.encode())
 try:
- waitFor('Install Gentle Shell')
- send('\x1b[B'*11+'\r');waitFor('Configure experience')
+ waitFor('Install Gentle-Shell, our own agent')
+ send('\r');waitFor('Configure Gentle-Shell experience')
  if mode=='navigation':
-  send('\r\x1b[B\r'+'\x1b[B'*8+'\r')
+  send('\x1b[B\r'+'\x1b[B'*2+'\r\x1b[F\r')
  else:
-  send('\x1b[B'*9+'\r')
+  send('\x1b[F\r')
  waitFor('Target:')
  send('/fixture/install-parent/final\r');waitFor('Ready — review before installation')
  if mode=='actual':
-  send('\x05');waitFor('Configure experience')
-  send('\r\x1b[B\r'+'\x1b[B'*8+'\r');waitFor('Target:')
+  send('\x05');waitFor('Configure Gentle-Shell experience')
+  send('\x1b[B\r'+'\x1b[B'*2+'\r\x1b[F\r');waitFor('Target:')
   assert not (parent/'final').exists()
   send('\r');waitFor('Ready — review before installation')
  ready=strip(bytes(raw[phaseStart:]))
@@ -88,7 +88,7 @@ try:
  report['readyTwoPanelsObserved']=True;report['terminalReadyLflag']=termios.tcgetattr(slave)[3]
  assert not (parent/'final').exists();save()
  if mode=='navigation':
-  send('\x1b');waitFor('Install Gentle Shell');send('q')
+  send('\x1b');waitFor('Install Gentle-Shell, our own agent');send('q')
  else:
   report['confirmed']=True;save()
   expect['ConfirmNS']=time.time_ns();p('/fixture/probe-expect.json').write_text(json.dumps(expect))

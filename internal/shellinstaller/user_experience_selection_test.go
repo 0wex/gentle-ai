@@ -52,10 +52,14 @@ func TestUserExperienceSelectionRefusesUnsupportedProfileBeforeEffects(t *testin
 	}
 	target := filepath.Join(root, "target")
 	profile := UserExperience{Persona: "gentleman", BackgroundSubagents: "on"}
-	profile.CodeGraph = "on" // Additional public effects remain unqualified.
+	profile.GGA, profile.GGAProvider = "on", "codex"
 	req := UserInstallRequest{Destination: target, Mode: "separate", Experience: &profile}
-	if token, err := InspectUserInstall(req); err == nil || token != "" || !strings.Contains(err.Error(), "experience") {
-		t.Fatalf("unsupported profile is silently ignored: %q, %v", token, err)
+	if token, err := InspectUserInstall(req); err != nil || token == "" {
+		t.Fatalf("qualified GGA profile was refused: %q, %v", token, err)
+	}
+	profile.GGAProvider = ""
+	if token, err := InspectUserInstall(req); err != nil || token == "" {
+		t.Fatalf("unprovided GGA profile was refused: %q, %v", token, err)
 	}
 	if _, err := os.Lstat(target); !os.IsNotExist(err) {
 		t.Fatalf("profile refusal changed destination: %v", err)

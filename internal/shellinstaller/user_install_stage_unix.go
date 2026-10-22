@@ -19,8 +19,8 @@ func userPrepareInstallStage(ctx context.Context, root, mode string, profile *Us
 	if err := ctx.Err(); err != nil {
 		return privateError("canceled", err)
 	}
-	if mode != "separate" && mode != "shared" {
-		return experienceError("installation stage requires separate or shared mode")
+	if mode != "separate" && mode != "shared" && mode != "agent" {
+		return experienceError("installation stage requires separate, shared or agent mode")
 	}
 	if err := userValidateStagePreferences(profile); err != nil {
 		return err
@@ -29,21 +29,12 @@ func userPrepareInstallStage(ctx context.Context, root, mode string, profile *Us
 		if err := userExperienceSupported(profile); err != nil {
 			return err
 		}
-		if mode != "separate" {
-			return experienceError("Main SDK requires a fresh Separate stage")
+		if mode == "shared" {
+			return experienceError("Main SDK requires a Separate or agent stage")
 		}
 	}
-	if profile != nil && profile.CodeGraph != "" && (mode != "separate" || runtime.GOOS != "linux" || runtime.GOARCH != "amd64") {
-		return experienceError("explicit CodeGraph requires Linux amd64 Separate")
-	}
-	if profile != nil && profile.GGA != "" && mode != "separate" {
-		return experienceError("explicit GGA requires a private Separate configuration stage")
-	}
-	if profile != nil && profile.StrictTDD != "" && mode != "separate" {
-		return experienceError("explicit Strict TDD requires a private Separate SDK runtime")
-	}
-	if profile != nil && profile.Context7 != "" && mode != "separate" {
-		return experienceError("explicit Context7 requires a private Separate agent")
+	if profile != nil && profile.CodeGraph != "" && (runtime.GOOS != "linux" || runtime.GOARCH != "amd64") {
+		return experienceError("explicit CodeGraph requires Linux amd64")
 	}
 	files, err := userExperienceConfigFiles(profile)
 	if err != nil {
@@ -69,7 +60,7 @@ func userPrepareInstallStage(ctx context.Context, root, mode string, profile *Us
 		}
 	}
 	// Ordinary profiles retain the complete generic validator and native writer.
-	if profile != nil && profile.Context7 == "" && profile.StrictTDD == "" && profile.GGA == "" && profile.CodeGraph == "" && profile.SDKSource != "main-preview" {
+	if profile != nil && profile.Context7 == "" && profile.StrictTDD == "" && profile.CodeGraph == "" && profile.SDKSource != "main-preview" {
 		return userStageExperience(ctx, root, profile)
 	}
 	if err := userStageExperienceConfig(ctx, root, files); err != nil {
@@ -78,8 +69,11 @@ func userPrepareInstallStage(ctx context.Context, root, mode string, profile *Us
 	if profile == nil {
 		return nil
 	}
+	if userQualifiedPrivateChoices(profile) || userQualifiedLegacyExperience(profile) {
+		return userStagePrivateChoices(ctx, root, mode, profile)
+	}
 	if err := userStageContext7(ctx, root, mode, profile.Context7); err != nil {
 		return err
 	}
-	return userStageGGA(ctx, root, mode, profile.GGA, profile.GGAProvider)
+	return nil
 }

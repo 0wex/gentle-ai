@@ -9,9 +9,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
+
+// userMainFallbackCommit is the last Main snapshot verified against the stock
+// composition. HEAD is attempted first; this commit is used only when the TUI
+// retries after a Main composition failure.
+const userMainFallbackCommit = "63d6065f924ec366a321dd21f7396f04026c026f"
 
 type userSnapshotArtifact struct {
 	URL, SHA, Archive, Prefix string
@@ -80,17 +86,23 @@ func userMainSnapshotUsing(ctx context.Context, client *http.Client) (userSnapsh
 		}
 		return data, nil
 	}
-	metadata, err := get("https://api.github.com/repos/Gentleman-Programming/gentle-shell/commits/main", 256<<10)
-	var record struct {
-		SHA string `json:"sha"`
+	commit := ""
+	if os.Getenv("GENTLE_AI_MAIN_FALLBACK") == "1" {
+		commit = userMainFallbackCommit
+	} else {
+		metadata, err := get("https://api.github.com/repos/Gentleman-Programming/gentle-shell/commits/main", 256<<10)
+		var record struct {
+			SHA string `json:"sha"`
+		}
+		if err != nil {
+			return userSnapshotArtifact{}, nil, err
+		}
+		if err := json.Unmarshal(metadata, &record); err != nil || !userSnapshotLowerHex(record.SHA, 40) {
+			return userSnapshotArtifact{}, nil, errors.Join(err, errors.New("canonical Main ref identity refused"))
+		}
+		commit = record.SHA
 	}
-	if err != nil {
-		return userSnapshotArtifact{}, nil, err
-	}
-	if err := json.Unmarshal(metadata, &record); err != nil || !userSnapshotLowerHex(record.SHA, 40) {
-		return userSnapshotArtifact{}, nil, errors.Join(err, errors.New("canonical Main ref identity refused"))
-	}
-	data, err := get("https://codeload.github.com/Gentleman-Programming/gentle-shell/zip/"+record.SHA, 32<<20)
+	data, err := get("https://codeload.github.com/Gentleman-Programming/gentle-shell/zip/"+commit, 32<<20)
 	if err != nil {
 		return userSnapshotArtifact{}, nil, err
 	}
@@ -99,6 +111,6 @@ func userMainSnapshotUsing(ctx context.Context, client *http.Client) (userSnapsh
 	if err := ctx.Err(); err != nil {
 		return userSnapshotArtifact{}, nil, err
 	}
-	artifact, err := userMainDescriptor(record.SHA, fmt.Sprintf("%x", sha256.Sum256(data)))
+	artifact, err := userMainDescriptor(commit, fmt.Sprintf("%x", sha256.Sum256(data)))
 	return artifact, data, err
 }

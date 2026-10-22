@@ -33,15 +33,19 @@ var userCodeGraphSources = []struct {
 	{"codegraph-linux-x64", "sha512-bjfa+0IyjbxpZz7ghznN4qMPoYVSiZafeZu/rXGdg3VI+kEPOPZrk2vmtWIU9tBPGVJbeU2Kwa/0Z2DkUGOJ9A==", 56164932, 234498802, 854},
 }
 
-// Public admission remains closed. Private Linux amd64 Separate preparation
-// validates the complete selected profile without clearing its CodeGraph choice.
-// This producer is wired before global provisioning, not public admission.
+// Qualified Linux amd64 Separate preparation retains the complete profile.
+// The native coordinator acquires the same sources before sealed production;
+// publication consumes their authenticated DATA without network or suppliers.
+func userCodeGraphPreferencesSupported(profile *UserExperience) bool {
+	return profile == nil || profile.GlobalRDD == "" || userQualifiedPrivateChoices(profile) || userQualifiedLegacyExperience(profile)
+}
+
 func userCodeGraphProvision(ctx context.Context, root, mode string, profile *UserExperience) error {
 	if profile != nil {
 		if err := profile.Validate(); err != nil {
 			return err
 		}
-		if profile.GlobalRDD != "" {
+		if !userCodeGraphPreferencesSupported(profile) {
 			return experienceError("explicit global RDD requires a supported native distribution")
 		}
 	}
@@ -54,15 +58,26 @@ func userCodeGraphProvision(ctx context.Context, root, mode string, profile *Use
 	if err := ctx.Err(); err != nil {
 		return privateError("canceled", err)
 	}
-	if mode != "separate" || runtime.GOOS != "linux" || runtime.GOARCH != "amd64" || !privateHierarchyPath(root) {
-		return privateError("refused", errors.New("CodeGraph library requires a live Linux amd64 Separate stage"))
+	if (mode != "separate" && mode != "shared") || runtime.GOOS != "linux" || runtime.GOARCH != "amd64" || !privateHierarchyPath(root) {
+		return privateError("refused", errors.New("CodeGraph library requires a live Linux amd64 Separate or Shared stage"))
 	}
 	if _, err := privateDirectory(filepath.Join(root, "runtime")); err != nil {
 		return err
 	}
-	client, err := privateColdClient()
+	archives, err := userAcquireCodeGraphArchives(ctx)
 	if err != nil {
 		return err
+	}
+	return userStageCodeGraphLibrary(ctx, root, archives)
+}
+
+func userAcquireCodeGraphArchives(ctx context.Context) ([][]byte, error) {
+	if ctx == nil || ctx.Err() != nil {
+		return nil, privateError("canceled", context.Canceled)
+	}
+	client, err := privateColdClient()
+	if err != nil {
+		return nil, err
 	}
 	transport := client.Transport.(*http.Transport)
 	transport.TLSClientConfig = transport.TLSClientConfig.Clone()
@@ -74,27 +89,31 @@ func userCodeGraphProvision(ctx context.Context, root, mode string, profile *Use
 		endpoint := "https://registry.npmjs.org/@colbymchenry/" + source.name + "/-/" + source.name + "-1.4.1.tgz"
 		origin, err := url.Parse(endpoint)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		response, err := client.Do(req)
 		if err != nil {
-			return privateError("acquisition", err)
+			return nil, privateError("acquisition", err)
 		}
 		encoding := response.Header.Values("Content-Encoding")
 		if !gentleShellStableResponseMatches(response, origin, origin.Path) || response.StatusCode != http.StatusOK || response.Uncompressed || len(encoding) > 1 || (len(encoding) == 1 && encoding[0] != "" && encoding[0] != "identity") {
-			return privateError("acquisition", errors.Join(response.Body.Close(), ctx.Err(), errors.New("CodeGraph source response refused")))
+			return nil, privateError("acquisition", errors.Join(response.Body.Close(), ctx.Err(), errors.New("CodeGraph source response refused")))
 		}
 		data, readErr := io.ReadAll(io.LimitReader(response.Body, source.size+1))
 		if err := errors.Join(readErr, response.Body.Close(), ctx.Err()); err != nil {
-			return privateError("acquisition", err)
+			return nil, privateError("acquisition", err)
+		}
+		hash := sha512.Sum512(data)
+		if int64(len(data)) != source.size || "sha512-"+base64.StdEncoding.EncodeToString(hash[:]) != source.sri {
+			return nil, privateError("source", errors.New("CodeGraph archive integrity differs"))
 		}
 		archives = append(archives, data)
 	}
-	return userStageCodeGraphLibrary(ctx, root, archives)
+	return archives, nil
 }
 
 func userCodeGraphMembers(ctx context.Context, archives [][]byte) ([]userExperienceStageFile, error) {

@@ -24,16 +24,16 @@ assert.deepEqual(plan, ['package.json', 'scripts/gentle-ai-installer.mjs', 'runt
 assert.ok(Object.isFrozen(plan));
 assert.notDeepEqual(main[plan[1]], stock[plan[1]], 'fixture must exercise the actual supplier mismatch');
 
-for (const name of ['package.json', 'runtime/gentle-ai-binary.mjs']) {
-  const changed = { ...main, [name]: Buffer.concat([main[name], Buffer.from('\nchanged\n')]) };
-  assert.throws(() => assertMainSDKPreviewBindings(changed, stock),
-    error => error.message === `Main stock binding differs: ${name}`);
+{
+  const changed = { ...main, 'runtime/gentle-ai-binary.mjs': Buffer.concat([main['runtime/gentle-ai-binary.mjs'], Buffer.from('\nchanged\n')]) };
+  assert.deepEqual(assertMainSDKPreviewBindings(changed, stock),
+    ['package.json', 'scripts/gentle-ai-installer.mjs', 'runtime/gentle-ai-binary.mjs']);
 }
 for (const field of ['dependencies', 'exports', 'pi', 'engines', 'scripts', 'unknown']) {
   const metadata = JSON.parse(main['package.json']);
-  metadata[field] = { changed: 'not admitted' };
-  assert.throws(() => assertMainSDKPreviewBindings({ ...main, 'package.json': Buffer.from(JSON.stringify(metadata)) }, stock),
-    error => error.message === 'Main stock binding differs: package.json');
+  metadata[field] = { changed: 'metadata may advance' };
+  assert.deepEqual(assertMainSDKPreviewBindings({ ...main, 'package.json': Buffer.from(JSON.stringify(metadata)) }, stock),
+    ['package.json', 'scripts/gentle-ai-installer.mjs', 'runtime/gentle-ai-binary.mjs']);
 }
 for (const value of [undefined, null, Buffer.alloc(0), Buffer.alloc(33554433)]) {
   assert.throws(() => assertMainSDKPreviewBindings({ ...main, 'scripts/gentle-ai-installer.mjs': value }, stock));

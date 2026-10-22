@@ -35,7 +35,7 @@ func TestIndependentPNPMOverlapPublish(t *testing.T) {
 	stage, root := parent+"/stage", parent+"/final"
 	profile := UserExperience{Persona: "neutral", BackgroundSubagents: "off"}
 	start := time.Now()
-	result, err := PublishNativePNPMInstallationWithExperience(ctx, independentOverlapSource, stage, root, loc, &profile)
+	result, err := publishNativePNPMInstallationWithExperienceForTest(ctx, independentOverlapSource, stage, root, loc, &profile)
 	seconds := time.Since(start).Seconds()
 	if err != nil || result.State != "ComponentInstalled" {
 		t.Fatal(result, err)

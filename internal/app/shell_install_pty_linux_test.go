@@ -46,8 +46,17 @@ type shellPTYModel struct{ tea.Model }
 
 func (shellPTYModel) Init() tea.Cmd { return nil }
 
+func shellPTYExperience(scenario string) shellinstaller.UserExperience {
+	profile := shellinstaller.DefaultUserExperience()
+	profile.StrictTDD, profile.GlobalRDD, profile.CodeGraph, profile.Context7, profile.GGA = "on", "on", "on", "on", "off"
+	if strings.HasPrefix(scenario, "confirm-main") {
+		profile.SDKSource = "main-preview"
+	}
+	return profile
+}
+
 func TestShellInstallParentPhysicalPTY(t *testing.T) {
-	scenarios := []string{"confirm", "confirm-edit", "cancel-target", "cancel-review", "ctrl-c-target", "ctrl-c-review"}
+	scenarios := []string{"confirm", "confirm-edit", "cancel-target", "cancel-review", "ctrl-c-target", "ctrl-c-review", "install-failure"}
 	if runtime.GOARCH == "amd64" {
 		scenarios = append(scenarios, "confirm-main", "confirm-main-edit")
 	}
@@ -104,11 +113,11 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 			}
 			setupMockHome(t, home)
 			t.Setenv("GENTLE_AI_NO_ANIMATION", "1")
-			target := filepath.Join(home, "qtarget")
+			target := filepath.Join(home, ".local", "share", "gentle-shell", "install")
 			var originalConfirmation string
 			readerDone, parentDone := make(chan struct{}), make(chan struct{})
 			oldIn, oldOut := os.Stdin, os.Stdout
-			oldOS, oldDetect, oldTUI, oldRun := ensureCurrentOSSupported, detectSystem, runTUI, runShellInstallSelection
+			oldOS, oldDetect, oldTUI, oldRun, oldInline := ensureCurrentOSSupported, detectSystem, runTUI, runShellInstallSelection, runInlineShellInstall
 			os.Stdin, os.Stdout = slave, slave // Real TTY boundary, not an isatty override.
 			t.Cleanup(func() {
 				select {
@@ -122,13 +131,13 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 					t.Error("terminal owner is still running before global restoration")
 				}
 				os.Stdin, os.Stdout = oldIn, oldOut
-				ensureCurrentOSSupported, detectSystem, runTUI, runShellInstallSelection = oldOS, oldDetect, oldTUI, oldRun
+				ensureCurrentOSSupported, detectSystem, runTUI, runShellInstallSelection, runInlineShellInstall = oldOS, oldDetect, oldTUI, oldRun, oldInline
 			})
 			ensureCurrentOSSupported = func() error { return nil }
 			detectSystem = func(context.Context) (system.DetectionResult, error) {
 				return system.DetectionResult{System: system.SystemInfo{Supported: true}}, nil
 			}
-			programs, workers, returned := 0, 0, false
+			programs, returned := 0, false
 			created := make(chan *tea.Program, 1)
 			runTUI = func(m tea.Model, opts ...tea.ProgramOption) (tea.Model, error) {
 				programs++
@@ -137,27 +146,35 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 				defer func() { returned = true }()
 				return p.Run()
 			}
-			runShellInstallSelection = func(selection cli.ShellInstallSelection, stdout io.Writer) error {
-				workers++
-				after, err := term.GetState(slave.Fd())
-				if err != nil || !returned || !reflect.DeepEqual(before, after) || stdout != slave {
-					return fmt.Errorf("worker hook before terminal restoration: %v", err)
+			inlineCalls, postWorkers := 0, 0
+			runInlineShellInstall = func(ctx context.Context, request shellinstaller.UserInstallRequest, report func(shellinstaller.UserInstallProgress)) error {
+				inlineCalls++
+				if returned {
+					return fmt.Errorf("in-process worker ran after the TUI returned")
 				}
-				fresh, err := shellinstaller.InspectUserInstall(selection.Request)
-				wantProfile := shellinstaller.DefaultUserExperience()
-				if strings.HasPrefix(scenario, "confirm-main") {
-					wantProfile.SDKSource = "main-preview"
-				}
+				wantProfile := shellPTYExperience(scenario)
 				if strings.HasSuffix(scenario, "edit") {
 					wantProfile.Persona = "neutral"
 				}
-				if err != nil || !selection.Confirmed || selection.Request.Destination != target || selection.Request.Confirmation != fresh || selection.Request.Experience == nil || *selection.Request.Experience != wantProfile {
-					return fmt.Errorf("public interaction lost physical selection: %+v, %v", selection, err)
+				if request.Destination != target || request.Confirmation == "" || request.Experience == nil || *request.Experience != wantProfile {
+					return fmt.Errorf("in-process worker lost physical selection: got %+v want %+v", request.Experience, wantProfile)
 				}
-				if strings.HasSuffix(scenario, "edit") && (originalConfirmation == "" || selection.Request.Confirmation == originalConfirmation) {
-					return fmt.Errorf("edited profile reused physical confirmation: %+v", selection)
+				if strings.HasSuffix(scenario, "edit") && (originalConfirmation == "" || request.Confirmation == originalConfirmation) {
+					return fmt.Errorf("edited profile reused physical confirmation: %+v", request)
 				}
-				return nil // Inert boundary spy: no acquisition or installation authority.
+				for index, label := range []string{"Validate the selection and target", "Prepare the private stage and preferences", "Install the runtime and pinned suppliers", "Apply optional runtimes and the SDK channel", "Publish, verify and register the installation"} {
+					report(shellinstaller.UserInstallProgress{Index: index + 1, Total: 5, Label: label, State: "running"})
+					report(shellinstaller.UserInstallProgress{Index: index + 1, Total: 5, Label: label, State: "done"})
+					time.Sleep(30 * time.Millisecond)
+				}
+				if scenario == "install-failure" {
+					return fmt.Errorf("private installation: uncertain; Preserve evidence: workspace=%q destination/unit=%q", filepath.Dir(target)+"/.gentle-pty", target)
+				}
+				return nil
+			}
+			runShellInstallSelection = func(selection cli.ShellInstallSelection, stdout io.Writer) error {
+				postWorkers++
+				return fmt.Errorf("post-TUI worker ran for an in-process selection")
 			}
 			var output bytes.Buffer
 			var mu sync.Mutex
@@ -223,24 +240,21 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 					t.Error("PTY reader did not join during cleanup")
 				}
 			})
-			waitFor("Install Gentle Shell")
-			send(strings.Repeat("\x1b[B", 11) + "\r")
-			waitFor("Configure experience")
+			waitFor("Install Gentle-Shell, our own agent")
+			send("\r")
+			waitFor("Configure Gentle-Shell experience")
 			if strings.HasPrefix(scenario, "confirm-main") {
-				send(strings.Repeat("\x1b[B", 8) + "\r\r")
+				// Main keeps the concrete fresh preset; ON/OFF toggles no longer
+				// expose an inherited third state in the editor.
+				send("\x1b[H" + strings.Repeat("\x1b[B", 9) + "\r")
 				waitFor("SDK Main + stock provider")
 			}
 			send("\x1b[F\r")
-			waitFor("Target:")
-			if !strings.HasSuffix(scenario, "target") {
-				send(target + "\r")
-				waitFor("Ready — review before installation")
-			}
+			waitFor("Installation plan")
+			waitFor("5. Publish, verify and register the installation")
 			if strings.HasSuffix(scenario, "edit") {
-				profile := shellinstaller.DefaultUserExperience()
-				if strings.HasPrefix(scenario, "confirm-main") {
-					profile.SDKSource = "main-preview"
-				}
+				profile := shellPTYExperience(scenario)
+				var err error
 				originalConfirmation, err = shellinstaller.InspectUserInstall(shellinstaller.UserInstallRequest{
 					Destination: target, Mode: "separate", Experience: &profile,
 				})
@@ -250,10 +264,10 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 				mu.Lock()
 				output.Reset()
 				mu.Unlock()
-				send("\x05")
-				waitFor("Configure experience")
-				send("\r\x1b[F\r")
-				waitFor("Target:")
+				send("\x1b") // The plan goes back to configuration without consent.
+				waitFor("Configure Gentle-Shell experience")
+				send("\x1b[H\x1b[B\r\x1b[F\r")
+				waitFor("Installation plan")
 				if _, err := os.Lstat(target); !os.IsNotExist(err) {
 					t.Fatal("editing published before physical confirmation", err)
 				}
@@ -262,35 +276,44 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 					t.Fatal("editing ended the terminal owner before confirmation", err)
 				default:
 				}
-				mu.Lock()
-				output.Reset()
-				mu.Unlock()
-				send("\r")
-				waitFor("Ready — review before installation")
-				waitFor("neutral")
 			}
-			if strings.HasPrefix(scenario, "confirm") {
-				send("y")
+			confirms := strings.HasPrefix(scenario, "confirm") || scenario == "install-failure"
+			if confirms {
+				send("\r")
+				waitFor("Installing Gentle-Shell")
+				if scenario == "install-failure" {
+					waitFor("Installation failed")
+					waitFor("workspace=")
+					send("\r")
+					waitFor("Install Gentle-Shell, our own agent")
+					send("q")
+				} else {
+					waitFor("Installation complete")
+					send("\r")
+				}
 			} else {
 				mu.Lock()
 				output.Reset()
 				mu.Unlock()
 				if strings.HasPrefix(scenario, "ctrl-c") {
 					send("\x03")
+					waitFor("Install Gentle-Shell, our own agent")
 				} else {
 					send("\x1b")
+					waitFor("Configure Gentle-Shell experience")
+					send("\x1b")
+					waitFor("Install Gentle-Shell, our own agent")
 				}
-				waitFor("Install Gentle Shell")
 				send("q")
 			}
 			select {
 			case err := <-done:
-				wantWorkers := 0
-				if strings.HasPrefix(scenario, "confirm") {
-					wantWorkers = 1
+				wantInline := 0
+				if strings.HasPrefix(scenario, "confirm") || scenario == "install-failure" {
+					wantInline = 1
 				}
-				if err != nil || programs != 1 || workers != wantWorkers {
-					t.Fatalf("programs=%d workers=%d error=%v", programs, workers, err)
+				if err != nil || programs != 1 || inlineCalls != wantInline || postWorkers != 0 {
+					t.Fatalf("programs=%d inline=%d post=%d error=%v", programs, inlineCalls, postWorkers, err)
 				}
 			case <-time.After(10 * time.Second):
 				t.Fatal("terminal owner did not finish")

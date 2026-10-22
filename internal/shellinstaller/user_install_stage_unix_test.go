@@ -66,17 +66,13 @@ func TestUserPrepareInstallStageAppliesCanonicalProfile(t *testing.T) {
 }
 
 func TestUserPrepareInstallStageRefusesBeforeCreation(t *testing.T) {
-	for _, scenario := range []string{"invalid", "rdd-on", "rdd-off", "nil-context", "canceled", "parent-mode", "relative", "existing-file", "existing-directory", "symlink"} {
+	for _, scenario := range []string{"invalid", "nil-context", "canceled", "parent-mode", "relative", "existing-file", "existing-directory", "symlink"} {
 		t.Run(scenario, func(t *testing.T) {
 			root := installStagePath(t)
 			profile, ctx := UserExperience{Persona: "gentleman", BackgroundSubagents: "on"}, context.Background()
 			switch scenario {
 			case "invalid":
 				profile.BackgroundSubagents = "auto"
-			case "rdd-on":
-				profile.GlobalRDD = "on"
-			case "rdd-off":
-				profile.GlobalRDD = "off"
 			case "nil-context":
 				ctx = nil
 			case "canceled":

@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -66,7 +67,7 @@ func TestUserMainSupplierNativeResolverProtocol(t *testing.T) {
 	}
 	pin := lock.Packages["node_modules/gentle-pi"]
 	hash := sha512.Sum512(archive)
-	if pin.Version != "4.0.0" || pin.Resolved != "https://registry.npmjs.org/gentle-pi/-/gentle-pi-4.0.0.tgz" ||
+	if pin.Version == "" || pin.Resolved != "https://registry.npmjs.org/gentle-pi/-/gentle-pi-"+pin.Version+".tgz" ||
 		pin.Integrity != "sha512-"+base64.StdEncoding.EncodeToString(hash[:]) {
 		t.Fatal("original supplier fixture differs from committed npm SRI")
 	}
@@ -76,12 +77,31 @@ func TestUserMainSupplierNativeResolverProtocol(t *testing.T) {
 		t.Fatal(err, string(output))
 	}
 	nativeRoot := "/node_modules/gentle-pi/.gentle-ai"
-	binaryPath := filepath.Join(nativeRoot, "v4.0.0/gentle-ai")
-	if _, err := privateNativeFile(ctx, binaryPath, 0, userBinarySize, userBinarySHA); err != nil {
+	// The retained distribution's bundle version is producer data, never a pin:
+	// derive the single v<version> directory and authenticate the binary against
+	// the manifest's own binarySha256, as the production readback does.
+	bundles, err := os.ReadDir(nativeRoot)
+	if err != nil || len(bundles) != 1 || !strings.HasPrefix(bundles[0].Name(), "v") {
+		t.Fatal("original native bundle layout differs", err)
+	}
+	bundleVersion := bundles[0].Name()
+	binaryPath := filepath.Join(nativeRoot, bundleVersion, "gentle-ai")
+	manifestData, err := os.ReadFile(filepath.Join(nativeRoot, bundleVersion, "integrity.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var manifestPin struct {
+		Version      string `json:"version"`
+		BinarySha256 string `json:"binarySha256"`
+	}
+	if json.Unmarshal(manifestData, &manifestPin) != nil || manifestPin.Version != bundleVersion[1:] || manifestPin.BinarySha256 == "" {
+		t.Fatal("original native manifest differs")
+	}
+	if _, err := privateNativeFile(ctx, binaryPath, 0, -1, manifestPin.BinarySha256); err != nil {
 		t.Fatal("original authenticated native binary differs", err)
 	}
-	if _, err := privateNativeFile(ctx, filepath.Join(nativeRoot, "v4.0.0/integrity.json"), 0,
-		int64(len(userNativeManifest)), ""); err != nil {
+	if _, err := privateNativeFile(ctx, filepath.Join(nativeRoot, bundleVersion, "integrity.json"), 0,
+		int64(len(manifestData)), ""); err != nil {
 		t.Fatal(err)
 	}
 	binary, err := os.ReadFile(binaryPath)
@@ -95,12 +115,12 @@ func TestUserMainSupplierNativeResolverProtocol(t *testing.T) {
 	for _, scenario := range []string{"valid", "changed binary", "changed manifest", "noncanonical manifest", "symlink binary"} {
 		t.Run(scenario, func(t *testing.T) {
 			warm := t.TempDir()
-			bundle := filepath.Join(warm, ".gentle-ai/v4.0.0")
+			bundle := filepath.Join(warm, ".gentle-ai", bundleVersion)
 			if err := os.MkdirAll(bundle, 0700); err != nil {
 				t.Fatal(err)
 			}
 			content := append([]byte(nil), binary...)
-			manifest := []byte(userNativeManifest)
+			manifest := append([]byte(nil), manifestData...)
 			switch scenario {
 			case "changed binary":
 				content[0] ^= 1

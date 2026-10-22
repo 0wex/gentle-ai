@@ -41,9 +41,6 @@ func TestUserCodeGraphPrivateSeparateStage(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					if err := userGGAProvision(context.Background(), root, "separate", &profile); err != nil {
-						t.Fatal("common validation blocked an unrelated absent GGA selection", err)
-					}
 					if choice == "off" {
 						if err := userCodeGraphProvision(context.Background(), root, "separate", &profile); err != nil {
 							t.Fatal("OFF attempted acquisition", err)
@@ -55,11 +52,19 @@ func TestUserCodeGraphPrivateSeparateStage(t *testing.T) {
 							t.Fatal("ON failed before the real producer cancellation boundary", err)
 						}
 					}
-					if files, err := userStageExperienceFiles(&profile); err == nil || files != nil || !strings.Contains(err.Error(), "CodeGraph") {
-						t.Fatal("private admission opened the generic writer", files, err)
+					if files, err := userStageExperienceFiles(&profile); err != nil || len(files) == 0 {
+						t.Fatal("qualified stock profile lost the generic writer", files, err)
 					}
-					if err := userExperienceSupported(&profile); err == nil {
-						t.Fatal("private preparation opened unqualified public installation")
+					if err := userExperienceSupported(&profile); err != nil {
+						t.Fatalf("qualified stock profile was refused: %v", err)
+					}
+					main := profile
+					main.SDKSource = "main-preview"
+					if err := userExperienceSupported(&main); err != nil {
+						t.Fatalf("Main lost the qualified CodeGraph profile: %v", err)
+					}
+					if files, err := userStageExperienceFiles(&main); err == nil || files != nil || !strings.Contains(err.Error(), "Main SDK") {
+						t.Fatal("stock PNPM stage admitted Main without its producer", files, err)
 					}
 					after, err := userTreeStamp(root)
 					if err != nil || after != stamp {

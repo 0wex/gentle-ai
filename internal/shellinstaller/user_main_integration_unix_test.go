@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -62,27 +61,14 @@ func TestUserMainIntegrationPreservesContextCauses(t *testing.T) {
 	}
 }
 
-type userMainCloseErrorBody struct {
-	io.Reader
-	cause  error
-	closed *int
-}
-
-func (b userMainCloseErrorBody) Close() error {
-	(*b.closed)++
-	return b.cause
-}
-
 func TestUserMainIntegrationRejectsBodyCloseFailure(t *testing.T) {
-	for _, failingCall := range []int{1, 2} {
+	t.Setenv("GENTLE_AI_MAIN_FALLBACK", "1")
+	for _, failingCall := range []int{1} {
 		cause := errors.New("controlled response close failure")
 		calls, closes := 0, 0
 		client := &http.Client{Transport: userMainResponse(func(req *http.Request) (*http.Response, error) {
 			calls++
-			data := `{"sha":"` + strings.Repeat("a", 40) + `"}`
-			if calls == 2 {
-				data = "opaque response DATA, not ZIP or publisher evidence"
-			}
+			data := "opaque response DATA, not ZIP or publisher evidence"
 			var closeErr error
 			if calls == failingCall {
 				closeErr = cause

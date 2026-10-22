@@ -18,6 +18,7 @@ import (
 	"github.com/gentleman-programming/gentle-ai/v4/internal/pipeline"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/planner"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/reviewtransaction"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/shellinstaller"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/skillregistry"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/state"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/statecoord"
@@ -40,7 +41,10 @@ var (
 	ensureCurrentOSSupported  = system.EnsureCurrentOSSupported
 	detectSystem              = system.Detect
 	runShellInstallSelection  = cli.RunShellInstallSelectionProcess
-	runTUI                    = func(m tea.Model, opts ...tea.ProgramOption) (tea.Model, error) {
+	runInlineShellInstall     = func(ctx context.Context, request shellinstaller.UserInstallRequest, report func(shellinstaller.UserInstallProgress)) error {
+		return cli.RunShellInstallInline(ctx, cli.ShellInstallSelection{Request: request, Confirmed: true, Executed: true}, report, io.Discard)
+	}
+	runTUI = func(m tea.Model, opts ...tea.ProgramOption) (tea.Model, error) {
 		p := tea.NewProgram(m, opts...)
 		return p.Run()
 	}
@@ -275,7 +279,7 @@ func RunArgs(args []string, stdout io.Writer) error {
 			printPostUpgradeDoctorAdvisory(stdout)
 		}
 
-		m := tui.NewModel(result, Version, installedState).WithShellInstaller()
+		m := tui.NewModel(result, Version, installedState).WithShellInstaller().WithShellInstallRunner(runInlineShellInstall)
 		m.ExecuteFn = tuiExecuteWithBackground
 		m.ExecuteSDKFn = tuiExecuteWithSDK
 		m.RestoreFn = tuiRestore
@@ -310,7 +314,7 @@ func RunArgs(args []string, stdout io.Writer) error {
 		if selector, ok := finalModel.(interface {
 			ShellInstallSelection() cli.ShellInstallSelection
 		}); ok {
-			if selection := selector.ShellInstallSelection(); selection.Confirmed {
+			if selection := selector.ShellInstallSelection(); selection.Confirmed && !selection.Executed {
 				return runShellInstallSelection(selection, stdout)
 			}
 		}

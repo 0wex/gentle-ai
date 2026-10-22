@@ -133,3 +133,29 @@ func TestUserNativeCoordinatePrivate(t *testing.T) {
 	}
 	t.Log(string(j))
 }
+
+// GGA ON has no PNPM producer; the request must use the legacy installer that
+// owns acquisition, installation and its own setup instructions.
+func TestUserNativeFreshRequestRoutesGGA(t *testing.T) {
+	parent := filepath.Dir(installStagePath(t))
+	dest := parent + "/gga-destination"
+	profile := DefaultUserExperience()
+	profile.GGA, profile.GGAProvider = "on", "codex"
+	req := UserInstallRequest{Destination: dest, Mode: "separate", Experience: &profile}
+	token, err := InspectUserInstall(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := profile.Encode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := []string{dest, "separate", "", "", token, "--experience", encoded}
+	_, fresh, err := userNativeFreshRequest(args)
+	if err != nil || fresh {
+		t.Fatalf("GGA ON did not route to the legacy installer: fresh=%v err=%v", fresh, err)
+	}
+	if _, err := os.Lstat(dest); !os.IsNotExist(err) {
+		t.Fatal("routing inspection changed the destination")
+	}
+}

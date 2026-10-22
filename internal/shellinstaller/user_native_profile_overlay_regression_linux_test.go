@@ -76,7 +76,7 @@ func TestIndependentNativeProfilePublicCollision(t *testing.T) {
 	}
 	profile := UserExperience{Persona: "neutral", BackgroundSubagents: "off"}
 	started := time.Now()
-	result, callErr := PublishNativePNPMInstallationWithExperience(ctx, "/out", parent+"/stage", parent+"/final", location, &profile)
+	result, callErr := publishNativePNPMInstallationWithExperienceForTest(ctx, "/out", parent+"/stage", parent+"/final", location, &profile)
 	if callErr == nil || !strings.Contains(callErr.Error(), "staged preference already exists") || result.State != "" {
 		t.Fatal("existing preference overwritten or accepted", result, callErr)
 	}

@@ -29,9 +29,46 @@ func userExperienceConfirmationData(fields []string, profile *UserExperience) ([
 	return json.Marshal(fields)
 }
 
-// A transport or valid DTO is not proof that the selected runtime applies it.
-// Base persona/background use the existing canonical stage and pinned consumer.
-// Additional explicit choices stay refused until their installed chain exists.
+// Only the stock Linux amd64 path has the qualified private consumers below.
+// Request validation still owns fresh Separate paths and physical confirmation;
+// this predicate never grants execution or changes a reviewed preference.
+func userQualifiedStockExperience(profile *UserExperience) bool {
+	return profile != nil && runtime.GOOS == "linux" && runtime.GOARCH == "amd64" &&
+		profile.SDKSource != "main-preview" && profile.GGA != "on"
+}
+
+// Main preview delivers the same private preference consumers through the
+// legacy authenticated Main worker, including the CodeGraph runtime staged
+// before the SDK overlay. GGA ON keeps the same refusal as the stock path.
+func userQualifiedMainExperience(profile *UserExperience) bool {
+	return profile != nil && runtime.GOOS == "linux" && runtime.GOARCH == "amd64" &&
+		profile.SDKSource == "main-preview" && profile.GGA != "on"
+}
+
+// Both qualified distributions share the canonical private writers.
+func userQualifiedPrivateChoices(profile *UserExperience) bool {
+	return userQualifiedStockExperience(profile) || userQualifiedMainExperience(profile)
+}
+
+// The legacy authenticated worker acquires and installs GGA with its own setup
+// instructions, so GGA ON keeps the same private writers on Linux amd64. The
+// stock PNPM publication route still has no GGA producer and keeps refusing it.
+func userQualifiedLegacyExperience(profile *UserExperience) bool {
+	return profile != nil && runtime.GOOS == "linux" && runtime.GOARCH == "amd64"
+}
+
+func userValidateMainExperience(profile *UserExperience) error {
+	if runtime.GOOS == "linux" && runtime.GOARCH == "amd64" {
+		return nil
+	}
+	if runtime.GOOS == "windows" {
+		return nil // The Windows native installer consumes the Main channel.
+	}
+	return experienceError("SDK Main + stock provider is qualified on Linux amd64 today; macOS support is being completed")
+}
+
+// A valid DTO alone is not admission: unsupported distributions/combinations
+// retain their refusal, while the qualified route materializes every selection.
 func userExperienceSupported(profile *UserExperience) error {
 	if profile == nil {
 		return nil
@@ -39,10 +76,16 @@ func userExperienceSupported(profile *UserExperience) error {
 	if err := profile.Validate(); err != nil {
 		return err
 	}
-	if profile.SDKSource == "main-preview" && (runtime.GOOS != "linux" || runtime.GOARCH != "amd64") {
-		return experienceError("SDK Main + stock provider requires Linux amd64 Separate")
+	if profile.SDKSource == "main-preview" {
+		return userValidateMainExperience(profile)
 	}
-	if profile.GlobalRDD != "" || profile.Context7 != "" || profile.StrictTDD != "" || profile.GGA != "" || profile.CodeGraph != "" {
+	if (profile.GlobalRDD != "" || profile.Context7 != "" || profile.StrictTDD != "") && runtime.GOOS != "windows" && !userQualifiedStockExperience(profile) && !userQualifiedLegacyExperience(profile) {
+		return experienceError("selected additional experience preferences require a compatible installed runtime")
+	}
+	if profile.CodeGraph != "" && runtime.GOOS != "windows" && !userQualifiedStockExperience(profile) && !userQualifiedLegacyExperience(profile) {
+		return experienceError("selected additional experience preferences require a compatible installed runtime")
+	}
+	if profile.GGA != "" && profile.GGA != "off" && !userQualifiedStockExperience(profile) && !userQualifiedLegacyExperience(profile) {
 		return experienceError("selected additional experience preferences require a compatible installed runtime")
 	}
 	return nil

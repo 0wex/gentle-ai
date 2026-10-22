@@ -14,9 +14,9 @@ func TestNativeInstallationHandoff(t *testing.T) {
 	root := "/private/stage"
 	result := json.RawMessage(`{"outcome":"terminal-action-required","action":"open-new-terminal","completed":["shell-setup"],"retained":"original"}`)
 	location := map[string]string{
-		"packageRoot": root + "/pnpm/store/v11/links/@/gentle-pi/4.0.0/hash/node_modules/gentle-pi",
+		"packageRoot": root + "/pnpm/store/v11/links/@/gentle-pi/4.3.0/hash/node_modules/gentle-pi",
 		"pnpmHome":    root + "/pnpm", "globalBin": root + "/pnpm/bin",
-		"shellVersion": "4.0.0", "piVersion": "1.2.0",
+		"shellVersion": "4.3.0", "piVersion": "1.3.0",
 	}
 	encode := func(result json.RawMessage, location any) []byte {
 		t.Helper()
@@ -29,7 +29,7 @@ func TestNativeInstallationHandoff(t *testing.T) {
 	t.Run("retains-original-result-and-adjacent-peer", func(t *testing.T) {
 		data := encode(result, location)
 		got, installed, err := decodeNativeInstallation(root, data)
-		if err != nil || installed == nil || installed.PackageRoot != location["packageRoot"] || installed.PNPMHome != location["pnpmHome"] || installed.GlobalBin != location["globalBin"] || installed.ShellVersion != "4.0.0" || installed.PiVersion != "1.2.0" {
+		if err != nil || installed == nil || installed.PackageRoot != location["packageRoot"] || installed.PNPMHome != location["pnpmHome"] || installed.GlobalBin != location["globalBin"] || installed.ShellVersion != "4.3.0" || installed.PiVersion != "1.3.0" {
 			t.Fatal(got, installed, err)
 		}
 		if string(got.Details) != string(result) || got.Outcome != "terminal-action-required" || got.Reason != "" || !reflect.DeepEqual(got.Completed, []string{"shell-setup"}) {
@@ -57,7 +57,7 @@ func TestNativeInstallationHandoff(t *testing.T) {
 		{"traversal", "packageRoot", root + "/pnpm/store/v11/links/../../outside"},
 		{"noncanonical", "packageRoot", root + "/pnpm/store/v11/links/a/../b"},
 		{"empty-version", "shellVersion", ""},
-		{"invalid-peer", "piVersion", "1.2.0\n"},
+		{"invalid-peer", "piVersion", "1.3.0\n"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			bad := make(map[string]string, len(location))

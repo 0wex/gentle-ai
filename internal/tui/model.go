@@ -30,6 +30,7 @@ import (
 	"github.com/gentleman-programming/gentle-ai/v4/internal/pipeline"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/planner"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/reviewtransaction"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/shellinstaller"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/state"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/statecoord"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/system"
@@ -637,7 +638,20 @@ const (
 
 type Model struct {
 	shellExperience       *shellExperienceConfig
+	shellDetected         []shellinstaller.UserShellInstall
+	shellDetectedProfiles []shellinstaller.UserExperience
+	shellDetectedCursor   int
+	shellManage           *shellManageState
+	shellUpdate           *shellUpdateState
+	shellReconfigure      string
+	shellPlan             []string
+	shellPlanConfig       *shellExperienceConfig
+	shellPlanRequest      shellinstaller.UserInstallRequest
+	shellInstallRun       *shellInstallRun
+	shellInstallEvents    <-chan shellInstallEvent
+	shellInstallRunner    func(context.Context, shellinstaller.UserInstallRequest, func(shellinstaller.UserInstallProgress)) error
 	shellReadyOffset      int
+	shellReadyCursor      int
 	shellInstallEnabled   bool
 	shellInstallModel     tea.Model
 	shellInstallSelection cli.ShellInstallSelection
@@ -1036,6 +1050,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateShellInstall(msg)
 		case tea.WindowSizeMsg:
 			m.Width, m.Height = msg.Width, msg.Height
+			return m.updateShellInstall(msg)
+		case shellInstallEvent, shellInstallTick, shellUpdateResult, shellUninstallResult:
 			return m.updateShellInstall(msg)
 		}
 	}
@@ -2011,14 +2027,20 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 			case screens.ShellInstallWelcomeOption:
 				m.shellInstallSelection = cli.ShellInstallSelection{}
 				m.beginShellExperience()
-				m.shellInstallModel, _ = m.shellInstallModel.Update(tea.WindowSizeMsg{Width: m.Width, Height: m.Height})
+				if m.shellInstallModel != nil {
+					m.shellInstallModel, _ = m.shellInstallModel.Update(tea.WindowSizeMsg{Width: m.Width, Height: m.Height})
+				}
 				m.setScreen(ScreenShellInstall)
 				return m, nil
 			case "Quit":
 				return m, tea.Quit
 			}
 		}
-		switch m.Cursor {
+		welcomeCursor := m.Cursor
+		if m.shellInstallEnabled {
+			welcomeCursor--
+		}
+		switch welcomeCursor {
 		case 0:
 			m.InstallFlowActive = true
 			m.setScreen(ScreenDetection)
@@ -2066,29 +2088,29 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 		default:
 			next := 6
 
-			if m.Cursor == next {
+			if welcomeCursor == next {
 				m.setScreen(ScreenBackups)
 				return m, nil
 			}
 			next++
 
-			if m.Cursor == next {
+			if welcomeCursor == next {
 				return m.startReviewStoreResetSurvey()
 			}
 			next++
 
-			if m.Cursor == next {
+			if welcomeCursor == next {
 				return m.startReviewModeLoad()
 			}
 			next++
 
-			if m.Cursor == next {
+			if welcomeCursor == next {
 				m.setScreen(ScreenUninstallMode)
 				return m, nil
 			}
 			next++
 
-			if m.Cursor == next {
+			if welcomeCursor == next {
 				m.CommunityToolsStandalone = true
 				m.CommunityToolResults = nil
 				m.CommunityToolErr = nil
@@ -2101,7 +2123,7 @@ func (m Model) confirmSelection() (tea.Model, tea.Cmd) {
 			}
 			next++
 
-			if m.Cursor == next {
+			if welcomeCursor == next {
 				return m, tea.Quit
 			}
 		}

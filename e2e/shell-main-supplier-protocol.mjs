@@ -18,7 +18,7 @@ for (const name of [
   'GENTLE_AI_WINDOWS_SOURCE_PACKAGE_PATH', 'GENTLE_AI_WINDOWS_SOURCE_MODULE',
   'GENTLE_AI_WINDOWS_SOURCE_TAG', 'GENTLE_AI_WINDOWS_SOURCE_MODULE_CHECKSUM',
 ]) assert.deepEqual(main[name], stock[name], name);
-assert.equal(main.INSTALLER_VERSION, '4.0.0');
+assert.equal(main.INSTALLER_VERSION, '4.2.0');
 assert.deepEqual(main.GENTLE_AI_RELEASE_ASSETS, stock.GENTLE_AI_RELEASE_ASSETS);
 for (const [platform, arch] of [['linux', 'x64'], ['darwin', 'arm64']]) {
   assert.deepEqual(main.resolveGentleAiReleaseAsset(platform, arch),
@@ -44,7 +44,7 @@ for (const resolver of [stockResolver, mainResolver]) {
   assert.equal(resolver.gentleAiDevBinaryOverrideConfigured(env), false);
   const resolve = () => resolver.resolveGentleAiBinary(warmRoot, 'linux', fs.readFileSync, env);
   if (scenario === 'valid') {
-    assert.equal(resolve(), path.join(warmRoot, '.gentle-ai/v4.0.0/gentle-ai'));
+    assert.equal(resolve(), path.join(warmRoot, '.gentle-ai/v4.2.0/gentle-ai'));
   } else {
     assert.throws(resolve, error => error instanceof resolver.PackageLocalGentleAiBinaryMissingError &&
       error.code === 'package-local-binary-missing');

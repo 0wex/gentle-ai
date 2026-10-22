@@ -63,7 +63,12 @@ func TestUserExperienceAdmissionKeepsScopeAndFeatureRefusals(t *testing.T) {
 		}
 	}
 	profile.CodeGraph = "on"
-	if token, err := InspectUserInstall(UserInstallRequest{Destination: filepath.Join(parent, "advanced"), Mode: "separate", Experience: &profile}); err == nil || token != "" {
-		t.Fatal("unqualified advanced effects admitted")
+	profile.GGA, profile.GGAProvider = "on", "codex"
+	if token, err := InspectUserInstall(UserInstallRequest{Destination: filepath.Join(parent, "advanced"), Mode: "separate", Experience: &profile}); err != nil || token == "" {
+		t.Fatalf("qualified advanced effects refused: %v", err)
+	}
+	profile.GGAProvider = ""
+	if token, err := InspectUserInstall(UserInstallRequest{Destination: filepath.Join(parent, "unprovided"), Mode: "separate", Experience: &profile}); err != nil || token == "" {
+		t.Fatalf("GGA ON without provider refused: %v", err)
 	}
 }

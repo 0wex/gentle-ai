@@ -49,8 +49,8 @@ func TestUserStageExperienceFilesRefusals(t *testing.T) {
 		{"unknown persona", UserExperience{Persona: "custom", BackgroundSubagents: "on"}},
 		{"unknown background", UserExperience{Persona: "neutral", BackgroundSubagents: "inherit"}},
 		{"invalid RDD", UserExperience{Persona: "neutral", BackgroundSubagents: "off", GlobalRDD: "inherit"}},
-		{"explicit RDD on", UserExperience{Persona: "gentleman", BackgroundSubagents: "on", GlobalRDD: "on"}},
-		{"explicit RDD off", UserExperience{Persona: "unmanaged", BackgroundSubagents: "off", GlobalRDD: "off"}},
+		{"explicit RDD on", UserExperience{Persona: "gentleman", BackgroundSubagents: "on", GlobalRDD: "on", SDKSource: "main-preview"}},
+		{"explicit RDD off", UserExperience{Persona: "unmanaged", BackgroundSubagents: "off", GlobalRDD: "off", SDKSource: "main-preview"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			before := tc.profile

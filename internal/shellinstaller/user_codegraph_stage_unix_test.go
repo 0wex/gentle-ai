@@ -7,11 +7,13 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 )
 
-func TestUserCodeGraphStageRefusesBeforeEffects(t *testing.T) {
+func TestUserCodeGraphStageAcceptsQualifiedModes(t *testing.T) {
+	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
+		t.Skip("CodeGraph qualification is Linux amd64 only")
+	}
 	for _, mode := range []string{"separate", "shared"} {
 		for _, choice := range []string{"on", "off"} {
 			t.Run(mode+"/"+choice, func(t *testing.T) {
@@ -19,28 +21,29 @@ func TestUserCodeGraphStageRefusesBeforeEffects(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				parent := t.TempDir()
-				root := filepath.Join(parent, "stage")
-				var refusal error
-				if mode == "separate" && runtime.GOOS == "linux" && runtime.GOARCH == "amd64" {
-					// Qualified Separate now has paired positive coverage; the generic
-					// writer must still reject the same selection without effects.
-					files, err := userStageExperienceFiles(&profile)
-					if files != nil {
-						t.Fatal("generic CodeGraph refusal returned staged files", files)
-					}
-					refusal = err
-				} else {
-					refusal = userPrepareInstallStage(context.Background(), root, mode, &profile)
+				root := installStagePath(t)
+				if err := userPrepareInstallStage(context.Background(), root, mode, &profile); err != nil {
+					t.Fatalf("qualified %s CodeGraph stage refused: %v", mode, err)
 				}
-				if refusal == nil || !strings.Contains(refusal.Error(), "CodeGraph") {
-					t.Fatal("unqualified CodeGraph stage was admitted", refusal)
-				}
-				entries, err := os.ReadDir(parent)
-				if err != nil || len(entries) != 0 {
-					t.Fatal("CodeGraph refusal changed the destination parent", entries, err)
+				if _, err := os.Lstat(filepath.Join(root, "runtime/codegraph")); !os.IsNotExist(err) {
+					t.Fatal("stage materialized the provisioned runtime")
 				}
 			})
 		}
+	}
+	profile, err := DecodeUserExperience(`{"persona":"unmanaged","background_subagents":"off","codegraph":"on"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if files, err := userStageExperienceFiles(&profile); err != nil || len(files) == 0 {
+		t.Fatalf("qualified stock profile lost generic staging: %v %v", files, err)
+	}
+	main := profile
+	main.SDKSource = "main-preview"
+	if files, err := userStageExperienceFiles(&main); err == nil || files != nil {
+		t.Fatalf("stock PNPM writer admitted Main: %v %v", files, err)
+	}
+	if err := userExperienceSupported(&main); err != nil {
+		t.Fatalf("Main CodeGraph parity lost: %v", err)
 	}
 }

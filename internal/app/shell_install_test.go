@@ -27,7 +27,7 @@ func TestShellInstallWelcomeMainTUI(t *testing.T) {
 	calls := 0
 	runTUI = func(m tea.Model, _ ...tea.ProgramOption) (tea.Model, error) {
 		calls++
-		if !strings.Contains(m.View(), "Install Gentle Shell") {
+		if !strings.Contains(m.View(), "Install Gentle-Shell, our own agent") {
 			t.Fatal("ordinary application does not expose the embedded installer")
 		}
 		return m, nil

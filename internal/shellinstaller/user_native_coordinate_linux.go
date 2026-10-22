@@ -27,10 +27,15 @@ func userNativeFreshRequest(args []string) (UserInstallRequest, bool, error) {
 	if err != nil {
 		return req, true, err
 	}
-	if _, err = os.Lstat(req.Destination); err == nil {
+	reconfigure := req.Experience != nil && userReconfigureTarget() == req.Destination
+	if !reconfigure {
+		if _, err = os.Lstat(req.Destination); err == nil {
+			return req, false, nil
+		} else if !os.IsNotExist(err) {
+			return req, true, err
+		}
+	} else if _, err = os.Lstat(req.Destination); err != nil {
 		return req, false, nil
-	} else if !os.IsNotExist(err) {
-		return req, true, err
 	}
 	token, err := InspectUserInstall(req)
 	if err != nil || token != req.Confirmation {
@@ -38,7 +43,7 @@ func userNativeFreshRequest(args []string) (UserInstallRequest, bool, error) {
 	}
 	// SDK Main + stock retains its existing authenticated Main worker.
 	// Keep the original profile and token; never clear its SDK selector.
-	if req.Experience != nil && req.Experience.SDKSource == "main-preview" {
+	if req.Experience != nil && (req.Experience.SDKSource == "main-preview" || req.Experience.GGA == "on") {
 		return req, false, nil
 	}
 	return req, true, userValidateStageExperience(req.Experience)
@@ -91,6 +96,13 @@ func userNativeCoordinate(ctx context.Context, self string, args []string, stdin
 	if err := userBootstrap(ctx, root, workspace); err != nil {
 		return err
 	}
+	var codegraph [][]byte
+	if req.Experience != nil && req.Experience.CodeGraph == "on" {
+		codegraph, err = userAcquireCodeGraphArchives(ctx)
+		if err != nil {
+			return err
+		}
+	}
 	worker, err := StageNativeInstallerCarrier(ctx, root)
 	if err != nil {
 		return err
@@ -130,7 +142,7 @@ func userNativeCoordinate(ctx context.Context, self string, args []string, stdin
 	if err != nil {
 		return err
 	}
-	installed, err := PublishNativePNPMInstallationWithExperience(ctx, root, stage, req.Destination, *location, req.Experience)
+	installed, err := userPublishNativePNPMPrepared(ctx, root, stage, req.Destination, *location, req.Experience, codegraph, req.Mode, req.SharedAgent)
 	if err != nil {
 		return err
 	}

@@ -86,7 +86,7 @@ func TestUserPNPMManifest(t *testing.T) {
 		{"codegraph", func(m *userManifest) { m.CodeGraph = true }},
 		{"main-sdk", func(m *userManifest) { m.MainSDK = &userSnapshotArtifact{} }},
 		{"parent-package", func(m *userManifest) { m.PNPM.PackageRoot = "../out/pnpm" }},
-		{"wrong-peer", func(m *userManifest) { m.PNPM.PeerVersion = "1.0.0" }},
+		{"malformed-peer", func(m *userManifest) { m.PNPM.PeerVersion = "1.2" }},
 		{"wrong-seal", func(m *userManifest) { m.PNPM.CodeSeal = strings.Repeat("0", 64) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

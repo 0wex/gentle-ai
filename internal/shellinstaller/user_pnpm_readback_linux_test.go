@@ -33,8 +33,21 @@ func TestUserPNPMReadback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.PiCLI == got.PeerCLI || !strings.Contains(got.PiCLI, "/1.0.0/") || !strings.Contains(got.PeerCLI, "/1.2.0/") || !strings.Contains(got.Node, "/24.21.0/") {
+	if got.PiCLI == got.PeerCLI || !strings.Contains(got.PeerCLI, "/"+location.PiVersion+"/") || !strings.Contains(got.Node, "/24.21.0/") {
 		t.Fatal("persistent Node, primary Pi and adjacent peer were conflated", got)
+	}
+	// The independent primary Pi version is producer data, never a frozen pin:
+	// read it from the shim target's own package metadata and require its store path.
+	primary, err := os.ReadFile(filepath.Join(filepath.Dir(filepath.Dir(filepath.Dir(got.PiCLI))), "package.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var primaryPackage struct {
+		Version string `json:"version"`
+	}
+	if json.Unmarshal(primary, &primaryPackage) != nil || primaryPackage.Version == "" ||
+		!strings.Contains(got.PiCLI, "/"+primaryPackage.Version+"/") || primaryPackage.Version == location.PiVersion {
+		t.Fatal("primary Pi version differs from its producer metadata", primaryPackage, got)
 	}
 	for _, target := range []string{got.Node, got.PiCLI, got.PeerCLI, got.ShellCLI} {
 		if filepath.IsAbs(target) || got.Files[target] == "" {
@@ -48,8 +61,15 @@ func TestUserPNPMReadback(t *testing.T) {
 	for name := range got.Files {
 		selected[name] = true
 	}
+	// The embedded SDK bundle is named after the stock installer's own pinned
+	// Gentle AI release; derive the single v<version> directory from the layout.
+	bundles, err := os.ReadDir(filepath.Join("/out", got.SDKRoot))
+	if err != nil || len(bundles) != 1 || !strings.HasPrefix(bundles[0].Name(), "v") {
+		t.Fatal("SDK bundle layout differs", err)
+	}
+	sdkVersion := bundles[0].Name()
 	for _, name := range []string{"gentle-ai", "integrity.json"} {
-		selected[filepath.Join(got.SDKRoot, "v4.0.0", name)] = true
+		selected[filepath.Join(got.SDKRoot, sdkVersion, name)] = true
 	}
 	fixture := filepath.Join(t.TempDir(), "stage")
 	if err := os.Mkdir(fixture, 0700); err != nil {
@@ -112,11 +132,28 @@ func TestUserPNPMReadback(t *testing.T) {
 	if _, err := ReadNativePNPMInstallation(ctx, fixture, location); err != nil {
 		t.Fatal("relocated real target fixture", err)
 	}
+	shellVersion, integrity := "", ""
+	if data, err := os.ReadFile(filepath.Join(fixture, filepath.Dir(got.ShellCLI), "../package.json")); err != nil {
+		t.Fatal(err)
+	} else {
+		var metadata struct {
+			Version string `json:"version"`
+		}
+		if json.Unmarshal(data, &metadata) != nil || metadata.Version == "" {
+			t.Fatal("Gentle Shell producer metadata differs")
+		}
+		shellVersion = metadata.Version
+	}
+	if data, err := os.ReadFile(filepath.Join(fixture, got.SDKRoot, sdkVersion, "integrity.json")); err != nil {
+		t.Fatal(err)
+	} else {
+		integrity = string(data)
+	}
 	for _, tt := range []struct{ name, path, old, new string }{
 		{"shim-command", "pnpm/bin/pi", "  exec node ", "  exec false "},
-		{"metadata-version", filepath.Dir(got.ShellCLI) + "/../package.json", `"4.0.0"`, `"4.0.1"`},
+		{"metadata-version", filepath.Dir(got.ShellCLI) + "/../package.json", `"` + shellVersion + `"`, `"` + strings.TrimSuffix(shellVersion, shellVersion[len(shellVersion)-1:]) + "1" + `"`},
 		{"metadata-bin", filepath.Dir(got.Node) + "/../package.json", `"bin/node"`, `"bin/other"`},
-		{"sdk-integrity", got.SDKRoot + "/v4.0.0/integrity.json", `"4.0.0"`, `"4.0.1"`},
+		{"sdk-integrity", got.SDKRoot + "/" + sdkVersion + "/integrity.json", integrity, strings.Replace(integrity, sdkVersion[1:], sdkVersion[1:len(sdkVersion)-1]+"1", 1)},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			path := filepath.Join(fixture, tt.path)

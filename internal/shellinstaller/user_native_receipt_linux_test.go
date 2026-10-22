@@ -18,7 +18,7 @@ func TestUserNativeProducerReceipt(t *testing.T) {
 		t.Fatal(err)
 	}
 	native := NativeInstallerResult{Details: json.RawMessage(`{"outcome":"terminal-action-required","action":"open-new-terminal","completed":["original-step"]}`)}
-	location := NativeInstallationLocation{PackageRoot: root + "/pnpm/store/v11/links/package/node_modules/gentle-pi", PNPMHome: root + "/pnpm", GlobalBin: root + "/pnpm/bin", ShellVersion: "4.0.0", PiVersion: "1.2.0"}
+	location := NativeInstallationLocation{PackageRoot: root + "/pnpm/store/v11/links/package/node_modules/gentle-pi", PNPMHome: root + "/pnpm", GlobalBin: root + "/pnpm/bin", ShellVersion: "4.3.0", PiVersion: "1.3.0"}
 	if err := userWriteNativeReceipt(root, native, &location); err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +49,7 @@ func TestUserNativeProducerReceiptRefuses(t *testing.T) {
 			path := filepath.Join(root, "native-installation.json")
 			data, err := json.Marshal(map[string]any{
 				"result":       json.RawMessage(`{"outcome":"terminal-action-required","action":"open-new-terminal"}`),
-				"installation": NativeInstallationLocation{PackageRoot: root + "/pnpm/store/v11/links/package/node_modules/gentle-pi", PNPMHome: root + "/pnpm", GlobalBin: root + "/pnpm/bin", ShellVersion: "4.0.0", PiVersion: "1.2.0"},
+				"installation": NativeInstallationLocation{PackageRoot: root + "/pnpm/store/v11/links/package/node_modules/gentle-pi", PNPMHome: root + "/pnpm", GlobalBin: root + "/pnpm/bin", ShellVersion: "4.3.0", PiVersion: "1.3.0"},
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -114,7 +114,7 @@ func TestUserNativeReceiptRefusesNonPrivateRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	native := NativeInstallerResult{Details: json.RawMessage(`{"outcome":"terminal-action-required","action":"open-new-terminal","completed":["original-step"]}`)}
-	location := NativeInstallationLocation{PackageRoot: root + "/pnpm/store/v11/links/package/node_modules/gentle-pi", PNPMHome: root + "/pnpm", GlobalBin: root + "/pnpm/bin", ShellVersion: "4.0.0", PiVersion: "1.2.0"}
+	location := NativeInstallationLocation{PackageRoot: root + "/pnpm/store/v11/links/package/node_modules/gentle-pi", PNPMHome: root + "/pnpm", GlobalBin: root + "/pnpm/bin", ShellVersion: "4.3.0", PiVersion: "1.3.0"}
 	var refusal *PrivateRuntimeError
 	if err := userWriteNativeReceipt(root, native, &location); !errors.As(err, &refusal) || refusal.Kind != "filesystem" {
 		t.Fatal("nonprivate receipt root bypassed custody", err)

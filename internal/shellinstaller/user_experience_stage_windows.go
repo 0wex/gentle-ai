@@ -4,9 +4,11 @@ package shellinstaller
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // userStageExperience writes only an unpublished installer stage. The caller
@@ -78,9 +80,65 @@ func userStageExperience(ctx context.Context, root string, profile *UserExperien
 			return errors.Join(err, errors.New("Windows staged preference custody/readback differs"))
 		}
 	}
+	if err := userStageWindowsAdvancedChoices(ctx, root, profile); err != nil {
+		return err
+	}
 	for path, expected := range map[string]string{root: rootIdentity, config: identity} {
 		if fresh, err := userWindowsIdentity(path, true); err != nil || fresh != expected {
 			return errors.Join(err, errors.New("Windows stage final identity differs"))
+		}
+	}
+	return ctx.Err()
+}
+
+// userStageWindowsAdvancedChoices materializes the choices that the stock
+// Windows runtime consumes as configuration/state. CodeGraph remains
+// separately gated because it needs its own optional runtime stage.
+func userStageWindowsAdvancedChoices(ctx context.Context, root string, profile *UserExperience) error {
+	if profile == nil {
+		return nil
+	}
+	if profile.GlobalRDD != "" {
+		home := filepath.Join(root, "home", ".gentle-ai")
+		if err := os.MkdirAll(home, 0700); err != nil {
+			return err
+		}
+		if err := userWindowsPrivate(home); err != nil {
+			return err
+		}
+		data, err := json.MarshalIndent(map[string]any{
+			"rdd_mode":             profile.GlobalRDD,
+			"rdd_mode_recorded_at": time.Now().UTC(),
+		}, "", "  ")
+		if err != nil {
+			return err
+		}
+		if err := userWindowsWrite(filepath.Join(home, "state.json"), append(data, '\n')); err != nil {
+			return err
+		}
+	}
+	if profile.Context7 != "" {
+		agent := filepath.Join(root, "agent")
+		if err := os.MkdirAll(agent, 0700); err != nil {
+			return err
+		}
+		if err := userWindowsPrivate(agent); err != nil {
+			return err
+		}
+		data, err := json.MarshalIndent(map[string]any{
+			"mcpServers": map[string]any{
+				"context7": map[string]any{
+					"url":      "https://mcp.context7.com/mcp",
+					"enabled":  profile.Context7 == "on",
+					"exposure": "codemode",
+				},
+			},
+		}, "", "  ")
+		if err != nil {
+			return err
+		}
+		if err := userWindowsWrite(filepath.Join(agent, "mcp.json"), append(data, '\n')); err != nil {
+			return err
 		}
 	}
 	return ctx.Err()

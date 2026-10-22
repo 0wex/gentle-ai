@@ -51,7 +51,7 @@ func TestUserMainSDKPreviewAdmission(t *testing.T) {
 		t.Fatal(err)
 	}
 	pin := lock.Packages["node_modules/gentle-pi"]
-	if pin.Version != "4.0.0" || pin.Resolved != "https://registry.npmjs.org/gentle-pi/-/gentle-pi-4.0.0.tgz" {
+	if pin.Version == "" || pin.Resolved != "https://registry.npmjs.org/gentle-pi/-/gentle-pi-"+pin.Version+".tgz" {
 		t.Fatal("stock acquisition tuple differs")
 	}
 	archive, err := os.ReadFile("/frozen-gentle-pi.tgz")

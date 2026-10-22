@@ -4,7 +4,11 @@
 
 The opt-in Welcome entry opens an inert configuration in the same parent tea.Program. Persona/background and all existing optional profile fields are editable; GGA provider is explicit, not inferred from Pi. Absent/on/off remain distinct. Windows keeps its existing Destination channel choice; interactive POSIX Main preview and complete installed advanced effects remain pending.
 
+Before Continue, wide configuration shows colored group headings and the original contextual About / changes / current value / recommendation / rationale blocks. Focus, current value and recommendation remain distinct; Continue and Cancel use shorter action panels. SDK-only Main qualifications and inherited choices remain truthful in this presentation.
+
 Continue passes an independent complete snapshot to the existing Destination selector. Ready displays the exact request/physical token and changes/scopes in two panels (stacked on narrower terminals), with bounded scroll. It is pre-install review, not installed health. Ctrl-E returns to configuration preserving target/mode/channel; re-entering Destination clears prior consent. Escape/Ctrl-C return to Welcome, without workers. No nested program or new installer/writer.
+
+The recovered destination presentation adds field-specific About help. The recovered review presentation adds Plan actions (Install / Back / Cancel), an About action panel and `[offset/last]` line positions; compact viewports keep focused actions reachable. These are current request projections, not the retired Shell pipeline. Existing y/n, Ctrl-E, cancellation and terminal-restored handoff remain authoritative; Enter on focused Install reuses y, not a new worker path. Source regression and inert PTY coverage are distinct from installed or human visual acceptance.
 
 Observed behavioral RED: ordinary entry skipped Configure. GREEN covers Configure→real inspection→Ready, editable snapshots/consent invalidation, exact unsupported choice retention/refusal and cancellation. Physical PTY tests exercise one program, default configured profile, confirm/cancel and complete terminal restoration before the inert worker hook; no actual installation is claimed. Viewport checks include narrow/short sizes. Pertinent regression, Guest formatting and three-target structural compilation are required.
 

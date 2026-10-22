@@ -11,41 +11,44 @@ import (
 )
 
 func TestShellInstallerWelcomeOptIn(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	ordinary := NewModel(system.DetectionResult{}, "dev")
 	ordinary.Width, ordinary.Height = 80, 30
-	if ordinary.optionCount() != 12 || strings.Contains(ordinary.View(), "Install Gentle Shell") {
+	if ordinary.optionCount() != 12 || strings.Contains(ordinary.View(), "Install Gentle-Shell, our own agent") {
 		t.Fatal("ordinary model changed its menu")
 	}
 	m := ordinary.WithShellInstaller()
-	if m.optionCount() != 13 || !strings.Contains(m.View(), "Install Gentle Shell") {
+	if m.optionCount() != 13 || !strings.Contains(m.View(), "Install Gentle-Shell, our own agent") {
 		t.Fatal("opted-in model does not expose the installer")
 	}
-	m.Cursor = 11 // New action is before Quit; existing action indexes stay stable.
+	m.Cursor = 0 // The restored campaign is the initial action.
 	m.Height = 8
-	if !strings.Contains(m.View(), "Install Gentle Shell") {
+	if !strings.Contains(m.View(), "Install Gentle-Shell, our own agent") {
 		t.Fatal("short viewport hides the selected installer action")
 	}
 	final, cmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = final.(Model)
-	if m.Screen != ScreenShellInstall || cmd != nil || !strings.Contains(m.View(), "Configure experience") {
+	if m.Screen != ScreenShellInstall || cmd != nil || !strings.Contains(m.View(), "Configure Gentle-Shell experience") {
 		t.Fatal("welcome starts a program or fails to enter the selector")
 	}
 	final, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnd})
 	m = final.(Model)
 	final, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = final.(Model)
+	if m.shellPlan == nil || m.shellPlanRequest.Confirmation == "" || m.ShellInstallSelection().Confirmed {
+		t.Fatalf("welcome did not reach the unconfirmed installation plan: %+v", m.shellPlanRequest)
+	}
 	final, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
 	m = final.(Model)
-	selection, err := cli.ShellInstallOutcome(m.shellInstallModel)
-	if err != nil || cmd != nil || selection.Request.Destination != "q" || selection.Confirmed {
-		t.Fatalf("parent consumed selector input: %+v, %v", selection, err)
+	if cmd != nil || m.ShellInstallSelection().Confirmed || m.shellPlan == nil {
+		t.Fatal("parent consumed plan input or forged consent")
 	}
 }
 
 func TestShellInstallerCancelReturnsWelcome(t *testing.T) {
 	for _, key := range []tea.KeyType{tea.KeyEsc, tea.KeyCtrlC} {
 		m := NewModel(system.DetectionResult{}, "dev").WithShellInstaller()
-		m.Cursor = 11
+		m.Cursor = 0
 		final, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 		m = final.(Model)
 		final, cmd := m.Update(tea.KeyMsg{Type: key})

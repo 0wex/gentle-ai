@@ -14,6 +14,9 @@ import (
 type ShellInstallSelection struct {
 	Request   shellinstaller.UserInstallRequest
 	Confirmed bool
+	// Executed reports that the owning TUI already ran the worker in-process.
+	// Its post-TUI owner must not run a second installation.
+	Executed bool
 }
 
 // NewShellInstallModel creates a selector for embedding in an existing program.

@@ -1,31 +1,37 @@
 package shellinstaller
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"runtime"
+)
 
 func userValidateStageExperience(profile *UserExperience) error {
 	if err := userValidateStagePreferences(profile); err != nil {
 		return err
 	}
-	if profile != nil && profile.SDKSource == "main-preview" {
+	if userQualifiedStockExperience(profile) {
+		return nil
+	}
+	if profile != nil && profile.SDKSource == "main-preview" && runtime.GOOS != "windows" {
 		return experienceError("Main SDK requires its authenticated runtime producer")
 	}
-	if profile != nil && profile.CodeGraph != "" {
+	if profile != nil && profile.CodeGraph != "" && runtime.GOOS != "windows" {
 		return experienceError("explicit CodeGraph requires a qualified private library/runtime stage")
 	}
-	if profile != nil && profile.GGA != "" {
+	if profile != nil && profile.GGA != "" && !(runtime.GOOS == "windows" && profile.GGA == "off") {
 		return experienceError("explicit GGA requires a qualified optional private CLI/config stage")
 	}
-	if profile != nil && profile.StrictTDD != "" {
+	if profile != nil && profile.StrictTDD != "" && runtime.GOOS != "windows" {
 		return experienceError("explicit Strict TDD requires a supported private SDK stage")
 	}
-	if profile != nil && profile.Context7 != "" {
+	if profile != nil && profile.Context7 != "" && runtime.GOOS != "windows" {
 		return experienceError("explicit Context7 requires a supported private MCP stage")
 	}
 	return nil
 }
 
-// Typed preferences and native RDD refusal are shared. POSIX preparation also
-// validates its actual mode; generic/Windows writers retain MCP/Strict TDD/GGA/CodeGraph refusals.
+// Typed preferences and distribution qualification are shared. Request/stage
+// callers still validate fresh Separate mode; other platforms retain refusals.
 func userValidateStagePreferences(profile *UserExperience) error {
 	if profile == nil {
 		return nil
@@ -33,7 +39,7 @@ func userValidateStagePreferences(profile *UserExperience) error {
 	if err := profile.Validate(); err != nil {
 		return err
 	}
-	if profile.GlobalRDD != "" {
+	if profile.GlobalRDD != "" && runtime.GOOS != "windows" && !userQualifiedPrivateChoices(profile) && !userQualifiedLegacyExperience(profile) {
 		return experienceError("explicit global RDD requires a supported native distribution")
 	}
 	return nil
