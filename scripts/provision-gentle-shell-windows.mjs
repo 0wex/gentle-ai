@@ -178,7 +178,10 @@ const authority = new Map();
 for (const [relative, record] of Object.entries(lock.packages)) {
   if (!relative) continue;
   const acquiredRoot = materialized ? modules : source;
-  const metadata = path.join(acquiredRoot, relative, 'package.json');
+  // The promoted root is already prefix/node_modules, so lock-relative
+  // node_modules/... paths must lose that one prefix.
+  const acquiredRelative = materialized ? relative.slice('node_modules/'.length) : relative;
+  const metadata = path.join(acquiredRoot, acquiredRelative, 'package.json');
   if (!fs.existsSync(metadata)) {
     if (record.optional !== true) reject('required acquired source absent');
     continue;
