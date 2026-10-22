@@ -45,6 +45,7 @@ func TestUserExperienceFreshSeparateAdmission(t *testing.T) {
 }
 
 func TestUserExperienceAdmissionKeepsScopeAndFeatureRefusals(t *testing.T) {
+	skipDarwinUnqualifiedMain(t)
 	parent := userUnixTempRoot(t)
 	if err := os.Chmod(parent, 0700); err != nil {
 		t.Fatal(err)
