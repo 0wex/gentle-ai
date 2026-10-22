@@ -32,7 +32,7 @@ func ShellInstallOutcome(model tea.Model) (ShellInstallSelection, error) {
 	if !ok {
 		return ShellInstallSelection{}, errors.New("installer selection is unavailable; run gentle-ai shell install to review a new selection")
 	}
-	return ShellInstallSelection{Request: selection.req, Confirmed: selection.confirmed}, selection.err
+	return ShellInstallSelection{Request: shellInstallRequestSnapshot(selection.req), Confirmed: selection.confirmed}, selection.err
 }
 
 // ShellInstallArguments preserves the backend's existing entry protocol.
@@ -55,9 +55,15 @@ func ShellInstallArguments(selection ShellInstallSelection) []string {
 	return args
 }
 
-// RunShellInstallSelection runs only after the owning TUI restores its terminal.
-// Confirmed is not authority: the physical selection and token are checked again.
-func RunShellInstallSelection(selection ShellInstallSelection, stdout io.Writer) (resultErr error) {
+// RunShellInstallSelectionProcess is for the ordinary process-owning TUI only,
+// after the owning TUI restores its terminal. Fresh native installation may
+// replace this process. Confirmed is not authority: the physical selection and
+// token are checked again.
+func RunShellInstallSelectionProcess(selection ShellInstallSelection, stdout io.Writer) error {
+	return runShellInstallSelectionWithEntry(selection, stdout, shellinstaller.RunUserEntryReplacingOwner)
+}
+
+func runShellInstallSelectionWithEntry(selection ShellInstallSelection, stdout io.Writer, entry shellEntryRunner) (resultErr error) {
 	if !selection.Confirmed {
 		return nil
 	}
@@ -67,5 +73,5 @@ func RunShellInstallSelection(selection ShellInstallSelection, stdout io.Writer)
 		return err
 	}
 	defer cancel()
-	return runShellInstallRequest(ctx, self, selection.Request, false, stdout)
+	return runShellInstallRequestWithEntry(ctx, self, selection.Request, false, stdout, entry)
 }

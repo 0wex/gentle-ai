@@ -9,6 +9,10 @@ import { pathToFileURL } from 'node:url';
 const [root, prefix, agent, finalPrefix, finalRoot, mode, requestedAction = 'install', recoveryAuthority] = process.argv.slice(2);
 const preparing = requestedAction === 'prepare-prior';
 const action = preparing ? 'install' : requestedAction;
+const selectingSDK = action === 'select-main-sdk-package';
+const verifyingSelectedSDK = action === 'verify-main-sdk-selected';
+const mainRuntimeActions = ['materialize-main-sdk-runtime', 'verify-main-sdk-runtime', 'select-main-sdk-package', 'verify-main-sdk-selected'];
+const mainActions = ['verify-main-source', 'verify-main-sdk-source', 'materialize-main-sdk-source', 'verify-main-sdk-composition', ...mainRuntimeActions];
 const uid = process.getuid();
 const reject = message => { throw Error(`global provision refused: ${message}`); };
 const digest = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
@@ -53,7 +57,7 @@ function writeExclusive(absolute, bytes, permissions = 0o600) {
 for (const value of [root, prefix, agent, finalPrefix, finalRoot]) {
   if (typeof value !== 'string' || !/^\/[A-Za-z0-9_./-]+$/.test(value) || path.resolve(value) !== value) reject('unsafe selection');
 }
-if (process.argv.length !== (requestedAction === 'restore' ? 10 : 9) || !['separate', 'shared'].includes(mode) || !['install', 'verify', 'restore', 'prepare-prior'].includes(requestedAction) || uid === 0) reject('arguments or UID');
+if (process.argv.length !== (requestedAction === 'restore' ? 10 : 9) || !['separate', 'shared'].includes(mode) || !['install', 'verify', 'restore', 'prepare-prior', ...mainActions].includes(requestedAction) || uid === 0) reject('arguments or UID');
 physical(root, true);
 const state = path.join(root, 'state');
 physical(state, true);
@@ -195,6 +199,7 @@ if (action === 'restore') {
     if (check.error || check.signal || check.status !== 0) reject('fixture prior requires verified existing installation');
   }
   const prior = preparing || (fs.existsSync(priorGraph) && JSON.parse(read(path.join(modules, '@earendil-works/pi-coding-agent/package.json'))).version === '0.99.2');
+  if (mainActions.includes(action) && (mode !== 'separate' || prior)) reject('Main preflight requires modern Separate stock');
   if (prior) source = path.join(root, 'runtime/prior');
   const graphPath = prior ? priorGraph : path.join(state, 'global-graph.json');
   const lockBytes = read(path.join(root, 'user-locks', prior ? 'prior' : 'modern', 'package-lock.json'));
@@ -321,6 +326,21 @@ if (action === 'restore') {
   const settings = priorSettings ? JSON.parse(priorSettings) : {};
   if (!settings || typeof settings !== 'object' || Array.isArray(settings) || (settings.packages !== undefined && !Array.isArray(settings.packages))) reject('malformed settings');
   const packageRoot = path.join(finalPrefix, 'lib/node_modules/gentle-pi');
+  const mainPackageRoot = path.join(finalRoot, 'runtime/main-sdk');
+  let selectedAgentIdentity;
+  if (selectingSDK || verifyingSelectedSDK) {
+    if (process.platform !== 'linux' || process.arch !== 'x64' || mode !== 'separate' || prefix !== path.join(root, 'prefix') || agent !== path.join(root, 'agent') || finalPrefix !== path.join(finalRoot, 'prefix')) reject('Main SDK selection requires Linux amd64 private Separate');
+    selectedAgentIdentity = physical(agent, true);
+    if ((selectedAgentIdentity.mode & 0o7777) !== 0o700) reject('Main SDK agent custody');
+    const info = physical(settingsPath);
+    if (info.nlink !== 1 || (info.mode & 0o7777) !== 0o600) reject('Main SDK settings custody');
+    const stockDeclarations = settings.packages?.filter(entry => (typeof entry === 'string' ? entry : entry?.source) === packageRoot) ?? [];
+    const mainDeclarations = settings.packages?.filter(entry => (typeof entry === 'string' ? entry : entry?.source) === mainPackageRoot) ?? [];
+    if (selectingSDK) {
+      absent(path.join(root, 'installation.json')); // Unpublished stage only.
+      if (stockDeclarations.length !== 1 || stockDeclarations[0] !== packageRoot || mainDeclarations.length !== 0) reject('Main SDK selection requires one plain stock declaration');
+    } else if (stockDeclarations.length !== 0 || mainDeclarations.length !== 1 || mainDeclarations[0] !== mainPackageRoot) reject('Main SDK selected declaration differs');
+  }
   if (action === 'install' && !preparing) {
     if (settings.npmCommand !== undefined) reject('foreign npm override');
     for (const entry of settings.packages ?? []) {
@@ -371,12 +391,17 @@ if (action === 'restore') {
     const nested = path.join(directory, 'node_modules');
     if (fs.existsSync(nested)) packages(nested);
   }
-  function nativeState() {
-    const native = path.join(modules, 'gentle-pi/.gentle-ai');
-    if (!fs.existsSync(native)) return;
+  function nativeState(native = path.join(modules, 'gentle-pi/.gentle-ai'), required = false) {
+    if (!fs.existsSync(native)) {
+      if (required) reject('required stock native absent');
+      return;
+    }
     physical(native, true);
     const entries = fs.readdirSync(native).sort();
-    if (entries.length === 0) return;
+    if (entries.length === 0) {
+      if (required) reject('required stock native empty');
+      return;
+    }
     if (JSON.stringify(entries) !== '["v4.0.0"]') reject('foreign native recovery state');
     const version = path.join(native, 'v4.0.0');
     physical(version, true);
@@ -504,7 +529,8 @@ if (action === 'restore') {
     sync(agent); // Complete settings publication before persisting its graph witness.
     writeExclusive(path.join(state, 'global-graph.json'), `${JSON.stringify(observed)}\n`);
   } else {
-    const declaration = settings.packages?.some(entry => (typeof entry === 'string' ? entry : entry?.source) === packageRoot);
+    const selectedPackageRoot = verifyingSelectedSDK ? mainPackageRoot : packageRoot;
+    const declaration = settings.packages?.some(entry => (typeof entry === 'string' ? entry : entry?.source) === selectedPackageRoot);
     const command = [path.join(finalRoot, 'runtime/node/bin/node'), path.join(finalRoot, 'runtime/node/lib/node_modules/npm/bin/npm-cli.js'), '--prefix', finalPrefix];
     if (!declaration || JSON.stringify(settings.npmCommand) !== JSON.stringify(command)) reject('selected settings bindings changed');
     if (preparing) {
@@ -521,5 +547,162 @@ if (action === 'restore') {
     }
   }
   if (!read(lockPath).equals(lockBytes)) reject('acquired lock changed');
+  if (mainActions.includes(action)) {
+    // All original stock checks above remain mandatory, including exact stock
+    // supplier pins. Composition is unpublished DATA, not installation/activation.
+    const { assertMainBindings, assertMainSDKPreviewBindings, mainBindingFiles } = await import(pathToFileURL(path.join(root, 'user-main-bindings.mjs')).href);
+    const acquired = authority.get(`gentle-pi@${pins['gentle-pi'][0]}`);
+    if (!acquired) reject('Main preflight lacks authenticated stock');
+    const bindings = directory => Object.fromEntries(mainBindingFiles.map(name => [name, read(path.join(directory, name))]));
+    const main = bindings(path.join(root, 'runtime/main-source')), stock = bindings(acquired.source);
+    if (action !== 'verify-main-source') {
+      const preserved = assertMainSDKPreviewBindings(main, stock);
+      if (action !== 'verify-main-sdk-source') {
+        // The Go caller binds main-source to the retained archive on both sides.
+        // No Main module is imported; only bounded source bytes are copied.
+        const mainRoot = path.join(root, 'runtime/main-source');
+        const composed = path.join(root, 'runtime/main-sdk');
+        const writing = action === 'materialize-main-sdk-source';
+        const runtime = mainRuntimeActions.includes(action);
+        const writingRuntime = action === 'materialize-main-sdk-runtime';
+        if (runtime && (process.platform !== 'linux' || process.arch !== 'x64' || prefix !== path.join(root, 'prefix'))) reject('Main SDK runtime requires Linux amd64 private Separate');
+        physical(path.dirname(composed), true);
+        if (writing) absent(composed);
+        const expected = new Map();
+        let bytes = 0;
+        function sourceMembers(directory, relative = '') {
+          const before = physical(directory, true);
+          if ((before.mode & 0o7777) !== 0o700) reject('Main source directory custody');
+          if (expected.size >= 32768) reject('Main composition member bound');
+          expected.set(relative, null);
+          for (const name of fs.readdirSync(directory).sort()) {
+            const original = path.join(directory, name), key = path.posix.join(relative, name);
+            if (fs.lstatSync(original).isDirectory()) sourceMembers(original, key);
+            else {
+              const info = physical(original);
+              if (info.nlink !== 1 || (info.mode & 0o7777) !== 0o600) reject('Main source file custody');
+              const originalBytes = read(original);
+              const content = preserved.includes(key) ? stock[key] : originalBytes;
+              bytes += originalBytes.length + (preserved.includes(key) ? content.length : 0);
+              if (expected.size >= 32768 || bytes > 1073741824) reject('Main composition byte/member bound');
+              expected.set(key, content);
+            }
+          }
+          const after = physical(directory, true);
+          if (before.dev !== after.dev || before.ino !== after.ino || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs) reject('Main source directory changed');
+        }
+        sourceMembers(mainRoot);
+        for (const name of preserved) if (!expected.has(name) || expected.get(name) === null) reject('Main binding member absent');
+        if (writing) {
+          for (const [name, content] of expected) {
+            const target = path.join(composed, name);
+            if (content === null) {
+              fs.mkdirSync(target, { mode: 0o700 });
+              sync(target);
+              sync(path.dirname(target));
+            } else writeExclusive(target, content);
+          }
+        }
+        const remaining = new Map(expected);
+        const nativeBinary = '.gentle-ai/v4.0.0/gentle-ai';
+        function compare(directory, relative = '') {
+          const before = physical(directory, true);
+          if ((before.mode & 0o7777) !== 0o700 || !remaining.has(relative) || remaining.get(relative) !== null) reject('Main composition directory differs');
+          remaining.delete(relative);
+          for (const name of fs.readdirSync(directory).sort()) {
+            const target = path.join(directory, name), key = path.posix.join(relative, name);
+            if (!remaining.has(key)) reject('Main composition extra member');
+            if (fs.lstatSync(target).isDirectory()) compare(target, key);
+            else {
+              const info = physical(target), content = remaining.get(key);
+              const permissions = runtime && key === nativeBinary ? 0o700 : 0o600;
+              if (info.nlink !== 1 || (info.mode & 0o7777) !== permissions || content === null || !read(target).equals(content)) reject('Main composition file differs');
+              remaining.delete(key);
+            }
+          }
+          const after = physical(directory, true);
+          if (before.dev !== after.dev || before.ino !== after.ino || before.mtimeMs !== after.mtimeMs || before.ctimeMs !== after.ctimeMs) reject('Main composition directory changed');
+        }
+        if (runtime) {
+          // Source composition is already materialized. Admit only the pinned
+          // stock native subtree and this one rename-safe dependency link.
+          if (expected.has('.gentle-ai')) reject('Main source collides with stock native');
+          const nativeSource = path.join(supplier, '.gentle-ai');
+          const nativeTarget = path.join(composed, '.gentle-ai');
+          const dependency = path.join(root, 'runtime/node_modules');
+          const linkText = '../prefix/lib/node_modules';
+          const dependencyTarget = modules; // Authenticated stock is hoisted here.
+          physical(dependencyTarget, true);
+          if (writingRuntime) {
+            absent(nativeTarget);
+            absent(dependency);
+            compare(composed);
+            if (remaining.size !== 0) reject('Main composition missing member');
+          }
+          nativeState(nativeSource, true); // Existing independent pins, mandatory.
+          const nativeMembers = new Map([
+            ['.gentle-ai', null], ['.gentle-ai/v4.0.0', null],
+            [nativeBinary, read(path.join(nativeSource, 'v4.0.0/gentle-ai'))],
+            ['.gentle-ai/v4.0.0/integrity.json', read(path.join(nativeSource, 'v4.0.0/integrity.json'))],
+          ]);
+          const nativeBytes = [...nativeMembers.values()].reduce((sum, content) => sum + (content?.length ?? 0), 0);
+          if (expected.size + nativeMembers.size > 32768 || bytes + nativeBytes > 1073741824) reject('Main runtime byte/member bound');
+          for (const [name, content] of nativeMembers) {
+            if (expected.has(name)) reject('Main native member collision');
+            expected.set(name, content);
+            if (content !== null && physical(path.join(supplier, name)).nlink !== 1) reject('stock native link custody');
+          }
+          if (writingRuntime) {
+            for (const [name, content] of nativeMembers) {
+              const target = path.join(composed, name);
+              if (content === null) {
+                fs.mkdirSync(target, { mode: 0o700 });
+                sync(target);
+                sync(path.dirname(target));
+              } else writeExclusive(target, content, name === nativeBinary ? 0o700 : 0o600);
+            }
+            fs.symlinkSync(linkText, dependency);
+            sync(path.dirname(dependency));
+          }
+          const link = fs.lstatSync(dependency);
+          if (!link.isSymbolicLink() || link.uid !== uid || link.nlink !== 1 || (link.mode & 0o7777) !== 0o777 || fs.readlinkSync(dependency) !== linkText || fs.realpathSync(dependency) !== dependencyTarget) reject('Main SDK dependency binding differs');
+          nativeState(nativeSource, true);
+          for (const [name, content] of nativeMembers) {
+            if (content !== null && !read(path.join(supplier, name)).equals(content)) reject('stock native changed during placement');
+          }
+          remaining.clear();
+          for (const [name, content] of expected) remaining.set(name, content);
+        }
+        compare(composed);
+        if (remaining.size !== 0) reject('Main composition missing member');
+        console.log(`Main SDK composition exact readback; materialized=${writing || writingRuntime}; activated=false`);
+        if (selectingSDK) {
+          // Only after every stock/source/native/dependency check. Preserve all
+          // other settings and declarations; never mutate the stock prefix.
+          const freshAgent = physical(agent, true);
+          if (freshAgent.dev !== selectedAgentIdentity.dev || freshAgent.ino !== selectedAgentIdentity.ino || (freshAgent.mode & 0o7777) !== 0o700) reject('Main SDK agent changed before selection');
+          if (!read(settingsPath).equals(priorSettings)) reject('Main SDK settings changed before selection');
+          settings.packages = settings.packages.map(entry => entry === packageRoot ? mainPackageRoot : entry);
+          const selectedBytes = Buffer.from(`${JSON.stringify(settings, null, 2)}\n`);
+          const stage = path.join(agent, `.gentle-shell-settings-${process.pid}`);
+          writeExclusive(stage, selectedBytes);
+          fs.renameSync(stage, settingsPath);
+          sync(agent);
+          const afterAgent = physical(agent, true);
+          if (afterAgent.dev !== selectedAgentIdentity.dev || afterAgent.ino !== selectedAgentIdentity.ino || (afterAgent.mode & 0o7777) !== 0o700) reject('Main SDK selected agent changed');
+          const info = physical(settingsPath);
+          if (info.nlink !== 1 || (info.mode & 0o7777) !== 0o600 || !read(settingsPath).equals(selectedBytes)) reject('Main SDK selected settings readback');
+          console.log('SDK Main + stock provider private package selected; personal_activated=false');
+        } else if (verifyingSelectedSDK) {
+          const afterAgent = physical(agent, true), info = physical(settingsPath);
+          if (afterAgent.dev !== selectedAgentIdentity.dev || afterAgent.ino !== selectedAgentIdentity.ino || (afterAgent.mode & 0o7777) !== 0o700 || info.nlink !== 1 || (info.mode & 0o7777) !== 0o600 || !read(settingsPath).equals(priorSettings)) reject('Main SDK selected settings changed during verification');
+        }
+      }
+      console.log(`Main SDK composition bindings verified; preserve authenticated stock=${preserved.join(',')}; activated=false`);
+    } else {
+      assertMainBindings(main, stock);
+      console.log('Main declared stock bindings verified; source API/runtime unqualified; activated=false');
+    }
+  }
   console.log(`Global readback verified; authenticated packages=${observed.length}; functional Ready=false`);
 }

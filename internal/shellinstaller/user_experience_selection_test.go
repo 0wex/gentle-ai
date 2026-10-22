@@ -52,6 +52,7 @@ func TestUserExperienceSelectionRefusesUnsupportedProfileBeforeEffects(t *testin
 	}
 	target := filepath.Join(root, "target")
 	profile := UserExperience{Persona: "gentleman", BackgroundSubagents: "on"}
+	profile.CodeGraph = "on" // Additional public effects remain unqualified.
 	req := UserInstallRequest{Destination: target, Mode: "separate", Experience: &profile}
 	if token, err := InspectUserInstall(req); err == nil || token != "" || !strings.Contains(err.Error(), "experience") {
 		t.Fatalf("unsupported profile is silently ignored: %q, %v", token, err)

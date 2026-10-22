@@ -6,6 +6,12 @@ func userValidateStageExperience(profile *UserExperience) error {
 	if err := userValidateStagePreferences(profile); err != nil {
 		return err
 	}
+	if profile != nil && profile.SDKSource == "main-preview" {
+		return experienceError("Main SDK requires its authenticated runtime producer")
+	}
+	if profile != nil && profile.CodeGraph != "" {
+		return experienceError("explicit CodeGraph requires a qualified private library/runtime stage")
+	}
 	if profile != nil && profile.GGA != "" {
 		return experienceError("explicit GGA requires a qualified optional private CLI/config stage")
 	}
@@ -19,7 +25,7 @@ func userValidateStageExperience(profile *UserExperience) error {
 }
 
 // Typed preferences and native RDD refusal are shared. POSIX preparation also
-// validates its actual mode; generic/Windows writers retain MCP/Strict TDD/GGA refusals.
+// validates its actual mode; generic/Windows writers retain MCP/Strict TDD/GGA/CodeGraph refusals.
 func userValidateStagePreferences(profile *UserExperience) error {
 	if profile == nil {
 		return nil

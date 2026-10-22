@@ -120,7 +120,16 @@ func userManagerVersion(version []byte) error {
 	return nil
 }
 
-func userService(ctx context.Context, self string, args []string, stdin io.Reader, stdout, stderr io.Writer) (resultErr error) {
+type userServicePlan struct {
+	arguments func(string, bool, string, string, []string, []string) ([]string, error)
+	cancel    func() error
+}
+
+func userService(ctx context.Context, self string, args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	return userServiceWithPlan(ctx, self, args, stdin, stdout, stderr, nil)
+}
+
+func userServiceWithPlan(ctx context.Context, self string, args []string, stdin io.Reader, stdout, stderr io.Writer, plan *userServicePlan) (resultErr error) {
 	if ctx == nil || ctx.Err() != nil || os.Getuid() == 0 {
 		return privateError("unavailable", errors.New("existing delegated non-root user manager required"))
 	}
@@ -182,7 +191,17 @@ func userService(ctx context.Context, self string, args []string, stdin io.Reade
 	if err != nil {
 		return err
 	}
-	cmd := exec.CommandContext(ctx, "/usr/bin/systemd-run", userServiceArgs(unit, interactive, self, cwd, args, env)...)
+	commandArgs := userServiceArgs(unit, interactive, self, cwd, args, env)
+	if plan != nil {
+		if plan.arguments == nil {
+			return privateError("refused", errors.New("service argument builder unavailable"))
+		}
+		commandArgs, err = plan.arguments(unit, interactive, self, cwd, args, env)
+		if err != nil {
+			return err
+		}
+	}
+	cmd := exec.CommandContext(ctx, "/usr/bin/systemd-run", commandArgs...)
 	cmd.Env, cmd.Stdin, cmd.Stdout, cmd.Stderr = env, stdin, stdout, stderr
 	cmd.WaitDelay = 3 * time.Second
 	cmd.Cancel = func() error {
@@ -195,6 +214,9 @@ func userService(ctx context.Context, self string, args []string, stdin io.Reade
 			return privateError("uncertain", errors.New("unit stop failed; preserve owned files and inspect unit"))
 		}
 		return nil
+	}
+	if plan != nil && plan.cancel != nil {
+		cmd.Cancel = plan.cancel
 	}
 	runErr := cmd.Run()
 	readbackErr := userUnitReadback(filepath.Join(receiptDir, "kernel.json"))
@@ -290,6 +312,18 @@ func RunUserEntry(ctx context.Context, self string, args []string, stdin io.Read
 	if len(args) == 0 {
 		return errors.New("missing shell entry")
 	}
+	if args[0] == "internal-native-own" {
+		return userNativeOwnerEntry(ctx, self, args[1:], stdin, stdout, stderr)
+	}
+	if args[0] == "install" {
+		req, fresh, err := userNativeFreshRequest(args[1:])
+		if err != nil {
+			return err
+		}
+		if fresh {
+			return userNativeInstall(ctx, self, args[1:], req, stdin, stdout, stderr)
+		}
+	}
 	inner := strings.HasPrefix(args[0], "internal-")
 	if err := UserKernelCheck(); err != nil {
 		if inner {
@@ -314,8 +348,17 @@ func RunUserEntry(ctx context.Context, self string, args []string, stdin io.Read
 			_, err = fmt.Fprintf(stdout, "Installed %s; commands %s/bin/gentle-shell and %s/bin/pi\n", result.Destination, result.Destination, result.Destination)
 		}
 		return err
+	case "native-coordinate":
+		return userNativeCoordinate(ctx, self, args[1:], stdin, stdout, stderr)
+	case "native-produce":
+		return userNativeChild(ctx, args[1:], stdout)
 	case "recover":
 		return userRecover(ctx, args[1:], stdout)
+	case "launch-pnpm":
+		if len(args) < 3 {
+			return errors.New("missing owned PNPM launch root or role")
+		}
+		return userLaunchPNPM(ctx, args[1], args[2], args[3:], stdin, stdout, stderr)
 	case "launch":
 		if len(args) < 2 {
 			return errors.New("missing owned launch root")

@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -46,7 +47,10 @@ type shellPTYModel struct{ tea.Model }
 func (shellPTYModel) Init() tea.Cmd { return nil }
 
 func TestShellInstallParentPhysicalPTY(t *testing.T) {
-	scenarios := []string{"confirm", "cancel-target", "cancel-review", "ctrl-c-target", "ctrl-c-review"}
+	scenarios := []string{"confirm", "confirm-edit", "cancel-target", "cancel-review", "ctrl-c-target", "ctrl-c-review"}
+	if runtime.GOARCH == "amd64" {
+		scenarios = append(scenarios, "confirm-main", "confirm-main-edit")
+	}
 	const childScenario = "GENTLE_TEST_SHELL_PTY_SCENARIO"
 	if selected := os.Getenv(childScenario); selected != "" {
 		if selected == "stalled-cleanup" {
@@ -101,6 +105,7 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 			setupMockHome(t, home)
 			t.Setenv("GENTLE_AI_NO_ANIMATION", "1")
 			target := filepath.Join(home, "qtarget")
+			var originalConfirmation string
 			readerDone, parentDone := make(chan struct{}), make(chan struct{})
 			oldIn, oldOut := os.Stdin, os.Stdout
 			oldOS, oldDetect, oldTUI, oldRun := ensureCurrentOSSupported, detectSystem, runTUI, runShellInstallSelection
@@ -139,8 +144,18 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 					return fmt.Errorf("worker hook before terminal restoration: %v", err)
 				}
 				fresh, err := shellinstaller.InspectUserInstall(selection.Request)
-				if err != nil || !selection.Confirmed || selection.Request.Destination != target || selection.Request.Confirmation != fresh {
+				wantProfile := shellinstaller.DefaultUserExperience()
+				if strings.HasPrefix(scenario, "confirm-main") {
+					wantProfile.SDKSource = "main-preview"
+				}
+				if strings.HasSuffix(scenario, "edit") {
+					wantProfile.Persona = "neutral"
+				}
+				if err != nil || !selection.Confirmed || selection.Request.Destination != target || selection.Request.Confirmation != fresh || selection.Request.Experience == nil || *selection.Request.Experience != wantProfile {
 					return fmt.Errorf("public interaction lost physical selection: %+v, %v", selection, err)
+				}
+				if strings.HasSuffix(scenario, "edit") && (originalConfirmation == "" || selection.Request.Confirmation == originalConfirmation) {
+					return fmt.Errorf("edited profile reused physical confirmation: %+v", selection)
 				}
 				return nil // Inert boundary spy: no acquisition or installation authority.
 			}
@@ -210,12 +225,51 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 			})
 			waitFor("Install Gentle Shell")
 			send(strings.Repeat("\x1b[B", 11) + "\r")
+			waitFor("Configure experience")
+			if strings.HasPrefix(scenario, "confirm-main") {
+				send(strings.Repeat("\x1b[B", 8) + "\r\r")
+				waitFor("SDK Main + stock provider")
+			}
+			send("\x1b[F\r")
 			waitFor("Target:")
 			if !strings.HasSuffix(scenario, "target") {
 				send(target + "\r")
-				waitFor("Confirm this physical selection")
+				waitFor("Ready — review before installation")
 			}
-			if scenario == "confirm" {
+			if strings.HasSuffix(scenario, "edit") {
+				profile := shellinstaller.DefaultUserExperience()
+				if strings.HasPrefix(scenario, "confirm-main") {
+					profile.SDKSource = "main-preview"
+				}
+				originalConfirmation, err = shellinstaller.InspectUserInstall(shellinstaller.UserInstallRequest{
+					Destination: target, Mode: "separate", Experience: &profile,
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				mu.Lock()
+				output.Reset()
+				mu.Unlock()
+				send("\x05")
+				waitFor("Configure experience")
+				send("\r\x1b[F\r")
+				waitFor("Target:")
+				if _, err := os.Lstat(target); !os.IsNotExist(err) {
+					t.Fatal("editing published before physical confirmation", err)
+				}
+				select {
+				case err := <-done:
+					t.Fatal("editing ended the terminal owner before confirmation", err)
+				default:
+				}
+				mu.Lock()
+				output.Reset()
+				mu.Unlock()
+				send("\r")
+				waitFor("Ready — review before installation")
+				waitFor("neutral")
+			}
+			if strings.HasPrefix(scenario, "confirm") {
 				send("y")
 			} else {
 				mu.Lock()
@@ -232,7 +286,7 @@ func TestShellInstallParentPhysicalPTY(t *testing.T) {
 			select {
 			case err := <-done:
 				wantWorkers := 0
-				if scenario == "confirm" {
+				if strings.HasPrefix(scenario, "confirm") {
 					wantWorkers = 1
 				}
 				if err != nil || programs != 1 || workers != wantWorkers {

@@ -1,6 +1,9 @@
 package shellinstaller
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"runtime"
+)
 
 // The optional named suffix keeps legacy positional fields and Windows channel
 // selectors unambiguous. Decoding is inert; inspection still owns admission.
@@ -27,7 +30,8 @@ func userExperienceConfirmationData(fields []string, profile *UserExperience) ([
 }
 
 // A transport or valid DTO is not proof that the selected runtime applies it.
-// Keep every non-nil profile refused until its canonical effects are supported.
+// Base persona/background use the existing canonical stage and pinned consumer.
+// Additional explicit choices stay refused until their installed chain exists.
 func userExperienceSupported(profile *UserExperience) error {
 	if profile == nil {
 		return nil
@@ -35,5 +39,11 @@ func userExperienceSupported(profile *UserExperience) error {
 	if err := profile.Validate(); err != nil {
 		return err
 	}
-	return experienceError("experience preferences are not supported by this installer yet")
+	if profile.SDKSource == "main-preview" && (runtime.GOOS != "linux" || runtime.GOARCH != "amd64") {
+		return experienceError("SDK Main + stock provider requires Linux amd64 Separate")
+	}
+	if profile.GlobalRDD != "" || profile.Context7 != "" || profile.StrictTDD != "" || profile.GGA != "" || profile.CodeGraph != "" {
+		return experienceError("selected additional experience preferences require a compatible installed runtime")
+	}
+	return nil
 }
