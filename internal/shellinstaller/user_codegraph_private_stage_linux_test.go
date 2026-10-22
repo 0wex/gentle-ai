@@ -41,9 +41,6 @@ func TestUserCodeGraphPrivateSeparateStage(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					if err := userGGAProvision(context.Background(), root, "separate", &profile); err != nil {
-						t.Fatal("common validation blocked an unrelated absent GGA selection", err)
-					}
 					if choice == "off" {
 						if err := userCodeGraphProvision(context.Background(), root, "separate", &profile); err != nil {
 							t.Fatal("OFF attempted acquisition", err)

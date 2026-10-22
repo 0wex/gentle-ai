@@ -5,7 +5,6 @@ package shellinstaller
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -117,17 +116,5 @@ func TestUserSharedDefaultsRefuseMain(t *testing.T) {
 	req := UserInstallRequest{Destination: root, Mode: "shared", SharedPrefix: prefix, SharedAgent: agent, Experience: &profile}
 	if err := userValidateInstall(req); err == nil || !strings.Contains(err.Error(), "Main preview is not available with the retained Shared prefix") {
 		t.Fatalf("shared Main preview was not refused precisely: %v", err)
-	}
-}
-
-func TestUserSharedGGAGate(t *testing.T) {
-	root, _, _ := sharedStagePaths(t)
-	profile := sharedDefaultsProfile()
-	profile.GGA, profile.GGAProvider = "on", ""
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	err := userGGAProvision(ctx, root, "shared", &profile)
-	if !errors.Is(err, context.Canceled) {
-		t.Fatalf("shared GGA did not reach the live cancellation boundary: %v", err)
 	}
 }

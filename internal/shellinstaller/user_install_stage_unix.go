@@ -60,7 +60,7 @@ func userPrepareInstallStage(ctx context.Context, root, mode string, profile *Us
 		}
 	}
 	// Ordinary profiles retain the complete generic validator and native writer.
-	if profile != nil && profile.Context7 == "" && profile.StrictTDD == "" && profile.GGA == "" && profile.CodeGraph == "" && profile.SDKSource != "main-preview" {
+	if profile != nil && profile.Context7 == "" && profile.StrictTDD == "" && profile.CodeGraph == "" && profile.SDKSource != "main-preview" {
 		return userStageExperience(ctx, root, profile)
 	}
 	if err := userStageExperienceConfig(ctx, root, files); err != nil {
@@ -70,15 +70,10 @@ func userPrepareInstallStage(ctx context.Context, root, mode string, profile *Us
 		return nil
 	}
 	if userQualifiedPrivateChoices(profile) || userQualifiedLegacyExperience(profile) {
-		if err := userStagePrivateChoices(ctx, root, mode, profile); err != nil {
-			return err
-		}
-		// The legacy GGA installer still receives its explicit provider through
-		// its own private config stage; nothing else about GGA is managed here.
-		return userStageGGA(ctx, root, mode, profile.GGA, profile.GGAProvider)
+		return userStagePrivateChoices(ctx, root, mode, profile)
 	}
 	if err := userStageContext7(ctx, root, mode, profile.Context7); err != nil {
 		return err
 	}
-	return userStageGGA(ctx, root, mode, profile.GGA, profile.GGAProvider)
+	return nil
 }
