@@ -18,8 +18,6 @@ const (
 	ShellExperienceRDD
 	ShellExperienceCodeGraph
 	ShellExperienceContext7
-	ShellExperienceGGA
-	ShellExperienceProvider
 	ShellExperienceSDK
 	ShellExperienceContinue
 	ShellExperienceCancel
@@ -38,7 +36,7 @@ type ShellExperienceEntry struct {
 }
 
 func shellExperienceCategories() []string {
-	return []string{"Required foundation", "Persona", "Recommended", "SDK source", "Install target", "Optional workflows", "Actions"}
+	return []string{"Required foundation", "Persona", "Recommended", "SDK source", "Install target", "Actions"}
 }
 
 // shellExperienceEntries restores the original grouping using only preferences
@@ -108,16 +106,6 @@ func shellExperienceEntries(p shellinstaller.UserExperience, uninstall bool, con
 	}
 	for _, target := range targets {
 		add(target)
-	}
-	addToggle(ShellExperienceGGA, "Optional workflows", "GGA", "Off by default. A provider is optional; leave it empty and GGA configures it later. Inheritance does not write an OFF override.", p.GGA)
-	// A retained provider stays editable so invalid OFF/inherit combinations
-	// can be corrected without silently discarding an explicit selection.
-	if p.GGA == "on" || p.GGAProvider != "" {
-		provider := p.GGAProvider
-		if provider == "" {
-			provider = "not selected"
-		}
-		add(ShellExperienceEntry{Control: ShellExperienceProvider, Category: "Optional workflows", Kind: "text", Label: "GGA provider (type explicitly)", Description: "Optional: type a provider here or leave it empty for GGA to configure it later. Never inferred from Pi.", Value: provider})
 	}
 	if uninstall {
 		add(ShellExperienceEntry{Control: ShellExperienceUpdate, Category: "Actions", Kind: "action", Label: "Check for updates", Description: "Checks this installation's Stable or Main channel for component updates."})

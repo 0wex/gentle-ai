@@ -16,22 +16,18 @@ import (
 // The ordinary Welcome starts with the agreed product preset. Incoming requests
 // retain their explicit OFF/inherited choices; the transport defaults stay inert.
 func shellWelcomeExperience() shellinstaller.UserExperience {
-	profile := shellinstaller.DefaultUserExperience()
-	profile.BackgroundSubagents = "on"
-	if runtime.GOOS == "windows" {
-		// Windows stages persona, background, Strict TDD, RDD, CodeGraph and Context7.
-		profile.StrictTDD = "on"
-		profile.GlobalRDD = "on"
-		profile.CodeGraph = "on"
-		profile.Context7 = "on"
-		profile.GGA = "off"
-		return profile
-	}
-	profile.StrictTDD = "on"
-	profile.GlobalRDD = "on"
-	profile.CodeGraph = "on"
-	profile.Context7 = "on"
-	profile.GGA = "off"
+	// GGA is retired: every constructed experience is forced OFF with an empty
+	// provider so no environment can silently re-enable it.
+	return shellForceGGAOff(shellinstaller.UserExperience{
+		Persona: "gentleman", BackgroundSubagents: "on", StrictTDD: "on",
+		GlobalRDD: "on", CodeGraph: "on", Context7: "on",
+	})
+}
+
+// shellForceGGAOff retires GGA on any constructed or loaded shell experience:
+// old installations, manifests or environments can never re-enable it here.
+func shellForceGGAOff(profile shellinstaller.UserExperience) shellinstaller.UserExperience {
+	profile.GGA, profile.GGAProvider = "off", ""
 	return profile
 }
 
@@ -105,7 +101,7 @@ func (m *Model) beginShellExperience() {
 		profiles := make([]shellinstaller.UserExperience, len(installs))
 		for index := range installs {
 			if detected, err := shellinstaller.LoadUserShellExperience(installs[index]); err == nil {
-				profiles[index] = detected
+				profiles[index] = shellForceGGAOff(detected)
 			}
 		}
 		m.shellDetected, m.shellDetectedProfiles, m.shellDetectedCursor = installs, profiles, 0
@@ -153,157 +149,147 @@ func (m Model) configureShellExperience(msg tea.Msg) (tea.Model, tea.Cmd) {
 	options := screens.ShellExperienceOptionsWithUninstall(config.profile, canUninstall, targets...)
 	config.cursor = min(max(0, config.cursor), len(options)-1)
 	entry := options[config.cursor]
-	if entry.Control == screens.ShellExperienceProvider && key.Type == tea.KeyRunes {
-		text := string(key.Runes)
-		if len(config.profile.GGAProvider)+len(text) <= 64 && strings.IndexFunc(text, func(r rune) bool { return r < 32 || r > 126 }) < 0 {
-			config.profile.GGAProvider += text
+	pressed := key.String()
+	if strings.EqualFold(pressed, "x") {
+		return m.configureShellExperience(tea.KeyMsg{Type: tea.KeyEsc})
+	}
+	if strings.EqualFold(pressed, "c") {
+		for i, option := range options {
+			if option.Control == screens.ShellExperienceContinue {
+				config.cursor, entry = i, option
+			}
 		}
-	} else {
-		pressed := key.String()
-		if strings.EqualFold(pressed, "x") {
+		pressed = "enter"
+	}
+	switch pressed {
+	case "up", "k":
+		config.cursor = max(0, config.cursor-1)
+	case "down", "j", "tab":
+		config.cursor = min(len(options)-1, config.cursor+1)
+	case "home":
+		config.cursor = 0
+	case "end":
+		for i, option := range options {
+			if option.Control == screens.ShellExperienceContinue {
+				config.cursor = i
+			}
+		}
+	case "enter":
+		switch entry.Control {
+		case screens.ShellExperiencePersona:
+			config.profile.Persona = entry.Choice
+		case screens.ShellExperienceBackground:
+			if config.profile.BackgroundSubagents == "on" {
+				config.profile.BackgroundSubagents = "off"
+			} else {
+				config.profile.BackgroundSubagents = "on"
+			}
+		case screens.ShellExperienceInstallTarget:
+			config.reconfigure, config.target = false, ""
+			if entry.Choice == "shared" {
+				if !config.piFound {
+					detail := "No single npm-style Pi install was detected; choose Separate install"
+					if config.piNote != "missing" && config.piNote != "ambiguous" && config.piNote != "" {
+						detail = config.piNote
+					}
+					config.err = errors.New(detail)
+				} else {
+					config.mode, config.choice = "shared", "shared"
+				}
+			} else if entry.Choice == "agent" {
+				if !shellAgentUsable(config.agent) {
+					config.err = errors.New("No Pi agent was detected; choose Separate install")
+				} else {
+					config.mode, config.choice, config.prefix = "agent", "agent", ""
+				}
+			} else if entry.Choice == "existing" && len(config.existing) == 1 {
+				install := config.existing[0]
+				profile, loadErr := shellinstaller.LoadUserShellExperience(install)
+				if loadErr != nil {
+					config.err = loadErr
+				} else {
+					config.profile, config.mode, config.choice = shellForceGGAOff(profile), install.Mode, "existing"
+					config.prefix, config.agent = install.Prefix, install.Agent
+					config.reconfigure, config.target = true, install.Target
+				}
+			} else {
+				config.mode, config.choice = "separate", "separate"
+			}
+		case screens.ShellExperienceSDK:
+			// The channel never consumes an optional preference. Only the
+			// platform qualification locks it; unsupported preference
+			// pairings are named when continuing.
+			if entry.Choice == "main-preview" {
+				config.err = shellMainPlatformError()
+			}
+			if config.err == nil {
+				config.profile.SDKSource = entry.Choice
+			}
+		case screens.ShellExperienceContinue:
+			// GGA is retired; force it inert before any plan or manage handoff.
+			config.profile = shellForceGGAOff(config.profile)
+			config.err = config.profile.Validate()
+			if config.err == nil && config.profile.SDKSource == "main-preview" {
+				config.err = shellMainSDKChoiceError(config.profile)
+			}
+			if config.err == nil && config.reconfigure && len(config.existing) == 1 {
+				return m.beginManageChanges(config)
+			}
+			if config.err == nil {
+				var destination string
+				var destErr error
+				if config.reconfigure && config.target != "" {
+					destination = config.target
+				} else {
+					destination, destErr = shellDefaultDestination()
+				}
+				if config.reconfigure && config.target != "" {
+					_ = os.Setenv("GENTLE_AI_RECONFIGURE_TARGET", config.target)
+				} else {
+					_ = os.Unsetenv("GENTLE_AI_RECONFIGURE_TARGET")
+				}
+				if destErr != nil {
+					config.err = destErr
+				} else {
+					state, _ := cli.ShellInstallPresentationOf(m.shellInstallModel)
+					request := state.Request
+					request.Destination = destination
+					request.Mode = config.mode
+					if config.mode == "shared" {
+						request.SharedPrefix, request.SharedAgent = config.prefix, config.agent
+					} else if config.mode == "agent" {
+						request.SharedPrefix, request.SharedAgent = "", config.agent
+					} else {
+						request.SharedPrefix, request.SharedAgent = "", ""
+					}
+					request.Experience = &config.profile
+					token, inspectErr := shellinstaller.InspectUserInstall(request)
+					if inspectErr != nil {
+						config.err = inspectErr
+					} else {
+						request.Confirmation = token
+						m.shellPlanRequest = request
+						m.shellPlanConfig = &config
+						m.shellPlan = append([]string(nil), shellInstallStepLabels...)
+						m.shellExperience = nil
+						m.shellInstallModel, _ = m.shellInstallModel.Update(tea.WindowSizeMsg{Width: m.Width, Height: m.Height})
+						return m, nil
+					}
+				}
+			}
+		case screens.ShellExperienceUpdate:
+			return m.beginShellUpdate(config)
+		case screens.ShellExperienceUninstall:
+			return m.beginUninstallFromConfig(config), nil
+		case screens.ShellExperienceCancel:
 			return m.configureShellExperience(tea.KeyMsg{Type: tea.KeyEsc})
-		}
-		if strings.EqualFold(pressed, "c") {
-			for i, option := range options {
-				if option.Control == screens.ShellExperienceContinue {
-					config.cursor, entry = i, option
-				}
-			}
-			pressed = "enter"
-		}
-		switch pressed {
-		case "up", "k":
-			config.cursor = max(0, config.cursor-1)
-		case "down", "j", "tab":
-			config.cursor = min(len(options)-1, config.cursor+1)
-		case "home":
-			config.cursor = 0
-		case "end":
-			for i, option := range options {
-				if option.Control == screens.ShellExperienceContinue {
-					config.cursor = i
-				}
-			}
-		case "backspace":
-			if entry.Control == screens.ShellExperienceProvider && len(config.profile.GGAProvider) > 0 {
-				config.profile.GGAProvider = config.profile.GGAProvider[:len(config.profile.GGAProvider)-1]
-			}
-		case "enter":
-			switch entry.Control {
-			case screens.ShellExperiencePersona:
-				config.profile.Persona = entry.Choice
-			case screens.ShellExperienceBackground:
-				if config.profile.BackgroundSubagents == "on" {
-					config.profile.BackgroundSubagents = "off"
-				} else {
-					config.profile.BackgroundSubagents = "on"
-				}
-			case screens.ShellExperienceInstallTarget:
-				config.reconfigure, config.target = false, ""
-				if entry.Choice == "shared" {
-					if !config.piFound {
-						detail := "No single npm-style Pi install was detected; choose Separate install"
-						if config.piNote != "missing" && config.piNote != "ambiguous" && config.piNote != "" {
-							detail = config.piNote
-						}
-						config.err = errors.New(detail)
-					} else {
-						config.mode, config.choice = "shared", "shared"
-					}
-				} else if entry.Choice == "agent" {
-					if !shellAgentUsable(config.agent) {
-						config.err = errors.New("No Pi agent was detected; choose Separate install")
-					} else {
-						config.mode, config.choice, config.prefix = "agent", "agent", ""
-					}
-				} else if entry.Choice == "existing" && len(config.existing) == 1 {
-					install := config.existing[0]
-					profile, loadErr := shellinstaller.LoadUserShellExperience(install)
-					if loadErr != nil {
-						config.err = loadErr
-					} else {
-						config.profile, config.mode, config.choice = profile, install.Mode, "existing"
-						config.prefix, config.agent = install.Prefix, install.Agent
-						config.reconfigure, config.target = true, install.Target
-					}
-				} else {
-					config.mode, config.choice = "separate", "separate"
-				}
-			case screens.ShellExperienceProvider: // Typed explicitly, never inferred from Pi.
-			case screens.ShellExperienceSDK:
-				// The channel never consumes an optional preference. Only the
-				// platform qualification locks it; unsupported preference
-				// pairings are named when continuing.
-				if entry.Choice == "main-preview" {
-					config.err = shellMainPlatformError()
-				}
-				if config.err == nil {
-					config.profile.SDKSource = entry.Choice
-				}
-			case screens.ShellExperienceContinue:
-				config.err = config.profile.Validate()
-				if config.err == nil && config.profile.SDKSource == "main-preview" {
-					config.err = shellMainSDKChoiceError(config.profile)
-				}
-				if config.err == nil && config.reconfigure && len(config.existing) == 1 {
-					return m.beginManageChanges(config)
-				}
-				if config.err == nil {
-					var destination string
-					var destErr error
-					if config.reconfigure && config.target != "" {
-						destination = config.target
-					} else {
-						destination, destErr = shellDefaultDestination()
-					}
-					if config.reconfigure && config.target != "" {
-						_ = os.Setenv("GENTLE_AI_RECONFIGURE_TARGET", config.target)
-					} else {
-						_ = os.Unsetenv("GENTLE_AI_RECONFIGURE_TARGET")
-					}
-					if destErr != nil {
-						config.err = destErr
-					} else {
-						state, _ := cli.ShellInstallPresentationOf(m.shellInstallModel)
-						request := state.Request
-						request.Destination = destination
-						request.Mode = config.mode
-						if config.mode == "shared" {
-							request.SharedPrefix, request.SharedAgent = config.prefix, config.agent
-						} else if config.mode == "agent" {
-							request.SharedPrefix, request.SharedAgent = "", config.agent
-						} else {
-							request.SharedPrefix, request.SharedAgent = "", ""
-						}
-						request.Experience = &config.profile
-						token, inspectErr := shellinstaller.InspectUserInstall(request)
-						if inspectErr != nil {
-							config.err = inspectErr
-						} else {
-							request.Confirmation = token
-							m.shellPlanRequest = request
-							m.shellPlanConfig = &config
-							m.shellPlan = append([]string(nil), shellInstallStepLabels...)
-							m.shellExperience = nil
-							m.shellInstallModel, _ = m.shellInstallModel.Update(tea.WindowSizeMsg{Width: m.Width, Height: m.Height})
-							return m, nil
-						}
-					}
-				}
-			case screens.ShellExperienceUpdate:
-				return m.beginShellUpdate(config)
-			case screens.ShellExperienceUninstall:
-				return m.beginUninstallFromConfig(config), nil
-			case screens.ShellExperienceCancel:
-				return m.configureShellExperience(tea.KeyMsg{Type: tea.KeyEsc})
-			default:
-				fields := []*string{&config.profile.StrictTDD, &config.profile.GlobalRDD, &config.profile.CodeGraph, &config.profile.Context7, &config.profile.GGA}
-				field := fields[entry.Control-screens.ShellExperienceTDD]
-				if *field == "on" {
-					*field = "off"
-				} else {
-					*field = "on"
-				}
+		default:
+			fields := []*string{&config.profile.StrictTDD, &config.profile.GlobalRDD, &config.profile.CodeGraph, &config.profile.Context7}
+			field := fields[entry.Control-screens.ShellExperienceTDD]
+			if *field == "on" {
+				*field = "off"
+			} else {
+				*field = "on"
 			}
 		}
 	}
@@ -336,7 +322,7 @@ func (m Model) shellInstallView() string {
 		return screens.RenderShellDetected(screens.ShellDetectedInstall{
 			Target: install.Target, Mode: shellDetectedMode(install.Mode), Channel: shellDetectedChannel(install.Channel),
 			Persona: profile.Persona, Background: profile.BackgroundSubagents,
-			TDD: profile.StrictTDD, RDD: profile.GlobalRDD, CodeGraph: profile.CodeGraph, Context7: profile.Context7, GGA: profile.GGA,
+			TDD: profile.StrictTDD, RDD: profile.GlobalRDD, CodeGraph: profile.CodeGraph, Context7: profile.Context7,
 		}, m.shellDetectedCursor, m.Width, m.Height)
 	}
 	if len(m.shellDetected) > 1 {

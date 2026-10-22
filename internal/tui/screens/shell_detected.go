@@ -13,7 +13,7 @@ import (
 type ShellDetectedInstall struct {
 	Target, Mode, Channel              string
 	Persona, Background                string
-	TDD, RDD, CodeGraph, Context7, GGA string
+	TDD, RDD, CodeGraph, Context7      string
 }
 
 // ShellDetectedEntry is one installation row in the multi-install selector.
@@ -117,7 +117,7 @@ func RenderShellDetected(install ShellDetectedInstall, cursor, width, height int
 		shellDetectedRow("PERSONA", shellDetectedValue(install.Persona)),
 		shellDetectedRow("BACKGROUND", shellDetectedValue(install.Background)),
 		shellDetectedRow("WORKFLOWS", shellDetectedToggle("TDD", install.TDD)+"  ·  "+shellDetectedToggle("RDD", install.RDD)+"  ·  "+shellDetectedToggle("CodeGraph", install.CodeGraph)),
-		shellDetectedRow("INTEGRATIONS", shellDetectedToggle("Context7", install.Context7)+"  ·  "+shellDetectedToggle("GGA", install.GGA)),
+		shellDetectedRow("INTEGRATIONS", shellDetectedToggle("Context7", install.Context7)),
 		"",
 		detectedSubtleStyle.Render(strings.Repeat("─", 64)),
 	)

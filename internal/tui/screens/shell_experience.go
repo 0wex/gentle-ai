@@ -55,7 +55,7 @@ func shellReadyLines(req shellinstaller.UserInstallRequest, preview string, widt
 		"Config: " + filepath.Join(req.Destination, "config"),
 		"Target HOME/state: " + filepath.Join(req.Destination, "home"),
 		"Commands: " + filepath.Join(req.Destination, "bin", "gentle-shell"+suffix) + " and " + filepath.Join(req.Destination, "bin", "pi"+suffix),
-		"Project overrides remain; no automatic indexing/GGA hooks.",
+		"Project overrides remain; no automatic indexing hooks.",
 	}
 	if req.Experience != nil && req.Experience.SDKSource == "main-preview" {
 		logical = append(logical, "SDK Main + stock provider: On my existing Pi or Separate install.",

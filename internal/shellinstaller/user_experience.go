@@ -27,6 +27,16 @@ func DefaultUserExperience() UserExperience {
 	return UserExperience{Persona: "gentleman", BackgroundSubagents: "on"}
 }
 
+// userForceGGAInert retires GGA on every shell install: the retained struct
+// fields are forced to OFF with an empty provider so an old profile, manifest
+// bit or environment can never silently enable GGA again.
+func userForceGGAInert(profile *UserExperience) {
+	if profile == nil {
+		return
+	}
+	profile.GGA, profile.GGAProvider = "off", ""
+}
+
 func (p UserExperience) Validate() error {
 	if p.Persona != "gentleman" && p.Persona != "neutral" && p.Persona != "unmanaged" {
 		return experienceError("choose gentleman, neutral or unmanaged persona")
@@ -49,7 +59,9 @@ func (p UserExperience) Validate() error {
 	if p.SDKSource != "" && p.SDKSource != "stable" && p.SDKSource != "main-preview" {
 		return experienceError("choose stable or main-preview for SDK source, or omit it for stock")
 	}
-	return userValidateGGASelection(p.GGA, p.GGAProvider)
+	// GGA is retired from the shell experience. The retained struct fields stay
+	// inert for transport compatibility; provisioning and recording are gone.
+	return nil
 }
 
 // Encode retains historical bytes when the new optional choices are omitted.
@@ -112,9 +124,8 @@ func DecodeUserExperience(raw string) (UserExperience, error) {
 		if key == "codegraph" && *field == "" {
 			return UserExperience{}, experienceError("an explicit CodeGraph choice must be on or off")
 		}
-		if (key == "gga" || key == "gga_provider") && *field == "" {
-			return UserExperience{}, experienceError("an explicit GGA choice/provider must not be empty")
-		}
+		// Retired "gga"/"gga_provider" keys still decode inertly so an older
+		// profile keeps loading; the install flow forces them off before staging.
 	}
 	if token, err = decoder.Token(); err != nil || token != json.Delim('}') {
 		return UserExperience{}, experienceError("unterminated experience object")

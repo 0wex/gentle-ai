@@ -92,8 +92,8 @@ func userStageExperience(ctx context.Context, root string, profile *UserExperien
 }
 
 // userStageWindowsAdvancedChoices materializes the choices that the stock
-// Windows runtime consumes as configuration/state. CodeGraph and GGA remain
-// separately gated because they need their own optional runtime stages.
+// Windows runtime consumes as configuration/state. CodeGraph remains
+// separately gated because it needs its own optional runtime stage.
 func userStageWindowsAdvancedChoices(ctx context.Context, root string, profile *UserExperience) error {
 	if profile == nil {
 		return nil

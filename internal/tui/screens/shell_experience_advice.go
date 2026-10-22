@@ -43,10 +43,6 @@ func shellExperienceRecommendation(entry ShellExperienceEntry) (string, string) 
 			return "Stable", "Choose Main for On my existing Pi or a Separate install; provider and native pins stay stock. Linux amd64 is qualified today; Windows and macOS support is being completed."
 		}
 		return "Stable", "Keep the stock SDK source, provider and native pins."
-	case ShellExperienceGGA:
-		return "OFF", "Opt in with or without a provider; GGA configures it later when absent. No automatic hooks or provider inference."
-	case ShellExperienceProvider:
-		return "Explicit choice", "Type your provider if you want; leave it empty and GGA configures it later. It is never inferred from Pi."
 	default:
 		return "", ""
 	}

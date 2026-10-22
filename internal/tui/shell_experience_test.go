@@ -101,24 +101,3 @@ func TestShellExperienceConfigureReachesPlan(t *testing.T) {
 		t.Fatal("plan escape lost the configuration")
 	}
 }
-
-func TestShellExperiencePreservesGGAChoiceAndCancel(t *testing.T) {
-	m := experienceFocus(t, experienceStart(t), screens.ShellExperienceGGA, "")
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // Inherited → ON.
-	m = experienceFocus(t, m, screens.ShellExperienceProvider, "")
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("codex")})
-	m, request := experiencePlan(t, m)
-	if request.Experience == nil || request.Experience.GGA != "on" || request.Experience.GGAProvider != "codex" {
-		t.Fatal("GGA selection was dropped at the installation plan")
-	}
-	if m.ShellInstallSelection().Confirmed {
-		t.Fatal("GGA plan acquired consent")
-	}
-	for _, key := range []tea.KeyType{tea.KeyEsc, tea.KeyCtrlC} {
-		cancel := experienceStart(t)
-		cancel = experienceKey(cancel, tea.KeyMsg{Type: key})
-		if cancel.Screen != ScreenWelcome || cancel.ShellInstallSelection().Confirmed {
-			t.Fatal("Configure cancel installs or leaves Welcome")
-		}
-	}
-}

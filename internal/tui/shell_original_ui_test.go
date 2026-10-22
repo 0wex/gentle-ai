@@ -54,7 +54,7 @@ func TestShellOriginalWelcomeAndMenu(t *testing.T) {
 		}
 		for _, want := range []string{
 			"Configure Gentle-Shell experience", "REQUIRED FOUNDATION", "Persistent memory + MCP",
-			"PERSONA", "RECOMMENDED", "SDK SOURCE", "OPTIONAL WORKFLOWS", "ACTIONS",
+			"PERSONA", "RECOMMENDED", "SDK SOURCE", "ACTIONS",
 			"ABOUT THIS OPTION", "WHAT IT CHANGES", "CURRENT VALUE",
 			"GENTLEMAN PROGRAMMING RECOMMENDS", "WHY WE RECOMMEND IT", "│",
 		} {

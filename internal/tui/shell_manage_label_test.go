@@ -25,7 +25,7 @@ func TestManageContinueLabelReflectsPendingChanges(t *testing.T) {
 	}
 
 	component := config
-	component.profile.GGA = "on"
+	component.profile.CodeGraph = "on"
 	if got := manageContinueLabel(component); got != "Update installation" {
 		t.Fatalf("component label = %q", got)
 	}

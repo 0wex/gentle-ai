@@ -129,8 +129,6 @@ func renderShellExperienceConfigCategory(category string, width int) string {
 		style = styles.SuccessStyle.Bold(true)
 	case "SDK source":
 		style = styles.WarningStyle.Bold(true)
-	case "Optional workflows":
-		style = lipgloss.NewStyle().Foreground(styles.ColorBlue).Bold(true)
 	}
 	return renderShellExperienceConfigLine(style, strings.ToUpper(category), width)
 }
@@ -170,8 +168,6 @@ func renderShellExperienceConfigPanel(focused ShellExperienceEntry, width int) [
 		hint = "Enter: toggle"
 	case "radio":
 		hint = "Enter: select"
-	case "text":
-		hint = "Type provider • Backspace: delete • Enter: keep"
 	case "action":
 		hint = "Enter: " + strings.ToLower(focused.Label)
 	}
@@ -208,8 +204,6 @@ func renderShellExperienceConfigEntry(entry ShellExperienceEntry, focused bool, 
 			marker = "[x]"
 		}
 		label = marker + " " + label + ": " + entry.Value
-	case "text":
-		label += ": " + entry.Value
 	}
 	return renderShellExperienceConfigLine(style, prefix+label, width)
 }

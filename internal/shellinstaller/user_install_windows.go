@@ -344,6 +344,11 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 		return result, err
 	}
 	req.Channel = channel
+	// GGA is retired from the shell installer. Force it inert before any
+	// inspection, staging or recording so an old profile or a crafted transport
+	// cannot silently enable it; such a request then fails its confirmation
+	// check below.
+	userForceGGAInert(req.Experience)
 	if err := userWindowsWorkerCheck(); err != nil {
 		return result, err
 	}

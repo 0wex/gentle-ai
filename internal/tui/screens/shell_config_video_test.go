@@ -14,7 +14,7 @@ func TestShellConfigVideoGroupHeadings(t *testing.T) {
 	view := RenderShellExperience(profile, 0, nil, 209, 61)
 	left, _ := shellConfigVideoColumns(view)
 	position := -1
-	for _, heading := range []string{"REQUIRED FOUNDATION", "PERSONA", "RECOMMENDED", "SDK SOURCE", "OPTIONAL WORKFLOWS", "ACTIONS"} {
+	for _, heading := range []string{"REQUIRED FOUNDATION", "PERSONA", "RECOMMENDED", "SDK SOURCE", "ACTIONS"} {
 		next := strings.Index("\n"+left+"\n", "\n"+heading+"\n")
 		if next <= position {
 			t.Fatalf("video group heading missing or out of order: %q:\n%s", heading, left)
@@ -41,7 +41,6 @@ func TestShellConfigVideoGroupHeadings(t *testing.T) {
 
 func TestShellConfigVideoFocusedPanels(t *testing.T) {
 	profile := shellinstaller.DefaultUserExperience()
-	profile.GGA = "on" // Keep the explicit provider's contextual panel covered.
 	for _, entry := range ShellExperienceOptionsWithUninstall(profile, false) {
 		if entry.Kind == "action" {
 			continue
@@ -82,11 +81,6 @@ func TestShellConfigVideoCurrentValueIsNotFocusOrRecommendation(t *testing.T) {
 			t.Fatalf("SDK focus lost current value or qualification %q:\n%s", want, panel)
 		}
 	}
-	profile.GGAProvider = "explicit-provider"
-	panel = shellConfigVideoPanel(t, profile, ShellExperienceProvider, "")
-	if !strings.Contains(panel, "CURRENT VALUE\nexplicit-provider\n") {
-		t.Fatalf("explicit provider was replaced by an inferred value:\n%s", panel)
-	}
 }
 
 func TestShellConfigVideoActionsHaveShortPanels(t *testing.T) {
@@ -106,7 +100,7 @@ func TestShellConfigVideoActionsHaveShortPanels(t *testing.T) {
 					t.Fatalf("video action panel missing %q:\n%s", want, panel)
 				}
 			}
-			for _, unwanted := range []string{"CURRENT VALUE", "GENTLEMAN PROGRAMMING RECOMMENDS", "WHY WE RECOMMEND IT", "SDK source:", "GGA:"} {
+			for _, unwanted := range []string{"CURRENT VALUE", "GENTLEMAN PROGRAMMING RECOMMENDS", "WHY WE RECOMMEND IT", "SDK source:"} {
 				if strings.Contains(panel, unwanted) {
 					t.Fatalf("action panel contains unrelated preference summary %q:\n%s", unwanted, panel)
 				}

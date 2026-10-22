@@ -26,7 +26,7 @@ func TestShellAgreedFreshDefaults(t *testing.T) {
 	if m.shellExperience.profile != want {
 		t.Errorf("fresh profile does not carry agreed defaults: got %+v, want %+v", m.shellExperience.profile, want)
 	}
-	for _, line := range []string{"Background subagents: ON", "Strict TDD: ON", "Global RDD: ON", "CodeGraph: ON", "Context7: ON", "GGA: OFF"} {
+	for _, line := range []string{"Background subagents: ON", "Strict TDD: ON", "Global RDD: ON", "CodeGraph: ON", "Context7: ON"} {
 		if !strings.Contains(m.View(), line) {
 			t.Errorf("fresh menu omits concrete default %q", line)
 		}

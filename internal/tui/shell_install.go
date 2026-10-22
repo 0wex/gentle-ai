@@ -305,8 +305,6 @@ func manageChanges(current, selected shellinstaller.UserExperience, inPlace bool
 	add("Strict TDD", current.StrictTDD, selected.StrictTDD, false)
 	add("Global RDD", current.GlobalRDD, selected.GlobalRDD, false)
 	add("Context7", current.Context7, selected.Context7, false)
-	add("GGA", current.GGA, selected.GGA, true)
-	add("GGA provider", current.GGAProvider, selected.GGAProvider, true)
 	add("CodeGraph", current.CodeGraph, selected.CodeGraph, true)
 	add("SDK source", current.SDKSource, selected.SDKSource, true)
 	return preferences, components

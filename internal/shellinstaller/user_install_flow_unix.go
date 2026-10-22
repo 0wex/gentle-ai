@@ -197,6 +197,11 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	if ctx == nil || ctx.Err() != nil {
 		return result, privateError("canceled", context.Canceled)
 	}
+	// GGA is retired from the shell installer. Force it inert before any
+	// inspection, staging or manifest recording so an old profile or a crafted
+	// transport cannot silently enable it; such a request then fails its
+	// physical confirmation check below.
+	userForceGGAInert(req.Experience)
 	if userDirectInstall(ctx) {
 		if err = userDirectKernelCheck(); err != nil {
 			return result, err
@@ -294,10 +299,6 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 			return result, err
 		}
 	}
-	userShellDetail(ctx, 3, 5, "Preparing optional GGA")
-	if err = userGGAProvision(ctx, root, req.Mode, req.Experience); err != nil {
-		return result, fmt.Errorf("optional GGA provisioning: %w", err)
-	}
 	freshConfirmation, inspectErr := InspectUserInstall(req)
 	if inspectErr != nil || freshConfirmation != req.Confirmation {
 		return result, privateError("preimage", errors.Join(inspectErr, errors.New("selected files changed before global provisioning")))
@@ -362,7 +363,8 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	userShellDetail(ctx, 4, 5, "Preparing the installation manifest")
 	manifest := userManifest{Schema: userSchema, Destination: req.Destination, Prefix: finalPrefix, Agent: finalAgent, Mode: req.Mode, SupervisorSHA: selfSHA, NodeSHA: privateNativeNodeSHA}
 	manifest.MainSDK = mainSDK
-	manifest.GGA = req.Experience != nil && req.Experience.GGA == "on"
+	// Shell installs never provision or record GGA; the bit stays false.
+	manifest.GGA = false
 	manifest.CodeGraph = req.Experience != nil && req.Experience.CodeGraph == "on"
 	manifest.PrefixIdentity, err = userIdentity(prefix)
 	if err == nil {
@@ -886,14 +888,6 @@ func userReadManifest(ctx context.Context, root string) (userManifest, error) {
 			return manifest, fmt.Errorf("CodeGraph retained integrity: %w", err)
 		}
 	}
-	if manifest.GGA {
-		if manifest.Mode != "separate" && manifest.Mode != "shared" && manifest.Mode != "agent" {
-			return manifest, privateError("refused", errors.New("GGA requires a Separate, Shared or agent manifest"))
-		}
-		if err := userGGAReadback(ctx, root); err != nil {
-			return manifest, fmt.Errorf("GGA retained integrity: %w", err)
-		}
-	}
 	for _, name := range []string{"gentle-shell", "pi"} {
 		binding := userManifestBinding(root, name, manifest)
 		if _, err := privateNativeFile(ctx, filepath.Join(root, "bin", name), 0700, int64(len(binding)), fmt.Sprintf("%x", sha256.Sum256([]byte(binding)))); err != nil {
@@ -930,19 +924,7 @@ func userLaunchCommand(ctx context.Context, root string, manifest userManifest, 
 	// Read-only stock Git probes must not refresh the caller's index. Explicit
 	// Git writes still take their mandatory locks.
 	cmd.Env = append(userEnvironment(root, manifest.Prefix, manifest.Agent), "GIT_OPTIONAL_LOCKS=0")
-	// Only a validated Separate manifest selects this owned optional payload.
-	// Installation/provisioning environments do not inherit this activation.
-	if manifest.GGA && (manifest.Mode == "separate" || manifest.Mode == "shared" || manifest.Mode == "agent") {
-		if strings.ContainsRune(root, os.PathListSeparator) {
-			cmd.Err = privateError("refused", errors.New("private GGA launch root cannot contain a PATH separator"))
-			return cmd
-		}
-		for i, entry := range cmd.Env {
-			if path, ok := strings.CutPrefix(entry, "PATH="); ok {
-				cmd.Env[i] = "PATH=" + filepath.Join(root, "runtime/gga/bin") + ":" + path
-			}
-		}
-	}
+	// GGA is retired from the shell installer: no runtime PATH is extended.
 	userCodeGraphLaunchEnv(root, manifest, cmd)
 	return cmd // Empty Dir inherits the caller's project, not the installer stage.
 }
@@ -976,7 +958,6 @@ func userLaunch(ctx context.Context, root string, args []string, stdin io.Reader
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdin, stdout, stderr
 	return userLaunchGroup(cmd, stdin, func(err error) error {
 		settled = true
-		err = userGGAExitReadback(context.Background(), root, manifest.GGA, limited(err))
 		if manifest.CodeGraph {
 			if readbackErr := userCodeGraphReadback(context.Background(), root); readbackErr != nil {
 				failure := privateError("uncertain", errors.Join(err, readbackErr))

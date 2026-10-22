@@ -60,22 +60,6 @@ func TestShellExperienceSDKSourceHandoff(t *testing.T) {
 	}
 }
 
-func TestShellExperienceSDKSourceEditingKeepsGGA(t *testing.T) {
-	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
-		return // Main is not an offered choice on these platforms.
-	}
-	m := sdkSourceRow(t, experienceInherited(t))
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyDown})
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	m = experienceFocus(t, m, screens.ShellExperienceGGA, "")
-	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	m, request := experiencePlan(t, m)
-	if request.Experience == nil || request.Experience.SDKSource != "main-preview" || request.Experience.GGA != "on" {
-		t.Fatalf("explicit choices were dropped: %+v", request.Experience)
-	}
-}
-
 func TestShellExperienceSDKSourceResponsiveDisclosure(t *testing.T) {
 	profile := shellinstaller.DefaultUserExperience()
 	profile.SDKSource = "main-preview"
