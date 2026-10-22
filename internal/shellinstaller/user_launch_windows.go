@@ -91,6 +91,15 @@ func userWindowsVerify(ctx context.Context, root string, stdout, stderr io.Write
 			return errors.Join(err, errors.New("owned Windows command binding differs"))
 		}
 	}
+	// The pinned Go artifact is intentionally absent when the installation
+	// reused a system Go toolchain. The decision is made once, before any
+	// archive is read: only a valid canonical in-target marker accepts the
+	// absence, and a present but invalid marker is refused outright. Every
+	// other artifact keeps its exact retained-archive comparison.
+	goZipRequired, err := userWindowsVerifyGoZipRequired(root)
+	if err != nil {
+		return err
+	}
 	for i, artifact := range userWindowsArtifacts {
 		destination, member := filepath.Join(root, "agent/bin"), strings.TrimSuffix(artifact.Archive, ".zip")+".exe"
 		if i < 2 {
@@ -103,6 +112,9 @@ func userWindowsVerify(ctx context.Context, root string, stdout, stderr io.Write
 			if i == 1 {
 				member = "bin/go.exe"
 			}
+		}
+		if i == 1 && !goZipRequired {
+			continue
 		}
 		if err := userWindowsVerifyArchive(ctx, root, artifact, destination, member); err != nil {
 			return err
@@ -262,6 +274,15 @@ func RunUserEntry(ctx context.Context, self string, args []string, stdin io.Read
 		forward := append([]string{"shell", "internal-" + args[0]}, args[1:]...)
 		command := exec.CommandContext(ctx, self, forward...)
 		command.Env, command.Stdin, command.Stdout, command.Stderr = env, stdin, stdout, stderr
+		if args[0] == "install" {
+			// The single caller context item for system-Go reuse: the absolute
+			// go.exe resolved on the original process PATH. The bounded worker
+			// revalidates the candidate completely before any trust decision;
+			// no caller PATH, credentials or configuration are forwarded.
+			if candidate := userWindowsSystemGoCandidate(); candidate != "" {
+				command.Env = append(command.Env, userWindowsSystemGoCandidateEnv+"="+candidate)
+			}
+		}
 		grace := 2 * time.Second
 		if args[0] == "install" {
 			grace = 120 * time.Second // Quiesce owned descendants and remove the owned stage.

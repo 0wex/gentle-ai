@@ -128,6 +128,7 @@ func userWindowsEnvironment(root string) ([]string, error) {
 	if root == "" {
 		return append(env, "PATH="+filepath.Join(system, "System32")), nil
 	}
+	goBin := userWindowsSystemGoBin(root) // Best-effort: doubt keeps the pinned runtime Go entry.
 	prefix, agent := filepath.Join(root, "prefix"), filepath.Join(root, "agent")
 	return append(env,
 		"HOME="+filepath.Join(root, "home"), "USERPROFILE="+filepath.Join(root, "home"),
@@ -139,7 +140,7 @@ func userWindowsEnvironment(root string) ([]string, error) {
 		// Go's own defaults below the private HOME/LOCALAPPDATA, made explicit
 		// because launch verification classifies them as mutable runtime state.
 		"GOPATH="+filepath.Join(root, "home/go"), "GOMODCACHE="+filepath.Join(root, "home/go/pkg/mod"), "GOCACHE="+filepath.Join(root, "state/go-build"),
-		"PATH="+strings.Join([]string{filepath.Join(root, "runtime/node"), filepath.Join(root, "runtime/go/bin"), filepath.Join(root, "runtime/codegraph/bin"), filepath.Join(system, "System32")}, string(os.PathListSeparator)),
+		"PATH="+strings.Join([]string{filepath.Join(root, "runtime/node"), goBin, filepath.Join(root, "runtime/codegraph/bin"), filepath.Join(system, "System32")}, string(os.PathListSeparator)),
 		"NPM_CONFIG_PREFIX="+prefix, "NPM_CONFIG_IGNORE_SCRIPTS=true", "NPM_CONFIG_AUDIT=false", "NPM_CONFIG_FUND=false",
 		"NPM_CONFIG_USERCONFIG="+filepath.Join(root, "config/user.npmrc"), "NPM_CONFIG_GLOBALCONFIG="+filepath.Join(root, "config/global.npmrc"),
 		"NPM_CONFIG_CACHE="+filepath.Join(root, "runtime/cache"), "NODE_USE_SYSTEM_CA=1"), nil
@@ -411,6 +412,18 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 			return result, err
 		}
 	}
+	// System-Go reuse is decided before any artifact is downloaded: a caller
+	// go.exe that passes the full reuse contract replaces the pinned go.zip
+	// acquisition and is recorded inside the staged target itself. Anything
+	// else falls back to the pinned artifact unchanged.
+	fmt.Fprintln(os.Stderr, "Windows install phase: system-go-detect")
+	systemGo, systemGoOK := userWindowsSystemGoDetect(ctx)
+	if systemGoOK {
+		if err := userWindowsSystemGoStage(stage, systemGo); err != nil {
+			return result, err
+		}
+		fmt.Fprintf(os.Stderr, "Windows install phase: system-go reused %s (%s)\n", systemGo.Version, systemGo.Go)
+	}
 	if err := userStageExperience(ctx, stage, req.Experience); err != nil {
 		return result, err
 	}
@@ -438,18 +451,23 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	}
 	fetched := make([]fetchedArtifact, len(userWindowsArtifacts))
 	var downloads sync.WaitGroup
-	for index := range userWindowsArtifacts {
-		index := index
+	for index, artifact := range userWindowsArtifacts {
+		if userWindowsGoZipSkipped(systemGoOK, artifact.Archive) {
+			continue // System Go reused: the pinned Go artifact is never acquired.
+		}
+		phase("acquire", artifact.Archive)
 		downloads.Add(1)
+		index, artifact := index, artifact
 		go func() {
 			defer downloads.Done()
-			artifact := userWindowsArtifacts[index]
-			phase("acquire", artifact.Archive)
 			fetched[index].data, fetched[index].err = userWindowsAcquire(ctx, artifact, filepath.Join(stage, "runtime/archives", artifact.Archive))
 		}()
 	}
 	downloads.Wait()
 	for index, artifact := range userWindowsArtifacts {
+		if userWindowsGoZipSkipped(systemGoOK, artifact.Archive) {
+			continue // The reused system Go needs no unpacked runtime/go tree.
+		}
 		if fetched[index].err != nil {
 			return result, fetched[index].err
 		}
