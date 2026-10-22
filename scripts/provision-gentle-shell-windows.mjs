@@ -175,12 +175,17 @@ if (action === 'install') {
   npmCommand(['rebuild', '--global', '--prefix', prefix, '--offline', '--ignore-scripts', '--bin-links=true', '--engine-strict', '--no-audit', '--no-fund']);
 }
 const authority = new Map();
+// An install promotes source/node_modules into prefix/node_modules. A later
+// verify/overlay run therefore has no source tree left; use the promoted tree
+// as authority whenever it exists. A source tree that was not promoted (for
+// example a staged overlay) remains authoritative.
+const promotedAuthority = materialized || !fs.existsSync(path.join(source, 'node_modules'));
 for (const [relative, record] of Object.entries(lock.packages)) {
   if (!relative) continue;
-  const acquiredRoot = materialized ? modules : source;
+  const acquiredRoot = promotedAuthority ? modules : source;
   // The promoted root is already prefix/node_modules, so lock-relative
   // node_modules/... paths must lose that one prefix.
-  const acquiredRelative = materialized ? relative.slice('node_modules/'.length) : relative;
+  const acquiredRelative = promotedAuthority ? relative.slice('node_modules/'.length) : relative;
   const metadata = path.join(acquiredRoot, acquiredRelative, 'package.json');
   if (!fs.existsSync(metadata)) {
     if (record.optional !== true) reject('required acquired source absent');
@@ -233,7 +238,7 @@ function packages(directory) {
       // A successful materializeGlobal already proved the copied tree equals
       // the authenticated source by whole-tree digest. Re-reading every file
       // here is redundant and dominates the Windows install.
-      if (!materialized) compare(absolute, acquired.directory, record.name === 'gentle-pi');
+      if (!promotedAuthority) compare(absolute, acquired.directory, record.name === 'gentle-pi');
     }
     if (fs.existsSync(path.join(absolute, 'node_modules'))) packages(path.join(absolute, 'node_modules'));
   }

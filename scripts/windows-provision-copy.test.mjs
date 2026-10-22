@@ -23,6 +23,7 @@ for (const phase of ['provision-lock', 'provision-ci', 'provision-copy', 'provis
 assert.ok(source.includes(`'rebuild', '--global', '--prefix', prefix, '--offline', '--ignore-scripts', '--bin-links=true', '--engine-strict', '--no-audit', '--no-fund'`), 'stock rebuild flags');
 assert.ok(source.includes('fs.renameSync(acquired, modules)'), 'source tree promoted by rename');
 assert.ok(source.includes("relative.slice('node_modules/'.length)"), 'promoted authority strips the node_modules prefix');
+assert.ok(source.includes('const promotedAuthority = materialized || !fs.existsSync(path.join(source, \'node_modules\'))'), 'verify uses the promoted tree when source is gone');
 assert.ok(source.includes('`' + '.previous-${crypto.randomUUID()}' + '`'), 'old modules tree preserved as .previous-<uuid> sibling');
 const materializedDecl = source.indexOf('let materialized = false;');
 assert.ok(materializedDecl >= 0, 'materialized state declared');
