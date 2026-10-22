@@ -57,8 +57,8 @@ func addAgentInstall(t *testing.T, home string) string {
 	return target
 }
 
-func TestShellManageShowsComponentChangesWithoutReinstall(t *testing.T) {
-	managedInstallFixture(t)
+func TestShellManageAppliesSDKSourceAsPreference(t *testing.T) {
+	_, target := managedInstallFixture(t)
 	m := NewModel(system.DetectionResult{}, "detected").WithShellInstaller()
 	m.Width, m.Height = 120, 35
 	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -69,15 +69,27 @@ func TestShellManageShowsComponentChangesWithoutReinstall(t *testing.T) {
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	if m.shellManage == nil || len(m.shellManage.components) == 0 || len(m.shellManage.preferences) != 0 || m.shellPlan != nil {
-		t.Fatalf("component changes were not isolated: %+v", m.shellManage)
+	if m.shellManage == nil || len(m.shellManage.preferences) != 1 || m.shellManage.preferences[0].Label != "SDK source" || len(m.shellManage.components) != 0 || m.shellPlan != nil {
+		t.Fatalf("SDK source was not classified as a preference: %+v", m.shellManage)
 	}
 	view := m.View()
-	if !strings.Contains(view, "COMPONENT CHANGES") || !strings.Contains(view, "SDK source") || strings.Contains(view, "Apply preferences") || !strings.Contains(view, "opens with gentle-shell") {
-		t.Fatalf("component summary differs:\n%s", view)
+	if !strings.Contains(view, "PREFERENCE CHANGES") || !strings.Contains(view, "SDK source") || !strings.Contains(view, "Apply preferences") || strings.Contains(view, "COMPONENT CHANGES") {
+		t.Fatalf("preference summary differs:\n%s", view)
 	}
 	if m.shellInstallSelection.Confirmed {
-		t.Fatal("component summary forged installation consent")
+		t.Fatal("preference summary forged installation consent")
+	}
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if !m.shellManage.applied || m.shellManage.err != nil || m.shellInstallSelection.Confirmed {
+		t.Fatalf("SDK source apply failed or forged installation: %+v", m.shellManage)
+	}
+	loaded, err := shellinstaller.LoadUserShellExperience(shellinstaller.UserShellInstall{Target: target, Mode: "separate"})
+	if err != nil || loaded.SDKSource != "main-preview" {
+		t.Fatalf("SDK source channel was not applied in place: %+v %v", loaded, err)
+	}
+	data, err := os.ReadFile(filepath.Join(target, "config", "update-channel.json"))
+	if err != nil || string(data) != `{"channel":"main"}` {
+		t.Fatalf("canonical channel bytes differ: %q %v", data, err)
 	}
 }
 

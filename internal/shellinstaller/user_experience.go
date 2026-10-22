@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -30,6 +32,82 @@ func DefaultUserExperience() UserExperience {
 // userForceGGAInert retires GGA on every shell install: the retained struct
 // fields are forced to OFF with an empty provider so an old profile, manifest
 // bit or environment can never silently enable GGA again.
+// Canonical per-install update channels. The SDK source preference is an
+// update-channel preference, not a component: Main preview routes update
+// checks at channel main, Stable at channel stable. Installing or replacing
+// components stays outside the preference apply path.
+const (
+	userChannelStable = "stable"
+	userChannelMain   = "main"
+)
+
+// userUpdateChannelRelPath is the target-relative canonical file that records
+// one installation's SDK update channel. It is a small regular preference
+// file inside config, so the installed-tree inventory rules accept it on every
+// platform without a special name grant.
+const userUpdateChannelRelPath = "config/update-channel.json"
+
+func userUpdateChannelPath(target string) string {
+	return filepath.Join(target, filepath.FromSlash(userUpdateChannelRelPath))
+}
+
+// userUpdateChannelBytes are the exact canonical bytes persisted for a
+// channel; single-key marshalling keeps the encoding deterministic.
+func userUpdateChannelBytes(channel string) []byte {
+	data, _ := json.Marshal(map[string]string{"channel": channel})
+	return data
+}
+
+// userUpdateChannelFromBytes accepts only the two canonical channel values.
+func userUpdateChannelFromBytes(data []byte) (string, bool) {
+	if len(data) > 4096 {
+		return "", false
+	}
+	var value struct {
+		Channel string `json:"channel"`
+	}
+	if json.Unmarshal(data, &value) != nil {
+		return "", false
+	}
+	if value.Channel != userChannelStable && value.Channel != userChannelMain {
+		return "", false
+	}
+	return value.Channel, true
+}
+
+// userReadUpdateChannel returns the persisted channel and whether a canonical
+// preference was found. Missing, oversized or non-canonical bytes mean no
+// recorded preference; readers fall back to the installed channel authority.
+func userReadUpdateChannel(target string) (string, bool) {
+	data, err := os.ReadFile(userUpdateChannelPath(target))
+	if err != nil {
+		return "", false
+	}
+	return userUpdateChannelFromBytes(data)
+}
+
+// userSDKSourceChannel maps an SDK source selection onto its update channel.
+func userSDKSourceChannel(source string) (string, error) {
+	switch source {
+	case "main-preview":
+		return userChannelMain, nil
+	case "stable":
+		return userChannelStable, nil
+	}
+	return "", experienceError("choose stable or main-preview for SDK source, or omit it for stock")
+}
+
+// userChannelSDKSource maps a persisted channel back onto the SDK source.
+func userChannelSDKSource(channel string) (string, bool) {
+	switch channel {
+	case userChannelMain:
+		return "main-preview", true
+	case userChannelStable:
+		return "stable", true
+	}
+	return "", false
+}
+
 func userForceGGAInert(profile *UserExperience) {
 	if profile == nil {
 		return

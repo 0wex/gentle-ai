@@ -306,7 +306,10 @@ func manageChanges(current, selected shellinstaller.UserExperience, inPlace bool
 	add("Global RDD", current.GlobalRDD, selected.GlobalRDD, false)
 	add("Context7", current.Context7, selected.Context7, false)
 	add("CodeGraph", current.CodeGraph, selected.CodeGraph, true)
-	add("SDK source", current.SDKSource, selected.SDKSource, true)
+	// SDK source is an update-channel preference, not a component: Manage can
+	// apply Stable ↔ Main in place, and the Update action then queries that
+	// channel. No component replacement happens here.
+	add("SDK source", current.SDKSource, selected.SDKSource, false)
 	return preferences, components
 }
 

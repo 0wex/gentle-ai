@@ -29,4 +29,16 @@ func TestManageContinueLabelReflectsPendingChanges(t *testing.T) {
 	if got := manageContinueLabel(component); got != "Update installation" {
 		t.Fatalf("component label = %q", got)
 	}
+
+	// SDK source is an update-channel preference: switching Stable ↔ Main
+	// offers the in-place apply label, never a component update.
+	sdk := config
+	sdk.profile.SDKSource = "main-preview"
+	if got := manageContinueLabel(sdk); got != "Apply changes to installation" {
+		t.Fatalf("SDK source label = %q", got)
+	}
+	preferences, components := manageChanges(config.profile, sdk.profile, true)
+	if len(preferences) != 1 || preferences[0].Label != "SDK source" || len(components) != 0 {
+		t.Fatalf("SDK source classification differs: %+v / %+v", preferences, components)
+	}
 }

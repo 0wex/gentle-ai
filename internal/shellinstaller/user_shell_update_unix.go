@@ -8,8 +8,9 @@ import (
 	"os"
 )
 
-// UserShellUpdate is channel-scoped update availability. It never crosses the
-// installed Stable/Main channel and never changes preferences.
+// UserShellUpdate is channel-scoped update availability. The check follows
+// the persisted SDK source preference (Stable ↔ stable update, Main preview ↔
+// latest Main snapshot) and never changes preferences or installs anything.
 type UserShellUpdate struct {
 	Channel    string
 	Available  bool
@@ -22,9 +23,26 @@ func CheckUserShellUpdate(ctx context.Context, install UserShellInstall) (UserSh
 	if err != nil {
 		return UserShellUpdate{}, err
 	}
-	update := UserShellUpdate{Channel: "stable"}
+	channel := "stable"
 	if manifest.MainSDK != nil {
-		update.Channel = "main-preview"
+		channel = "main-preview"
+	}
+	// The persisted SDK source preference routes the check: Stable checks the
+	// stable update, Main compares against the latest Main snapshot. No
+	// installation or component replacement happens here.
+	if preferred, ok := userReadUpdateChannel(install.Target); ok {
+		if source, ok := userChannelSDKSource(preferred); ok {
+			channel = source
+		}
+	}
+	update := UserShellUpdate{Channel: channel}
+	if channel == "main-preview" {
+		if manifest.MainSDK == nil {
+			update.Available = true
+			update.Components = []string{"SDK Main snapshot"}
+			update.Detail = "Main SDK is not installed in this tree yet"
+			return update, nil
+		}
 		latest, _, err := userMainSnapshot(ctx)
 		if err != nil {
 			return update, err

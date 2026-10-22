@@ -152,6 +152,11 @@ func DiscoverUserShellInstalls(home string) []UserShellInstall {
 		if manifest.MainSDK != nil {
 			channel = "main-preview"
 		}
+		if preferred, ok := userReadUpdateChannel(candidate.Target); ok {
+			if source, ok := userChannelSDKSource(preferred); ok {
+				channel = source
+			}
+		}
 		installs = append(installs, UserShellInstall{Target: candidate.Target, Mode: manifest.Mode, Channel: channel, UpdatedAt: candidate.UpdatedAt, Prefix: manifest.Prefix, Agent: manifest.Agent})
 	}
 	sort.Slice(installs, func(i, j int) bool { return installs[i].UpdatedAt.After(installs[j].UpdatedAt) })
@@ -240,6 +245,13 @@ func LoadUserShellExperience(install UserShellInstall) (UserExperience, error) {
 	profile.SDKSource = "stable"
 	if manifest.MainSDK != nil {
 		profile.SDKSource = "main-preview"
+	}
+	// The persisted channel preference is an update-channel choice made in
+	// place; it overrides the installed composition only for this projection.
+	if channel, ok := userReadUpdateChannel(install.Target); ok {
+		if source, ok := userChannelSDKSource(channel); ok {
+			profile.SDKSource = source
+		}
 	}
 	if err := profile.Validate(); err != nil {
 		return UserExperience{}, err

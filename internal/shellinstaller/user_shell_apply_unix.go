@@ -100,8 +100,17 @@ func ApplyUserExperiencePreferences(install UserShellInstall, selected UserExper
 			return err
 		}
 	}
+	if selected.SDKSource != "" {
+		channel, err := userSDKSourceChannel(selected.SDKSource)
+		if err != nil {
+			return err
+		}
+		if err := atomicPreferenceWrite(userUpdateChannelPath(install.Target), userUpdateChannelBytes(channel)); err != nil {
+			return err
+		}
+	}
 	loaded, err := LoadUserShellExperience(install)
-	if err != nil || loaded.Persona != selected.Persona || loaded.BackgroundSubagents != selected.BackgroundSubagents || loaded.StrictTDD != selected.StrictTDD || loaded.GlobalRDD != selected.GlobalRDD || loaded.Context7 != selected.Context7 {
+	if err != nil || loaded.Persona != selected.Persona || loaded.BackgroundSubagents != selected.BackgroundSubagents || loaded.StrictTDD != selected.StrictTDD || loaded.GlobalRDD != selected.GlobalRDD || loaded.Context7 != selected.Context7 || (selected.SDKSource != "" && loaded.SDKSource != selected.SDKSource) {
 		return fmt.Errorf("preference readback differs: %w", err)
 	}
 	return nil
