@@ -11,9 +11,9 @@ import (
 // ShellDetectedInstall is the read-only discovery summary. It grants no
 // installation or replacement authority.
 type ShellDetectedInstall struct {
-	Target, Mode, Channel              string
-	Persona, Background                string
-	TDD, RDD, CodeGraph, Context7      string
+	Target, Mode, Channel         string
+	Persona, Background           string
+	TDD, RDD, CodeGraph, Context7 string
 }
 
 // ShellDetectedEntry is one installation row in the multi-install selector.
