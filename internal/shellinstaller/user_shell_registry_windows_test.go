@@ -9,14 +9,15 @@ import (
 )
 
 func TestUninstallWindowsLeavesMinimalBackup(t *testing.T) {
+	t.Setenv("LOCALAPPDATA", t.TempDir()) // Keep the uninstall hermetic.
 	root := t.TempDir()
 	if err := userWindowsPrivate(root); err != nil {
 		t.Fatal(err)
 	}
 	target := filepath.Join(root, "install")
 	for _, relative := range []string{
-		`config`, `agent`, `home`, `home/go`, `runtime/node`, `runtime/archives`, `runtime/cache`,
-		`prefix`, `state`, `tmp`, `bin`, `source`, `project`,
+		`config`, `agent`, `home`, `home/go`, `home/go/pkg/mod`, `home/.gentle-ai`, `runtime/node`, `runtime/archives`, `runtime/cache`,
+		`prefix`, `prefix/lib`, `state`, `tmp`, `bin`, `source`, `project`,
 	} {
 		if err := os.MkdirAll(filepath.Join(target, relative), 0700); err != nil {
 			t.Fatal(err)
@@ -65,6 +66,75 @@ func TestUninstallWindowsLeavesMinimalBackup(t *testing.T) {
 	}
 	if _, err := os.Lstat(filepath.Join(backup, `home`, `.gentle-ai`, `state.json`)); err != nil {
 		t.Fatalf("uninstall lost the retained home state: %v", err)
+	}
+}
+
+// userWindowsUninstallFixture builds a minimal owned Separate installation
+// that survives pruning: only the retained backup set plus the cache-less
+// per-user LOCALAPPDATA override.
+func userWindowsUninstallFixture(t *testing.T) (target, cache string) {
+	t.Helper()
+	t.Setenv("LOCALAPPDATA", t.TempDir())
+	root := t.TempDir()
+	if err := userWindowsPrivate(root); err != nil {
+		t.Fatal(err)
+	}
+	target = filepath.Join(root, "install")
+	for _, relative := range []string{"config", "agent", "home", "home/.gentle-ai"} {
+		if err := os.MkdirAll(filepath.Join(target, relative), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, relative := range []string{
+		`config/persona.json`, `agent/mcp.json`, `home/.gentle-ai/state.json`,
+		`selection.json`, `manifest.json`,
+	} {
+		if err := userWindowsWrite(filepath.Join(target, relative), []byte("x")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return target, filepath.Join(os.Getenv("LOCALAPPDATA"), "gentle-shell", "cache", "downloads")
+}
+
+func TestUninstallWindowsRemovesOwnedDownloadCache(t *testing.T) {
+	target, cache := userWindowsUninstallFixture(t)
+	if err := os.MkdirAll(cache, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := userWindowsWrite(filepath.Join(cache, "node.zip"), []byte("x")); err != nil {
+		t.Fatal(err)
+	}
+	backup, err := UninstallUserShellInstall(t.TempDir(), UserShellInstall{Target: target, Mode: "separate"})
+	if err != nil || backup == "" {
+		t.Fatalf("Windows uninstall failed: %v %q", err, backup)
+	}
+	if _, err := os.Lstat(cache); !os.IsNotExist(err) {
+		t.Fatalf("owned download cache survived uninstall: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(backup, "manifest.json")); err != nil {
+		t.Fatalf("uninstall lost the retained backup: %v", err)
+	}
+}
+
+func TestUninstallWindowsPreservesForeignDownloadCache(t *testing.T) {
+	target, cache := userWindowsUninstallFixture(t)
+	aliased := filepath.Join(t.TempDir(), "downloads")
+	if err := os.MkdirAll(aliased, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(cache), 0700); err != nil {
+		t.Fatal(err)
+	}
+	userWindowsSymlinkOrSkip(t, aliased, cache)
+	backup, err := UninstallUserShellInstall(t.TempDir(), UserShellInstall{Target: target, Mode: "separate"})
+	if err != nil || backup == "" {
+		t.Fatalf("aliased download cache custody must not fail the uninstall: %v %q", err, backup)
+	}
+	if _, err := os.Lstat(cache); err != nil {
+		t.Fatalf("foreign download cache was removed: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(aliased, "keep.txt")); !os.IsNotExist(err) {
+		t.Fatalf("aliased cache destination was touched: %v", err)
 	}
 }
 

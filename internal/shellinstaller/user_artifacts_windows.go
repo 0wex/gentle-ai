@@ -103,7 +103,90 @@ var userWindowsArtifacts = []userWindowsArtifact{
 	{"https://github.com/BurntSushi/ripgrep/releases/download/15.2.0/ripgrep-15.2.0-x86_64-pc-windows-msvc.zip", "71b2fef860abe467217a538ff31de02f5258807c0129f771846f87bd029aafc5", "rg.zip", "ripgrep-15.2.0-x86_64-pc-windows-msvc", 32 << 20, 1789611},
 }
 
+// userWindowsDownloadCacheDirectory resolves, creates and owns the private
+// per-user download cache directory below the real LOCALAPPDATA, which is
+// resolved from the user token even when the sanitized worker environment
+// omits LOCALAPPDATA. Only the fixed supplier archives in
+// userWindowsArtifacts are cached, keyed by their exact archive name; the
+// Main snapshot descriptor and every mutable/user artifact are acquired
+// through their own path and are never routed through userWindowsAcquire.
+// Every failure — an unresolvable LOCALAPPDATA, a creation error or a
+// foreign/aliased cache identity — is a bypass, never an install failure:
+// caching is a pure optimization.
+func userWindowsDownloadCacheDirectory() (string, bool) {
+	local, err := userWindowsLocalAppData()
+	if err != nil {
+		return "", false
+	}
+	cache := filepath.Join(local, "gentle-shell", "cache", "downloads")
+	if _, err := os.Lstat(cache); err != nil {
+		if !errors.Is(err, os.ErrNotExist) || os.MkdirAll(cache, 0700) != nil {
+			return "", false
+		}
+	}
+	if err := userWindowsPrivate(cache); err != nil {
+		return "", false // Foreign, aliased or otherwise uncertain cache custody.
+	}
+	return cache, true
+}
+
+// userWindowsDownloadCacheHit returns cached archive bytes only when the
+// exact-name entry is owned (no reparse point, current-SID owner, private
+// DACL, NTFS, canonical path), stays within the artifact byte bound and
+// matches the artifact descriptor's exact size and SHA-256. Anything else is
+// a miss; unverified cache bytes are never returned.
+func userWindowsDownloadCacheHit(ctx context.Context, artifact userWindowsArtifact) ([]byte, bool) {
+	if ctx.Err() != nil {
+		return nil, false
+	}
+	cache, ok := userWindowsDownloadCacheDirectory()
+	if !ok {
+		return nil, false
+	}
+	data, err := userWindowsRead(filepath.Join(cache, artifact.Archive), artifact.Bound)
+	if err != nil ||
+		(artifact.Size != 0 && int64(len(data)) != artifact.Size) ||
+		userWindowsSHA(data) != artifact.SHA {
+		return nil, false
+	}
+	return data, true
+}
+
+// userWindowsDownloadCacheStore best-effort retains already verified supplier
+// bytes under their exact archive name. Any failure is dropped: a partial or
+// unverified entry is removed rather than left behind, and an entry another
+// concurrent install already stored is kept as found (it is re-verified
+// before any later read).
+func userWindowsDownloadCacheStore(artifact userWindowsArtifact, data []byte) {
+	cache, ok := userWindowsDownloadCacheDirectory()
+	if !ok {
+		return
+	}
+	entry := filepath.Join(cache, artifact.Archive)
+	if err := userWindowsWrite(entry, data); err != nil && !errors.Is(err, os.ErrExist) {
+		_ = os.Remove(entry)
+	}
+}
+
 func userWindowsAcquire(ctx context.Context, artifact userWindowsArtifact, target string) ([]byte, error) {
+	if data, hit := userWindowsDownloadCacheHit(ctx, artifact); hit {
+		if err := userWindowsWrite(target, data); err != nil {
+			return nil, err
+		}
+		return data, nil
+	}
+	data, err := userWindowsAcquireNetwork(ctx, artifact)
+	if err != nil {
+		return nil, err // A failed download never writes the cache.
+	}
+	if err := userWindowsWrite(target, data); err != nil {
+		return nil, err
+	}
+	userWindowsDownloadCacheStore(artifact, data)
+	return data, nil
+}
+
+func userWindowsAcquireNetwork(ctx context.Context, artifact userWindowsArtifact) ([]byte, error) {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.Proxy = nil
 	transport.DisableCompression = true
@@ -135,9 +218,6 @@ func userWindowsAcquire(ctx context.Context, artifact userWindowsArtifact, targe
 	data, err := io.ReadAll(io.LimitReader(response.Body, artifact.Bound+1))
 	if err != nil || int64(len(data)) > artifact.Bound || (artifact.Size != 0 && int64(len(data)) != artifact.Size) || userWindowsSHA(data) != artifact.SHA {
 		return nil, errors.Join(err, errors.New("Windows supplier digest/size differs"))
-	}
-	if err := userWindowsWrite(target, data); err != nil {
-		return nil, err
 	}
 	return data, nil
 }

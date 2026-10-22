@@ -162,13 +162,42 @@ func UninstallUserShellInstall(_ string, install UserShellInstall) (string, erro
 		return "", err
 	}
 	// The active install is already fully moved aside; prune the backup to
-	// the minimal retained set. A pruning failure never deletes the backup.
+	// the minimal retained set and drop the per-user download cache. A
+	// cleanup failure never deletes the backup nor undoes the uninstall.
 	pruneErr := userWindowsPruneRemovedBackup(backup)
 	launcherErr := userWindowsRemoveLauncher(install.Target)
-	if pruneErr != nil || launcherErr != nil {
-		return backup, fmt.Errorf("installation moved to %s but minimal-backup cleanup failed; the backup keeps more than config, agent, home, selection.json and manifest.json: %w", backup, errors.Join(pruneErr, launcherErr))
+	cacheErr := userWindowsRemoveDownloadCache()
+	if pruneErr != nil || launcherErr != nil || cacheErr != nil {
+		return backup, fmt.Errorf("installation moved to %s but cleanup failed; the backup keeps more than config, agent, home, selection.json and manifest.json, or the per-user download cache could not be removed: %w", backup, errors.Join(pruneErr, launcherErr, cacheErr))
 	}
 	return backup, nil
+}
+
+// userWindowsRemoveDownloadCache removes the installer's private per-user
+// download cache after the installed target has already been moved to its
+// backup. Absent paths and foreign or aliased cache custody are bypassed,
+// never deleted and never reported; only a failed removal of a cache that
+// verifiably belongs to this user is reported. The cache path stays outside
+// the installed target and outside the manifest.
+func userWindowsRemoveDownloadCache() error {
+	local, err := userWindowsLocalAppData()
+	if err != nil {
+		return nil // No resolvable per-user cache location; nothing to remove.
+	}
+	cache := filepath.Join(local, "gentle-shell", "cache", "downloads")
+	if _, err := os.Lstat(cache); err != nil {
+		return nil // Absent or unreadable: nothing certain to remove.
+	}
+	if _, err := userWindowsIdentity(cache, true); err != nil {
+		return nil // Foreign or aliased cache custody is preserved, not deleted.
+	}
+	if err := os.RemoveAll(cache); err != nil {
+		return err
+	}
+	if _, err := os.Lstat(cache); !os.IsNotExist(err) {
+		return fmt.Errorf("Windows download cache %q still exists after removal", cache)
+	}
+	return nil
 }
 
 func userWindowsRemoveLauncher(target string) error {
