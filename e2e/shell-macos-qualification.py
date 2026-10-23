@@ -502,7 +502,8 @@ def qualify(context):
     expected = ['conflict-agent', 'separate', 'shared', 'shared-agent', 'shared-prefix']
     require(sorted(os.listdir(context.work)) == expected, 'unexpected entries beside the targets')
     for directory in [context.home, context.tmp] + [context.env[key] for key in ('XDG_CONFIG_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME', 'XDG_DATA_HOME')]:
-        require(os.listdir(directory) == [], 'redirected %s is not empty' % os.path.relpath(directory, context.root))
+        entries = os.listdir(directory)
+        require(entries == [], 'redirected %s is not empty: %s' % (os.path.relpath(directory, context.root), sorted(entries)))
     reached('residue', stageOrWorkspaceResidue=0)
 
     checkpoint('real-home')
