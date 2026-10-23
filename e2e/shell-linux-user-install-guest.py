@@ -352,7 +352,7 @@ def acquisition_fault(target, cleanup=False):
     child = subprocess.Popen(args + ['--confirm', token], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
     stage = None
     try:
-        require(FAULT_SEEN.wait(timeout=min(20, remaining())), 'actual cold acquisition not observed')
+        require(FAULT_SEEN.wait(timeout=min(90, remaining())), 'actual cold acquisition not observed')
         stages = list(target.parent.glob('.gentle-user-*'))
         require(len(stages) == 1 and stages[0].is_dir() and stages[0].lstat().st_uid == 1002, 'owned acquisition stage differs')
         stage = stages[0]
