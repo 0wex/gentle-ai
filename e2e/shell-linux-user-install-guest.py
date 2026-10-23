@@ -348,8 +348,10 @@ def acquisition_fault(target, cleanup=False):
     FAULT_SEEN.clear()
     FAULT_RELEASE.clear()
     FAULT = 'node-cleanup' if cleanup else 'node-cancel'
-    env = {'PATH': '/usr/local/bin:/usr/bin:/bin', 'HOME': str(WORK / 'home'), 'TMPDIR': str(WORK / 'tmp')}
-    child = subprocess.Popen(args + ['--confirm', token], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+    env = {'PATH': '/usr/local/bin:/usr/bin:/bin:/work/personal/prefix/bin', 'HOME': str(WORK / 'home'), 'TMPDIR': str(WORK / 'tmp'),
+           'PYTHONDONTWRITEBYTECODE': '1', 'TERM': 'xterm-256color',
+           'XDG_RUNTIME_DIR': '/run/user/1002', 'DBUS_SESSION_BUS_ADDRESS': 'unix:path=/run/user/1002/bus'}
+    child = subprocess.Popen(args + ['--confirm', token], env=env, cwd=WORK, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
     stage = None
     try:
         if not FAULT_SEEN.wait(timeout=min(90, remaining())):
@@ -367,8 +369,17 @@ def acquisition_fault(target, cleanup=False):
                 raw, _ = child.communicate(timeout=15)
             except Exception:
                 pass
-            detail = (raw[:1500]).decode('utf-8', 'replace').replace('\n', ' | ')
-            raise RuntimeError('actual cold acquisition not observed; alive=%s exit=%s output=%r' % (alive, child.returncode, detail))
+            detail = (raw[:1200]).decode('utf-8', 'replace').replace('\n', ' | ')
+            evidence = []
+            for stage in sorted(target.parent.glob('.gentle-*')):
+                for item in sorted(stage.rglob('*failure*.json')) + sorted(stage.rglob('*.json')):
+                    try:
+                        evidence.append(item.name + '=' + item.read_text()[:400])
+                    except Exception:
+                        pass
+                if len(evidence) >= 4:
+                    break
+            raise RuntimeError('actual cold acquisition not observed; alive=%s exit=%s output=%r evidence=%s' % (alive, child.returncode, detail, ' ; '.join(evidence)[:1200]))
         stages = list(target.parent.glob('.gentle-user-*'))
         require(len(stages) == 1 and stages[0].is_dir() and stages[0].lstat().st_uid == 1002, 'owned acquisition stage differs')
         stage = stages[0]
