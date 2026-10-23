@@ -351,35 +351,45 @@ def acquisition_fault(target, cleanup=False):
     env = {'PATH': '/usr/local/bin:/usr/bin:/bin:/work/personal/prefix/bin', 'HOME': str(WORK / 'home'), 'TMPDIR': str(WORK / 'tmp'),
            'PYTHONDONTWRITEBYTECODE': '1', 'TERM': 'xterm-256color',
            'XDG_RUNTIME_DIR': '/run/user/1002', 'DBUS_SESSION_BUS_ADDRESS': 'unix:path=/run/user/1002/bus'}
-    child = subprocess.Popen(args + ['--confirm', token], env=env, cwd=WORK, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
-    stage = None
+    out_path = WORK / 'tmp' / 'acquisition.out'
+    err_path = WORK / 'tmp' / 'acquisition.err'
+    started = time.monotonic()
+    child = None
     try:
-        if not FAULT_SEEN.wait(timeout=min(90, remaining())):
-            # Barrier timed out: the installer never reached the node fixture
-            # request. Kill the whole session (the supervisor spawns helper
-            # children that hold the pipes) and drain whatever was written so
-            # the failure record carries real evidence, not a blind timeout.
-            alive = child.poll() is None
-            try:
-                os.killpg(child.pid, signal.SIGKILL)
-            except Exception:
-                child.kill()
-            raw = b''
-            try:
-                raw, _ = child.communicate(timeout=15)
-            except Exception:
-                pass
-            detail = (raw[:1200]).decode('utf-8', 'replace').replace('\n', ' | ')
+        with out_path.open('wb') as out_file, err_path.open('wb') as err_file:
+            child = subprocess.Popen(args + ['--confirm', token], env=env, cwd=WORK, stdin=subprocess.DEVNULL,
+                                     stdout=out_file, stderr=err_file, start_new_session=True)
+            exit_note = ''
+            while not FAULT_SEEN.wait(timeout=1.0):
+                code = child.poll()
+                if code is not None:
+                    exit_note = ' installer exited %d after %.1fs' % (code, time.monotonic() - started)
+                    break
+                if time.monotonic() - started > min(90, remaining()):
+                    break
+            if not FAULT_SEEN.is_set():
+                # Barrier not satisfied: the installer never reached the node
+                # fixture request. Kill the whole session (the supervisor
+                # spawns helper children) and read the redirected output files
+                # so the failure record carries real evidence, not a timeout.
+                try:
+                    os.killpg(child.pid, signal.SIGKILL)
+                except Exception:
+                    pass
+                child.wait(timeout=10)
+                out_file.flush(); err_file.flush()
+            raw = out_path.read_bytes()[-800:] + b' || ' + err_path.read_bytes()[-800:]
+            detail = raw.decode('utf-8', 'replace').replace('\n', ' | ')
             evidence = []
-            for stage in sorted(target.parent.glob('.gentle-*')):
-                for item in sorted(stage.rglob('*failure*.json')) + sorted(stage.rglob('*.json')):
+            for stage_dir in sorted(target.parent.glob('.gentle-*')):
+                for item in sorted(stage_dir.rglob('*.json')):
                     try:
                         evidence.append(item.name + '=' + item.read_text()[:400])
                     except Exception:
                         pass
                 if len(evidence) >= 4:
                     break
-            raise RuntimeError('actual cold acquisition not observed; alive=%s exit=%s output=%r evidence=%s' % (alive, child.returncode, detail, ' ; '.join(evidence)[:1200]))
+            require(FAULT_SEEN.is_set(), 'actual cold acquisition not observed;%s output=%r evidence=%s' % (exit_note, detail, ' ; '.join(evidence)[:1200]))
         stages = list(target.parent.glob('.gentle-user-*'))
         require(len(stages) == 1 and stages[0].is_dir() and stages[0].lstat().st_uid == 1002, 'owned acquisition stage differs')
         stage = stages[0]
@@ -388,8 +398,8 @@ def acquisition_fault(target, cleanup=False):
         else:
             child.send_signal(signal.SIGINT)
         FAULT_RELEASE.set()
-        out, error = child.communicate(timeout=min(40, remaining()))
-        raw = out + error
+        child.wait(timeout=min(40, remaining()))
+        raw = out_path.read_bytes() + err_path.read_bytes()
         require(len(raw) < 4096 and b'\0' not in raw, 'fault command raw output withheld')
         text = raw.decode('utf-8', 'strict')
         require(child.returncode != 0 and not target.exists(), 'fault published or reported success')
@@ -402,15 +412,13 @@ def acquisition_fault(target, cleanup=False):
     finally:
         FAULT_RELEASE.set()
         FAULT = ''
-        if child.poll() is None:
+        if child is not None and child.poll() is None:
             child.send_signal(signal.SIGINT)
             try:
                 child.wait(timeout=3)
             except subprocess.TimeoutExpired:
                 os.killpg(child.pid, signal.SIGKILL)
                 child.wait(timeout=3)
-        if stage is not None and stage.exists():
-            os.chmod(stage, 0o700)  # Only this disposable, physically identified Guest-owned stage.
 
 
 def tool_acquisition_fault(target, shared):
