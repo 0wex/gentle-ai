@@ -767,11 +767,11 @@ def alan_pnpm_backend_probe():
             require(reported == context / 'node_modules' / name, 'pnpm reported root placement differs')
             text = lock_text(context.resolve(strict=True))
             location = reported.resolve(strict=True)
-            location_relative = location.is_relative_to(home) if location.exists() else False
-            location_uid = location.stat().st_uid if location.exists() else None
-            require(location_relative and location_uid == 1002 and item['version'] == expected and pnpm_root_receipt(text, name, expected, sri),
-                    'pnpm root identity/integrity differs for %s: expected %s, reported %s, inside home %s, uid %s, receipt %s'
-                    % (name, expected, item['version'], location_relative, location_uid, pnpm_root_receipt(text, name, expected, sri)))
+            print('pnpm root diagnostics: %s' % json.dumps({
+                'name': name, 'expected': expected, 'reported': item['version'],
+                'insideHome': location.is_relative_to(home), 'uid': location.stat().st_uid,
+                'receipt': pnpm_root_receipt(text, name, expected, sri)}), file=sys.stderr)
+            require(location.is_relative_to(home) and location.stat().st_uid == 1002 and item['version'] == expected and pnpm_root_receipt(text, name, expected, sri), 'pnpm root identity/integrity differs')
             metadata = json.loads((location / 'package.json').read_bytes())
             require(metadata['name'] == name and metadata['version'] == expected, 'pnpm root metadata differs')
             # Keep pnpm's global entrypoint for Pi's stock ownership check;
