@@ -352,7 +352,18 @@ def acquisition_fault(target, cleanup=False):
     child = subprocess.Popen(args + ['--confirm', token], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
     stage = None
     try:
-        require(FAULT_SEEN.wait(timeout=min(90, remaining())), 'actual cold acquisition not observed')
+        if not FAULT_SEEN.wait(timeout=min(90, remaining())):
+            # Barrier timed out: the installer never reached the node fixture
+            # request. Drain the child (bounded) so the failure record carries
+            # the real installer output instead of a blind timeout.
+            child.kill()
+            raw = b''
+            try:
+                raw, _ = child.communicate(timeout=10)
+            except Exception:
+                pass
+            detail = (raw[:1500]).decode('utf-8', 'replace').replace('\n', ' | ')
+            raise RuntimeError('actual cold acquisition not observed; installer output: ' + detail)
         stages = list(target.parent.glob('.gentle-user-*'))
         require(len(stages) == 1 and stages[0].is_dir() and stages[0].lstat().st_uid == 1002, 'owned acquisition stage differs')
         stage = stages[0]
