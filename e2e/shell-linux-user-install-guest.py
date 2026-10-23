@@ -806,18 +806,21 @@ def alan_pnpm_backend_probe():
     require('/pnpm/' in str(pi) and run([str(node), str(pi), '--version'], extra=env).strip() == '0.99.2', 'prior Pi did not execute from recognized pnpm layout')
     identity = (home.stat().st_dev, home.stat().st_ino)
     run([str(node), str(pi), 'update', '--self'], extra=env, timeout=180)
-    pins['@earendil-works/pi-coding-agent'] = ('1.3.0', 'sha512-V/WoCjA2hQSe3QLWIUB24cTRdtEdeLiIzkDqU5RMXV6VWuD+KGZnzVBMhglwdnQTySkehZsjt8a3g6Jd2g4nnw==')
+    # Pi 0.99.2's self-updater installs its own pinned next release (1.0.0),
+    # not the registry latest; the modern cohort below pins 1.3.0 explicitly.
+    pins['@earendil-works/pi-coding-agent'] = ('1.0.0', 'sha512-/FtbxoSQU/mEv1QnichJjRjqteqaIaMWxmhB4G367+MwZfX7/DI5B9YAg5lqbN7nztFskBEtUSZ+FlmMBECtMw==')
     roots = cohort()
     pi = roots['@earendil-works/pi-coding-agent'] / 'dist/cli.js'
-    require(run([str(node), str(pi), '--version'], extra=env).strip() == '1.3.0', 'stock pnpm prior-to-next update did not execute')
+    require(run([str(node), str(pi), '--version'], extra=env).strip() == '1.0.0', 'stock pnpm prior-to-next update did not execute')
     run([str(node), str(pi), 'update', '--self', '--force'], extra=env, timeout=180)
     roots = cohort()
     require((home.stat().st_dev, home.stat().st_ino) == identity, 'stock updater replaced selected pnpm home')
-    require(run([str(node), str(roots['@earendil-works/pi-coding-agent'] / 'dist/cli.js'), '--version'], extra=env).strip() == '1.3.0', 'stock pnpm forced reinstall did not execute')
+    require(run([str(node), str(roots['@earendil-works/pi-coding-agent'] / 'dist/cli.js'), '--version'], extra=env).strip() == '1.0.0', 'stock pnpm forced reinstall did not execute')
     # The live modern cohort is the compiled modern lock's frozen root set;
     # acquiring it here pins the whole post-update pnpm home, not just Pi.
     modern = {
         'gentle-pi': ('4.3.0', 'sha512-xXBEZaGqden4bblEPagQEnkF12L0JHhsPr1REBGvhSeDy6mbHDQmEvUU5ATr9lvWb7xsTOXV7gwnfq4U+z7lpA=='),
+        '@earendil-works/pi-coding-agent': ('1.3.0', 'sha512-V/WoCjA2hQSe3QLWIUB24cTRdtEdeLiIzkDqU5RMXV6VWuD+KGZnzVBMhglwdnQTySkehZsjt8a3g6Jd2g4nnw=='),
         '@earendil-works/pi-tui': ('1.3.0', 'sha512-AlKvEwEWyVtnuw7SVb4N/mUhlfIohyFslUNWarZVdLHHSdt3ca5EhMLwTzblBpDpaofSz+f+tAHie6CfxVrWKA=='),
         '@heyhuynhgiabuu/pi-pretty': ('0.7.1', 'sha512-8cjOVRJHBvaHGnaNmYBRjmRWMd5V8fj4DvpTQHJWaEuLxdVJmL4dQqBSGODzhMbpaMKpeS394gNoK27Z1zT+uA=='),
         'typebox': ('1.4.2', 'sha512-eSoZzgSIyOKDtTH9MI7XMAxMaiXq7UiSFWarysN1ka66baTLDxAVdQ6WkWn6qDqsJFVrcjzvuP+CqHo9yrlQpg=='),
@@ -826,7 +829,7 @@ def alan_pnpm_backend_probe():
     pins.update(modern)
     roots = cohort()
     require(run([str(node), str(roots['@earendil-works/pi-coding-agent'] / 'dist/cli.js'), '--version'], extra=env).strip() == '1.3.0', 'stock pnpm modern cohort did not execute')
-    REPORT['alanBackendProbe'] = {'pnpm': version, 'stockUpgrade': '0.99.2 to 1.3.0', 'stockForce': True, 'modernCohort': 'acquired compiled modern frozen roots', 'independentlyPinnedRoots': len(pins), 'functionalReady': False}
+    REPORT['alanBackendProbe'] = {'pnpm': version, 'stockUpgrade': '0.99.2 to 1.0.0', 'modernCohortPin': 'pi-coding-agent 1.3.0', 'stockForce': True, 'modernCohort': 'acquired compiled modern frozen roots', 'independentlyPinnedRoots': len(pins), 'functionalReady': False}
 
 
 def mvp_smoke(personal):
