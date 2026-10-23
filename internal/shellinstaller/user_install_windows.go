@@ -33,6 +33,12 @@ type userWindowsManifest struct {
 }
 
 func UserKernelCheck() error {
+	// UserKernelGate (user_experience_files.go) is the test seam mirroring the
+	// darwin userKernelGate pattern. It is unset in production, so the real
+	// qualification below always runs.
+	if UserKernelGate != nil {
+		return UserKernelGate()
+	}
 	version := windows.RtlGetVersion()
 	var processMachine, nativeMachine uint16
 	if err := windows.IsWow64Process2(windows.CurrentProcess(), &processMachine, &nativeMachine); err != nil {
