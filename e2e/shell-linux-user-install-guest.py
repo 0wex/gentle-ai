@@ -354,16 +354,21 @@ def acquisition_fault(target, cleanup=False):
     try:
         if not FAULT_SEEN.wait(timeout=min(90, remaining())):
             # Barrier timed out: the installer never reached the node fixture
-            # request. Drain the child (bounded) so the failure record carries
-            # the real installer output instead of a blind timeout.
-            child.kill()
+            # request. Kill the whole session (the supervisor spawns helper
+            # children that hold the pipes) and drain whatever was written so
+            # the failure record carries real evidence, not a blind timeout.
+            alive = child.poll() is None
+            try:
+                os.killpg(child.pid, signal.SIGKILL)
+            except Exception:
+                child.kill()
             raw = b''
             try:
-                raw, _ = child.communicate(timeout=10)
+                raw, _ = child.communicate(timeout=15)
             except Exception:
                 pass
             detail = (raw[:1500]).decode('utf-8', 'replace').replace('\n', ' | ')
-            raise RuntimeError('actual cold acquisition not observed; installer output: ' + detail)
+            raise RuntimeError('actual cold acquisition not observed; alive=%s exit=%s output=%r' % (alive, child.returncode, detail))
         stages = list(target.parent.glob('.gentle-user-*'))
         require(len(stages) == 1 and stages[0].is_dir() and stages[0].lstat().st_uid == 1002, 'owned acquisition stage differs')
         stage = stages[0]
