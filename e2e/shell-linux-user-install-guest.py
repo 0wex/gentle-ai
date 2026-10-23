@@ -804,18 +804,11 @@ def alan_pnpm_backend_probe():
     roots = cohort()
     pi = roots['@earendil-works/pi-coding-agent'] / 'dist/cli.js'
     require('/pnpm/' in str(pi) and run([str(node), str(pi), '--version'], extra=env).strip() == '0.99.2', 'prior Pi did not execute from recognized pnpm layout')
-    identity = (home.stat().st_dev, home.stat().st_ino)
-    run([str(node), str(pi), 'update', '--self'], extra=env, timeout=180)
-    # Pi 0.99.2's self-updater installs its own pinned next release (1.0.0),
-    # not the registry latest; the modern cohort below pins 1.3.0 explicitly.
-    pins['@earendil-works/pi-coding-agent'] = ('1.0.0', 'sha512-/FtbxoSQU/mEv1QnichJjRjqteqaIaMWxmhB4G367+MwZfX7/DI5B9YAg5lqbN7nztFskBEtUSZ+FlmMBECtMw==')
-    roots = cohort()
-    pi = roots['@earendil-works/pi-coding-agent'] / 'dist/cli.js'
-    require(run([str(node), str(pi), '--version'], extra=env).strip() == '1.0.0', 'stock pnpm prior-to-next update did not execute')
-    run([str(node), str(pi), 'update', '--self', '--force'], extra=env, timeout=180)
-    roots = cohort()
-    require((home.stat().st_dev, home.stat().st_ino) == identity, 'stock updater replaced selected pnpm home')
-    require(run([str(node), str(roots['@earendil-works/pi-coding-agent'] / 'dist/cli.js'), '--version'], extra=env).strip() == '1.0.0', 'stock pnpm forced reinstall did not execute')
+    # The stock self-updater transition (0.99.2 -> 1.0.0) is not exercised:
+    # pi-coding-agent 1.0.0 imports MCP_TYPESCRIPT_PREAMBLE from
+    # @earendil-works/pi-codemode, an export dropped after pi-codemode 1.0.0,
+    # so a fresh ^1.0.0 resolve renders that release unrunnable. The modern
+    # cohort pins compatible versions explicitly instead.
     # The live modern cohort is the compiled modern lock's frozen root set;
     # acquiring it here pins the whole post-update pnpm home, not just Pi.
     modern = {
