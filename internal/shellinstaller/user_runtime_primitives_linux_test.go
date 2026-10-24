@@ -223,7 +223,7 @@ func TestPrivateCgroupMapping(t *testing.T) {
 		{"unrelated noncanonical root", "0::/child\n", mount + "36 26 0:41 /tenant/../ /opt nsfs rw - nsfs nsfs rw\n", "/sys/fs/cgroup/child"},
 		// A mountpoint that is not canonical cannot be classified against the
 		// trusted hierarchy, so it still refuses.
-		{"unrelated noncanonical mountpoint", "0::/\n", mount + "36 26 0:41 / /opt/evil\057x ro - tmpfs tmpfs rw\n", ""},
+		{"unrelated noncanonical mountpoint", "0::/\n", mount + "36 26 0:41 / /opt/../evil ro - tmpfs tmpfs rw\n", ""},
 		{"literal space", "0::/child space\n", mount, "/sys/fs/cgroup/child space"},
 		{"invalid UTF-8", "0::/child\xff\n", mount, ""},
 		{"missing membership", "", mount, ""},
