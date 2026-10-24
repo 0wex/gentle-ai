@@ -257,6 +257,17 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	}
 	ctx, cancel := context.WithTimeout(ctx, userUnixInstallBound)
 	defer cancel()
+	if _, statErr := os.Lstat(req.Destination); statErr == nil && userReconfigureTarget() == req.Destination {
+		// A reconfigure that only changes the SDK update channel swaps the
+		// installed SDK declaration in place; components, preferences,
+		// runtimes and the supervisor stay untouched. Any other reconfigure
+		// keeps the full retire-and-reinstall below.
+		if result, applied, err := userUnixChannelOverlay(ctx, req); err != nil {
+			return result, err
+		} else if applied {
+			return result, nil
+		}
+	}
 	userShellStepBegin(ctx, 2, 5, "Prepare the private stage and preferences")
 	userShellDetail(ctx, 2, 5, "Creating the private staging workspace")
 	workspace, err := os.MkdirTemp(filepath.Dir(req.Destination), ".gentle-user-")
