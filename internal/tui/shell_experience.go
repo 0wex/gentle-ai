@@ -375,6 +375,9 @@ func (m Model) shellInstallView() string {
 		}
 		return screens.RenderShellInstall(steps, failure, m.shellInstallRun.done, m.shellInstallRun.spinner, m.shellInstallRun.bloom, published, m.shellInstallRun.fallbackAvailable, m.shellInstallSelection.Request.Mode, launch, m.Width, m.Height)
 	}
+	if m.shellRootRisk != nil {
+		return screens.RenderShellRootRisk(m.shellRootRisk.input, m.Width, m.Height)
+	}
 	if m.shellPlan != nil {
 		return screens.RenderShellPlan(m.shellPlan, m.Width, m.Height)
 	}
