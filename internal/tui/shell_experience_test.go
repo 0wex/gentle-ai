@@ -2,7 +2,6 @@ package tui
 
 import (
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -98,7 +97,7 @@ func TestShellExperienceConfigureReachesPlan(t *testing.T) {
 	if request.Experience == nil || request.Experience.Persona != "unmanaged" || request.Experience.BackgroundSubagents != "off" {
 		t.Fatal("Configure lost profile at the installation plan")
 	}
-	wantDestination := filepath.Join(os.Getenv("HOME"), ".local", "share", "gentle-shell", "install")
+	wantDestination := shellDefaultTestDestination()
 	if request.Destination != wantDestination || request.Mode != "separate" {
 		t.Fatalf("default destination differs: %+v", request)
 	}

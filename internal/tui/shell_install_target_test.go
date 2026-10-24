@@ -3,6 +3,7 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -66,6 +67,14 @@ func TestShellAgentReuseOption(t *testing.T) {
 	m = experienceFocus(t, m, screens.ShellExperienceInstallTarget, "agent")
 	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = next.(Model)
+	if runtime.GOOS == "windows" {
+		// Windows supports Separate only: Pi detection never offers an agent
+		// to reuse, so the choice is refused and the request stays Separate.
+		if m.shellExperience.mode != "separate" || m.shellExperience.err == nil || !strings.Contains(m.shellExperience.err.Error(), "No Pi agent was detected") {
+			t.Fatalf("Windows accepted agent reuse: %+v", m.shellExperience)
+		}
+		return
+	}
 	if m.shellExperience.mode != "agent" || m.shellExperience.choice != "agent" {
 		t.Fatalf("agent reuse was not selected: %+v", m.shellExperience)
 	}

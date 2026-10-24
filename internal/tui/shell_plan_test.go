@@ -35,14 +35,11 @@ func TestShellPlanListsStepsAndDefaultTarget(t *testing.T) {
 			t.Fatalf("installation plan omits %q:\n%s", part, view)
 		}
 	}
-	wantDestination := filepath.Join(os.Getenv("HOME"), ".local", "share", "gentle-shell", "install")
+	wantDestination := shellDefaultTestDestination()
 	if request.Destination != wantDestination || request.Mode != "separate" || request.Confirmation == "" {
 		t.Fatalf("plan request differs: %+v", request)
 	}
-	base := filepath.Dir(request.Destination)
-	if info, err := os.Lstat(base); err != nil || info.Mode().Perm() != 0700 {
-		t.Fatalf("default parent is not private: %v %v", info, err)
-	}
+	assertShellPrivateParent(t, filepath.Dir(request.Destination))
 	if _, err := os.Lstat(request.Destination); !os.IsNotExist(err) {
 		t.Fatal("plan created the destination before confirmation")
 	}

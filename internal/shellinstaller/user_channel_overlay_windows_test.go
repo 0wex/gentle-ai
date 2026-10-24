@@ -33,6 +33,16 @@ func userWindowsOverlayFixture(t *testing.T) string {
 	return root
 }
 
+// userWindowsOverlayArchives adds the runtime/archives directory every
+// published installation carries; the launch fixture omits it on purpose, but
+// the overlay retains the Main archive there.
+func userWindowsOverlayArchives(t *testing.T, root string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Join(root, "runtime", "archives"), 0700); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func userWindowsOverlayFixtureFile(t *testing.T, root, relative, body string) {
 	t.Helper()
 	name := filepath.Join(root, filepath.FromSlash(relative))
@@ -121,6 +131,7 @@ func userWindowsOverlayRequest(root, channel string) UserInstallRequest {
 // later Main -> Stable restore source.
 func TestUserWindowsChannelOverlayStableToMain(t *testing.T) {
 	root := userWindowsOverlayFixture(t)
+	userWindowsOverlayArchives(t, root)
 	t.Setenv("GENTLE_AI_RECONFIGURE_TARGET", root)
 	commit := strings.Repeat("a", 40)
 	artifact, data := userWindowsOverlayMainFixture(t, commit)
@@ -252,6 +263,7 @@ func TestUserWindowsChannelOverlaySameChannelStaysFullReconfigure(t *testing.T) 
 // authority and quarantine, and leaves a canonical Stable installation.
 func TestUserWindowsChannelOverlayMainToStable(t *testing.T) {
 	root := userWindowsOverlayFixture(t)
+	userWindowsOverlayArchives(t, root)
 	t.Setenv("GENTLE_AI_RECONFIGURE_TARGET", root)
 	commit := strings.Repeat("a", 40)
 	artifact, data := userWindowsOverlayMainFixture(t, commit)

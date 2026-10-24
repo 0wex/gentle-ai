@@ -3,6 +3,7 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -49,6 +50,9 @@ func TestShellExperienceEditingImmediatelyInvalidatesInspection(t *testing.T) {
 }
 
 func TestShellExperienceNonPrivateParentRefusesBeforeConsent(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX 0755 mode bits are not Windows custody; TestShellExperienceForeignWritableParentRefusesBeforeConsentWindows covers the Windows DACL refusal")
+	}
 	stubShellKernelGate(t) // The real inspection (not the OS guard) must refuse the non-private parent.
 	home := t.TempDir()
 	t.Setenv("HOME", home)
