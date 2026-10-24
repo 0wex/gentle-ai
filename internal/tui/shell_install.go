@@ -68,7 +68,63 @@ func waitShellInstallEvent(events <-chan shellInstallEvent) tea.Cmd {
 }
 
 func (m Model) beginShellInstall() (tea.Model, tea.Cmd) {
-	return m.launchShellInstall(m.shellPlanRequest, false)
+	return m.requestShellInstall(m.shellPlanRequest, false)
+}
+
+// shellRootRiskGate is injectable for tests; production uses the installer
+// package's entry gate.
+var shellRootRiskGate = shellinstaller.RootRiskGate
+
+// shellRootRiskPrompt holds the typed root acceptance for plan-driven
+// installs: the plan screen confirms without the selection model, so the
+// root warning must live here too, never only behind the review screen.
+type shellRootRiskPrompt struct {
+	request  shellinstaller.UserInstallRequest
+	fallback bool
+	input    string
+}
+
+// requestShellInstall routes every host TUI launch through the root gate:
+// an unaccepted root operator sees the typed warning before any worker runs.
+func (m Model) requestShellInstall(request shellinstaller.UserInstallRequest, fallback bool) (tea.Model, tea.Cmd) {
+	if err := shellRootRiskGate(); err != nil {
+		m.shellRootRisk = &shellRootRiskPrompt{request: request, fallback: fallback}
+		return m, nil
+	}
+	return m.launchShellInstall(request, fallback)
+}
+
+func (m Model) updateShellRootRisk(msg tea.Msg) (tea.Model, tea.Cmd) {
+	key, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
+	switch key.String() {
+	case "ctrl+c", "esc":
+		m.shellRootRisk = nil
+		return m, nil
+	case "enter":
+		if strings.TrimSpace(m.shellRootRisk.input) != shellinstaller.RootRiskPhrase {
+			m.shellRootRisk.input = ""
+			return m, nil
+		}
+		if err := os.Setenv(shellinstaller.RootRiskEnv, shellinstaller.RootRiskBinding); err != nil {
+			m.shellRootRisk = nil
+			return m, nil
+		}
+		prompt := *m.shellRootRisk
+		m.shellRootRisk = nil
+		return m.launchShellInstall(prompt.request, prompt.fallback)
+	case "backspace":
+		if input := []rune(m.shellRootRisk.input); len(input) > 0 {
+			m.shellRootRisk.input = string(input[:len(input)-1])
+		}
+		return m, nil
+	}
+	if key.Type == tea.KeyRunes || key.Type == tea.KeySpace {
+		m.shellRootRisk.input += key.String()
+	}
+	return m, nil
 }
 
 func (m Model) launchShellInstall(request shellinstaller.UserInstallRequest, fallback bool) (tea.Model, tea.Cmd) {
@@ -645,7 +701,7 @@ func (m Model) updateShellInstallRun(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch key.Type {
 			case tea.KeyEnter:
 				request := m.shellInstallSelection.Request
-				return m.launchShellInstall(request, true)
+				return m.requestShellInstall(request, true)
 			case tea.KeyEsc, tea.KeyCtrlC:
 				_ = os.Unsetenv("GENTLE_AI_MAIN_FALLBACK")
 				m.shellInstallRun, m.shellInstallEvents = nil, nil
@@ -676,6 +732,9 @@ func (m Model) ShellInstallSelection() cli.ShellInstallSelection {
 }
 
 func (m Model) updateShellInstall(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.shellRootRisk != nil {
+		return m.updateShellRootRisk(msg)
+	}
 	if len(m.shellDetected) > 0 {
 		return m.updateShellDetected(msg)
 	}
