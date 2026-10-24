@@ -748,3 +748,8 @@ func userWindowsPublishLauncher(destination string) error {
 	closeErr := file.Close()
 	return errors.Join(writeErr, syncErr, closeErr)
 }
+
+// RunUserLaunchProbe is the Windows stub of the Linux delegated-unit launch
+// probe (#5713): Windows supervises the runtime through its own cooperative
+// worker, so there is no transient-unit precondition to prove here.
+func RunUserLaunchProbe(context.Context, string) error { return nil }
