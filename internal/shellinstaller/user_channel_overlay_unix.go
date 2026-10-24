@@ -73,13 +73,6 @@ func (r *userUnixOverlayRollback) unwind() error {
 	return cause
 }
 
-func userUnixOverlayRemoveIfPresent(path string) error {
-	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	return nil
-}
-
 // userUnixChannelOverlay performs the in-place SDK channel swap when the
 // managed reconfigure request differs from the installed composition only in
 // the channel. applied=false with a nil error means the channels match, the
