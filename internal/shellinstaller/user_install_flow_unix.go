@@ -490,7 +490,7 @@ func userPublishManifest(ctx context.Context, root, prefix, agent string, manife
 	if _, err = userReadManifest(ctx, manifest.Destination); err != nil {
 		return result, privateError("uncertain", err)
 	}
-	userRecordPublishedShell(manifest)
+	registryErr := userRecordPublishedShell(manifest)
 	launcherNote := ""
 	if manifest.Mode == "separate" {
 		report, err := PublishUserShellLauncher(manifest.Destination)
@@ -499,6 +499,9 @@ func userPublishManifest(ctx context.Context, root, prefix, agent string, manife
 		}
 		launcherNote = userShellLauncherNote(report)
 	}
+	// Registration is bookkeeping for Manage, never installation authority:
+	// a refusal is reported with the result and never retracts the install.
+	launcherNote = userJoinNote(launcherNote, userRegistryNote(registryErr))
 	// The publication is renamed, read back and registered; drop only the
 	// ephemeral caches. Failure is reported but never retracts the install.
 	if cleanupErr := userPublishEphemeralCleanup(manifest.Destination); cleanupErr != nil {
