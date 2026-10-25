@@ -4,13 +4,15 @@ import (
 	"errors"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/shellinstaller"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/tui/screens"
 )
 
 // shellPlatformTargetNote is the Windows installer refusal for every target
 // except Separate (shellinstaller.InspectUserInstall), shown on the target row
 // so the choice is disabled before Continue instead of refused at inspection.
-const shellPlatformTargetNote = "Windows supports Separate install only; existing Pi, configuration and bindings stay untouched."
+// Windows Pi detection reports the same text, so the first render names it.
+const shellPlatformTargetNote = shellinstaller.UserWindowsSeparateOnly
 
 // shellPlatformConfigure disables the existing-Pi targets on Windows: no agent
 // is offered for reuse (a managed Separate install's private agent is not a

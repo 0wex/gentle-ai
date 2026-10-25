@@ -40,7 +40,13 @@ type UserPiDetection struct {
 	Detail  string
 }
 
-func DetectUserPi(string) UserPiDetection { return UserPiDetection{Problem: "missing"} }
+// UserWindowsSeparateOnly is the Windows refusal for every target except
+// Separate; detection reports it so the TUI names it from the first render.
+const UserWindowsSeparateOnly = "Windows supports Separate install only; existing Pi, configuration and bindings stay untouched."
+
+func DetectUserPi(string) UserPiDetection {
+	return UserPiDetection{Problem: "unsupported", Detail: UserWindowsSeparateOnly}
+}
 
 func windowsLocalAppData(home string) string {
 	if value := os.Getenv("LOCALAPPDATA"); value != "" {
@@ -82,7 +88,9 @@ func ReadUserShellInstalls(home string) []UserShellInstall { return DiscoverUser
 
 func loadWindowsJSON(path string, value any) (bool, error) {
 	data, err := userWindowsRead(path, 1<<20)
-	if os.IsNotExist(err) {
+	// userWindowsRead joins the OS errno with its custody refusal, which
+	// os.IsNotExist does not unwrap; only a truly absent file is optional.
+	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
 	}
 	if err != nil {

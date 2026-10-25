@@ -26,6 +26,14 @@ func TestShellExistingPiTargetDisabledOnWindows(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := openTargetConfiguration(t)
+	// First render, before any key reaches Configure: the reason is already
+	// shown and the generic detection text never appears.
+	if view := m.View(); !strings.Contains(view, "Windows supports Separate install only") || strings.Contains(view, "No Pi agent was detected") {
+		t.Fatalf("first Configure frame lacks the Windows target reason:\n%s", view)
+	}
+	if m.shellExperience == nil || m.shellExperience.piNote != shellPlatformTargetNote {
+		t.Fatalf("Windows detection note differs: %+v", m.shellExperience)
+	}
 	m = experienceFocus(t, m, screens.ShellExperienceInstallTarget, "agent")
 	if view := m.View(); !strings.Contains(view, "Windows supports Separate install only") {
 		t.Fatalf("existing-Pi row does not show the Windows reason before Continue:\n%s", view)
