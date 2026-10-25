@@ -10,12 +10,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 )
 
 // An operator-owned Pi agent may be group-readable but must never be writable
 // by another user. The prefix is not reused in this mode, so Homebrew/system
-// prefixes stay untouched.
+// prefixes stay untouched. The darwin ACL and file-flag guard privateDirectory
+// applies to selected roots applies here too.
 func userOwnedIdentity(path string) (string, error) {
 	info, err := os.Lstat(path)
 	if err != nil || !info.IsDir() || info.Mode().Perm()&0022 != 0 || info.Sys().(*syscall.Stat_t).Uid != uint32(os.Getuid()) {
@@ -25,8 +27,122 @@ func userOwnedIdentity(path string) (string, error) {
 	if err != nil || canonical != path {
 		return "", privateError("filesystem", err)
 	}
+	if err := privateExtendedMetadata(path, info, false); err != nil {
+		return "", privateError("filesystem", err)
+	}
 	st := info.Sys().(*syscall.Stat_t)
 	return fmt.Sprintf("%d:%d:%d:%v", st.Dev, st.Ino, st.Uid, info.Mode()), nil
+}
+
+// userAgentPreflight checks, before the first write to the operator's Pi
+// agent, every precondition a fresh agent-reuse install would otherwise
+// refuse on after it had already changed the agent. Each refusal names the
+// path and the exact fix.
+func userAgentPreflight(agent, destination string, profile *UserExperience) error {
+	refuse := func(format string, args ...any) error {
+		return privateError("refused", fmt.Errorf(format, args...))
+	}
+	if _, err := userOwnedIdentity(agent); err != nil {
+		return refuse("the Pi agent %q must be a physical directory you own that no other user can write (run chmod go-w %q), or choose Separate: %w", agent, agent, err)
+	}
+	if profile != nil && profile.SDKSource == "main-preview" {
+		// The Main SDK selection binds the agent as a private 0700 directory.
+		if info, err := os.Lstat(agent); err != nil || info.Mode().Perm() != 0700 {
+			return refuse("Main preview on your existing Pi needs the agent %q to be private: run chmod 700 %q, or choose Stable or Separate", agent, agent)
+		}
+	}
+	if err := userToolBinAvailable(agent); err != nil {
+		return err
+	}
+	settingsPath := filepath.Join(agent, "settings.json")
+	data, err := userAgentPreflightFile(settingsPath)
+	if err != nil {
+		return err
+	}
+	if data != nil {
+		settings := map[string]json.RawMessage{}
+		if json.Unmarshal(data, &settings) != nil || settings == nil {
+			return refuse("%q is not a JSON object; fix or move it, then retry", settingsPath)
+		}
+		if _, present := settings["npmCommand"]; present {
+			return refuse("%q already sets npmCommand (left by an earlier Gentle Shell attempt or another tool); remove the npmCommand key, then retry", settingsPath)
+		}
+		if raw, present := settings["packages"]; present {
+			var packages []json.RawMessage
+			if json.Unmarshal(raw, &packages) != nil || packages == nil {
+				return refuse("%q packages must be a JSON array; fix it, then retry", settingsPath)
+			}
+			packageRoot := filepath.Join(destination, "prefix/lib/node_modules/gentle-pi")
+			for _, entry := range packages {
+				var source string
+				if strings.TrimSpace(string(entry)) == "null" || json.Unmarshal(entry, &source) != nil {
+					var filtered struct {
+						Source *string `json:"source"`
+					}
+					if json.Unmarshal(entry, &filtered) != nil || filtered.Source == nil {
+						return refuse("%q has a packages entry without a source string (%s); fix or remove it, then retry", settingsPath, entry)
+					}
+					source = *filtered.Source
+				}
+				if strings.HasPrefix(source, "npm:gentle-pi") || source == packageRoot {
+					return refuse("%q already declares gentle-pi (%s); remove that packages entry, then retry", settingsPath, source)
+				}
+			}
+		}
+	}
+	if profile != nil && profile.Context7 != "" {
+		mcpPath := filepath.Join(agent, "mcp.json")
+		if _, err := os.Lstat(mcpPath + ".new"); !os.IsNotExist(err) {
+			return refuse("%q is left over from an earlier attempt; remove it, then retry", mcpPath+".new")
+		}
+		data, err := userAgentPreflightFile(mcpPath)
+		if err != nil {
+			return err
+		}
+		if data != nil {
+			fields := map[string]json.RawMessage{}
+			if json.Unmarshal(data, &fields) != nil || fields == nil {
+				return refuse("%q is not a JSON object; fix or move it, then retry", mcpPath)
+			}
+			// Dry-run the exact merge the install applies later.
+			if err := userContext7Update(profile.Context7)(fields); err != nil {
+				return refuse("%q cannot take the Context7 entry (%v); fix it, then retry", mcpPath, err)
+			}
+		}
+	}
+	return nil
+}
+
+// userAgentPreflightFile admits an absent file or a bounded regular file the
+// operator owns, with one link, that no other user can write: the custody
+// the settings and mcp.json preimages require.
+func userAgentPreflightFile(path string) ([]byte, error) {
+	info, err := os.Lstat(path)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	refuse := func(problem string) error {
+		return privateError("refused", errors.Join(fmt.Errorf("%q %s, then retry", path, problem), err))
+	}
+	switch {
+	case err != nil:
+		return nil, refuse("cannot be inspected; fix its access")
+	case !info.Mode().IsRegular():
+		return nil, refuse("must be a regular file (not a link or directory); replace it with a regular file")
+	case info.Sys().(*syscall.Stat_t).Uid != uint32(os.Getuid()):
+		return nil, refuse("is owned by another user; take ownership of it")
+	case info.Mode().Perm()&0022 != 0:
+		return nil, refuse(fmt.Sprintf("is writable by other users; run chmod go-w %q", path))
+	case info.Sys().(*syscall.Stat_t).Nlink != 1:
+		return nil, refuse("has other hard links; replace it with a single copy")
+	case info.Size() > 1<<20:
+		return nil, refuse("is larger than 1 MiB; shrink or move it")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || int64(len(data)) != info.Size() {
+		return nil, refuse("changed while it was read; retry when it is stable")
+	}
+	return data, nil
 }
 
 // userStageOwnedAgentContext7 merges the selected Context7 entry into the
@@ -118,12 +234,18 @@ func userCaptureAgentPostImages(agent, root string) error {
 	files := map[string]userAgentPostFile{}
 	for _, name := range userAgentTouchFiles {
 		path := filepath.Join(agent, filepath.FromSlash(name))
-		data, err := os.ReadFile(path)
+		info, err := os.Lstat(path)
 		if os.IsNotExist(err) {
 			files[name] = userAgentPostFile{}
 			continue
 		}
-		if err != nil || len(data) > 1<<20 {
+		// The touched set includes the pinned multi-megabyte fd/rg, so the
+		// bound is the selection inventory's per-file bound, not 1 MiB.
+		if err != nil || !info.Mode().IsRegular() || info.Size() > userAgentImageBound {
+			return privateError("preimage", err)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil || int64(len(data)) != info.Size() {
 			return privateError("preimage", err)
 		}
 		files[name] = userAgentPostFile{Exists: true, SHA256: fmt.Sprintf("%x", sha256.Sum256(data))}
