@@ -69,6 +69,13 @@ Files checked for a profile (target `~/.local/share/gentle-shell/install`):
   `{"url": "https://mcp.context7.com/mcp", "enabled": <bool>, "exposure": "codemode"}`.
 - `config/update-channel.json`, when present: the channel matches.
 - `~/.local/bin/gentle-shell` (Separate): links to `<target>/bin/gentle-shell`.
+- Shell startup file: with `~/.local/bin` off the PATH the harness gives the
+  TUI (`--path`), a Separate install leaves exactly one
+  `# gentle-ai: gentle-shell launcher` line in the file chosen for the
+  harness's `SHELL` (`~/.profile` when unset); otherwise, after uninstall and
+  for "On my existing Pi" (G), no marked line anywhere and no startup file the
+  install created. Checked in A-F at each install check, in E and G after
+  uninstall.
 - `~/.gentle-ai/shell-installs.json`: exactly one entry for the target, with
   its mode and channel.
 

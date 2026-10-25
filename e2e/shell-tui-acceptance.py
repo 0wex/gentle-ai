@@ -291,6 +291,62 @@ def verify_uninstalled(home, backup):
     return problems
 
 
+PATH_MARK = '# gentle-ai: gentle-shell launcher'
+PATH_LINES = {'sh': 'export PATH="$HOME/.local/bin:$PATH" ' + PATH_MARK, 'fish': 'set -gx PATH $HOME/.local/bin $PATH ' + PATH_MARK}
+
+
+def startup_candidates(home, env):
+    """Every startup file the installer may choose for env, per shell (profileFor)."""
+    home = pathlib.Path(home)
+    zdot = env.get('ZDOTDIR', '')
+    config = env.get('XDG_CONFIG_HOME', '')
+    zdot = pathlib.Path(zdot) if os.path.isabs(zdot) else home
+    config = pathlib.Path(config) if os.path.isabs(config) else home / '.config'
+    bash = [home / name for name in ('.bash_profile', '.bash_login', '.profile')] if sys.platform == 'darwin' else [home / '.bashrc']
+    return {'zsh': [zdot / '.zshrc'], 'bash': bash, 'fish': [config / 'fish/conf.d/gentle-ai-shell.fish'], 'other': [home / '.profile']}
+
+
+def startup_file(home, env):
+    """The startup file the installer chooses for the SHELL the harness sets."""
+    files = startup_candidates(home, env)
+    shell = os.path.basename(env.get('SHELL', ''))
+    if shell == 'bash' and sys.platform == 'darwin':
+        return next((path for path in files['bash'] if path.exists()), files['bash'][0])
+    return files.get(shell, files['other'])[0]
+
+
+def startup_files_present(home, env):
+    return {path for paths in startup_candidates(home, env).values() for path in paths if os.path.lexists(path)}
+
+
+def verify_startup(home, env, served, preexisting):
+    """Marked PATH lines against the PATH and SHELL the harness gives the TUI.
+
+    served: a Separate launcher is published. With ~/.local/bin on that PATH,
+    or nothing served, no marked line may exist anywhere; otherwise the chosen
+    file holds exactly one, the exact line for its shell. With nothing served,
+    no startup file absent at preexisting time may be left behind.
+    """
+    home = pathlib.Path(home)
+    on_path = str(home / '.local/bin') in [os.path.normpath(entry) for entry in env.get('PATH', '').split(':') if entry]
+    chosen = startup_file(home, env) if served and not on_path else None
+    problems = []
+    for path in sorted({p for paths in startup_candidates(home, env).values() for p in paths}):
+        if not path.is_file() or path.is_symlink():
+            continue
+        lines = [line for line in path.read_text().split('\n') if PATH_MARK in line]
+        want = [PATH_LINES['fish' if path.suffix == '.fish' else 'sh']] if path == chosen else []
+        if lines != want:
+            problems.append(f'{path.relative_to(home)}: marked PATH lines {lines!r} want {want!r}')
+    if chosen is not None and not chosen.is_file():
+        problems.append(f'{chosen.relative_to(home)}: missing the marked PATH line')
+    if not served:
+        left = sorted(str(path.relative_to(home)) for path in startup_files_present(home, env) - set(preexisting))
+        if left:
+            problems.append(f'startup files created by the install remain: {left}')
+    return problems
+
+
 def snapshot_tree(root):
     root = pathlib.Path(root)
     entries = {}
@@ -492,6 +548,7 @@ class Context:
         for key in ('XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS'):
             if os.environ.get(key):
                 self.env[key] = os.environ[key]
+        self.startup_before = startup_files_present(self.home, self.env)
         self.notes, self.tuis = [], []
 
     def log(self, message):
@@ -518,6 +575,7 @@ class Context:
     def verify(self, profile, label):
         self.keep_files(label)
         problems = verify_install(self.home, profile)
+        problems += verify_startup(self.home, self.env, profile['target'] == 'separate', self.startup_before)
         if problems:
             raise Fail(f'{label}: ' + '; '.join(problems))
         self.log(f'{label}: files match profile')
@@ -699,6 +757,7 @@ def scenario_e(ctx):
     screen = tui.wait(lambda s: 'Installation uninstalled.' in s or ('Working' not in s and new_rows(before, s)), 180, 'uninstall')
     tui.snap('uninstalled', screen)
     problems = verify_uninstalled(ctx.home, backup_path(screen))
+    problems += verify_startup(ctx.home, ctx.env, False, ctx.startup_before)
     if 'Installation uninstalled.' not in screen or problems:
         raise Fail('uninstall: ' + ('; '.join(problems) or 'no success text'))
     ctx.log(f'uninstall: backup {backup_path(screen)}')
@@ -766,6 +825,7 @@ def scenario_g(ctx):
     manifest = json.loads((target / 'installation.json').read_bytes())
     ctx.keep_files('install')
     problems = verify_install(ctx.home, want)
+    problems += verify_startup(ctx.home, ctx.env, False, ctx.startup_before)
     if manifest.get('Agent') != str(agent):
         problems.append(f'installation.json Agent={manifest.get("Agent")!r} want {agent}')
     problems += verify_set_aside(target, agent, pi_tools)
@@ -788,6 +848,7 @@ def scenario_g(ctx):
     screen = tui.wait(lambda s: 'Installation uninstalled.' in s or ('Working' not in s and new_rows(screen_before, s)), 180, 'uninstall')
     tui.snap('uninstalled', screen)
     problems = verify_uninstalled(ctx.home, backup_path(screen))
+    problems += verify_startup(ctx.home, ctx.env, False, ctx.startup_before)
     if 'Installation uninstalled.' not in screen:
         problems.append('no success text: ' + screen_digest(screen))
     restored = tool_images(bin_dir)

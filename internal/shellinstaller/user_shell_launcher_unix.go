@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -33,6 +34,11 @@ type userShellLauncherReport struct {
 	Outcomes    []userShellLauncherOutcome
 	LauncherDir string
 	DirOnPath   bool
+	// The startup file PATH step, planned only when DirOnPath is false.
+	Profile       string
+	ProfileState  string
+	ProfileReason string
+	Fish          bool
 }
 
 func userShellLauncherPath(name string) (string, error) {
@@ -43,7 +49,15 @@ func userShellLauncherPath(name string) (string, error) {
 	return filepath.Join(home, ".local", "bin", name), nil
 }
 
+// userLauncherOnPathIntent carries the caller terminal's decision into a
+// delegated unit, whose own PATH is the fixed /usr/bin:/bin (#5758). Only the
+// boolean crosses the unit; the caller's PATH never does.
+const userLauncherOnPathIntent = "GENTLE_AI_LAUNCHER_DIR_ON_PATH"
+
 func userLauncherDirOnPath(dir string) bool {
+	if os.Getenv(userLauncherOnPathIntent) == "1" {
+		return true
+	}
 	for _, element := range filepath.SplitList(os.Getenv("PATH")) {
 		if element != "" && filepath.Clean(element) == dir {
 			return true
@@ -72,8 +86,26 @@ func userShellLauncherNote(report userShellLauncherReport) string {
 	if len(published) > 0 {
 		lines = append([]string{fmt.Sprintf("Commands: %s", strings.Join(published, " and "))}, lines...)
 	}
-	if report.LauncherDir != "" && !report.DirOnPath {
-		lines = append(lines, fmt.Sprintf("%s is not on this session's PATH; open a new login session or run: export PATH=\"$HOME/.local/bin:$PATH\"", report.LauncherDir))
+	// Without a served launcher no PATH step was planned and none is shown.
+	if report.LauncherDir != "" && !report.DirOnPath && report.ProfileState != "" {
+		lines = append(lines, report.LauncherDir+" is not on this terminal's PATH.", "Current terminal: "+userLauncherPathCommand(report.Fish))
+		switch report.ProfileState {
+		case userLauncherProfileAdded:
+			lines = append(lines, "Future terminals: open a new terminal", "PATH was added to "+report.Profile)
+		case userLauncherProfilePresent:
+			lines = append(lines, "Future terminals: open a new terminal", "PATH is already set in "+report.Profile)
+		default:
+			file := report.Profile
+			if file == "" {
+				file = "your shell startup file"
+			}
+			lines = append(lines, "Future terminals: add this line to "+file+", then open a new terminal: "+userLauncherPathLine(report.Fish))
+			if report.Profile == "" {
+				lines = append(lines, "No startup file was edited: "+report.ProfileReason)
+			} else if report.ProfileReason != "" {
+				lines = append(lines, report.Profile+" was not edited: "+report.ProfileReason)
+			}
+		}
 	}
 	return strings.Join(lines, "\n")
 }
@@ -139,10 +171,19 @@ func PublishUserShellLauncher(destination string) (userShellLauncherReport, erro
 		return report, err
 	}
 	defer directory.Close()
-	return report, directory.Sync()
+	if err := directory.Sync(); err != nil {
+		return report, err
+	}
+	// New terminals find the launchers only once the dir is on their PATH.
+	served := slices.ContainsFunc(report.Outcomes, func(outcome userShellLauncherOutcome) bool { return outcome.State != userShellLauncherOccupied })
+	if !report.DirOnPath && served {
+		userApplyLauncherPath(&report, filepath.Dir(filepath.Dir(dir)))
+	}
+	return report, nil
 }
 
-// RemoveUserShellLauncher removes only symlinks owned by destination.
+// RemoveUserShellLauncher removes only symlinks owned by destination, then our
+// PATH line once no gentle-shell launcher is left to serve.
 func RemoveUserShellLauncher(destination string) error {
 	bin := filepath.Join(destination, "bin", "gentle-shell")
 	for _, name := range userShellLauncherNames {
@@ -168,5 +209,12 @@ func RemoveUserShellLauncher(destination string) error {
 			return err
 		}
 	}
-	return nil
+	link, err := userShellLauncherPath("gentle-shell")
+	if err != nil {
+		return err
+	}
+	if _, err := os.Lstat(link); !os.IsNotExist(err) {
+		return err
+	}
+	return userRemoveLauncherPath(filepath.Dir(filepath.Dir(filepath.Dir(link))))
 }

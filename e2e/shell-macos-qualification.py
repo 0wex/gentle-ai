@@ -296,18 +296,26 @@ def residue(work):
 
 
 def home_launcher(home, separate):
-    """The redirected HOME holds exactly the Separate launcher symlinks.
+    """The redirected HOME holds exactly the Separate launchers and their PATH line.
 
     Separate installs publish ~/.local/bin/gentle-shell and, unless the name
     is occupied, ~/.local/bin/gs, both pointing at the target's
-    bin/gentle-shell; nothing else may appear in HOME.
+    bin/gentle-shell. The harness runs the installer with PATH=/usr/bin:/bin
+    and no SHELL, so ~/.local/bin is off that PATH and the startup file is
+    ~/.profile: it must hold exactly the one marked PATH line. Nothing else
+    may appear in HOME.
     """
+    startup, line = '.profile', 'export PATH="$HOME/.local/bin:$PATH" # gentle-ai: gentle-shell launcher\n'
     found = sorted(os.path.relpath(os.path.join(directory, name), home)
                    for directory, names, files in os.walk(home) for name in names + files)
     launchers = [entry for entry in ('.local/bin/gentle-shell', '.local/bin/gs') if entry in found]
-    expected = sorted(['.local', '.local/bin'] + launchers)
+    expected = sorted(['.local', '.local/bin', startup] + launchers)
     require('.local/bin/gentle-shell' in launchers and found == expected,
-            'redirected home holds more than the Separate launchers: %s' % found[:8])
+            'redirected home holds more than the Separate launchers and %s: %s' % (startup, found[:8]))
+    profile = os.path.join(home, startup)
+    require(os.path.isfile(profile) and not os.path.islink(profile), '%s is not a regular file' % startup)
+    with open(profile, 'rb') as handle:
+        require(handle.read() == line.encode(), '%s does not hold exactly the marked PATH line' % startup)
     target = os.path.join(os.path.realpath(separate), 'bin/gentle-shell')
     for entry in launchers:
         link = os.path.join(home, entry)

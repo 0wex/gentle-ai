@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -161,10 +162,15 @@ func TestUserServiceIntentEnvironment(t *testing.T) {
 		{"fallback other than 1", "", "", "yes", nil},
 	} {
 		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("PATH", "/usr/bin:/bin")
+			t.Setenv("GENTLE_AI_LAUNCHER_DIR_ON_PATH", "")
 			t.Setenv("GENTLE_AI_SHELL_REGISTRY_HOME", test.registry)
 			t.Setenv("GENTLE_AI_RECONFIGURE_TARGET", test.reconfigure)
 			t.Setenv("GENTLE_AI_MAIN_FALLBACK", test.main)
-			got := userServiceIntentEnvironment(home)
+			// The launcher intents have their own test.
+			got := slices.DeleteFunc(userServiceIntentEnvironment(home), func(entry string) bool {
+				return strings.HasPrefix(entry, "GENTLE_AI_LAUNCHER_")
+			})
 			if len(got) != len(test.want) {
 				t.Fatalf("intents = %q, want %q", got, test.want)
 			}
@@ -172,6 +178,36 @@ func TestUserServiceIntentEnvironment(t *testing.T) {
 				if got[index] != test.want[index] {
 					t.Fatalf("intents = %q, want %q", got, test.want)
 				}
+			}
+		})
+	}
+}
+
+// The launcher dir decision crosses the unit as a boolean, never as the
+// caller's PATH; an already forwarded decision survives a nested unit.
+func TestUserServiceIntentEnvironmentForwardsLauncherDirDecision(t *testing.T) {
+	home := registryTestHome(t, 0755)
+	launcherDir := filepath.Join(home, ".local", "bin")
+	for _, test := range []struct {
+		name, path, intent string
+		want               []string
+	}{
+		{"terminal PATH holds the launcher dir", "/usr/local/bin:" + launcherDir, "", []string{"GENTLE_AI_LAUNCHER_DIR_ON_PATH=1"}},
+		{"terminal PATH lacks the launcher dir", "/usr/local/bin", "", []string{"GENTLE_AI_LAUNCHER_PROFILE=" + filepath.Join(home, ".profile")}},
+		{"nested unit keeps the forwarded decision", "/usr/bin:/bin", "1", []string{"GENTLE_AI_LAUNCHER_DIR_ON_PATH=1"}},
+		{"invalid intent falls back to PATH", "/usr/bin:/bin", "yes", []string{"GENTLE_AI_LAUNCHER_PROFILE=" + filepath.Join(home, ".profile")}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("GENTLE_AI_SHELL_REGISTRY_HOME", "")
+			t.Setenv("GENTLE_AI_RECONFIGURE_TARGET", "")
+			t.Setenv("GENTLE_AI_MAIN_FALLBACK", "")
+			t.Setenv("SHELL", "")
+			t.Setenv("GENTLE_AI_LAUNCHER_PROFILE", "")
+			t.Setenv("PATH", test.path)
+			t.Setenv("GENTLE_AI_LAUNCHER_DIR_ON_PATH", test.intent)
+			got := userServiceIntentEnvironment(home)
+			if strings.Join(got, "\n") != strings.Join(test.want, "\n") {
+				t.Fatalf("intents = %q, want %q", got, test.want)
 			}
 		})
 	}
