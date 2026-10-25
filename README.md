@@ -261,6 +261,8 @@ curl -fsSL https://raw.githubusercontent.com/Gentleman-Programming/gentle-ai/mai
 go install github.com/gentleman-programming/gentle-ai/v4/cmd/gentle-ai@v4.1.1
 ```
 
+When the install directory is not on your `PATH` yet, `install.sh` adds one marked line (`# gentle-ai installer`) to the startup file your shell reads: `~/.zshrc` for zsh, `~/.bashrc` for bash on Linux, `~/.bash_profile` for bash on macOS, a `conf.d` file for fish, and `~/.profile` otherwise. `install.ps1` adds the directory to your user `Path`. Open a new terminal afterwards, or run the `export PATH=...` line the installer prints to use `gentle-ai` in the current one.
+
 ```bash
 gentle-ai          # pick your agents, components and persona
 gentle-ai doctor   # verify — read-only, changes nothing

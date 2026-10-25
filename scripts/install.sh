@@ -396,12 +396,9 @@ install_go() {
         gobin="$(go env GOPATH)/bin"
     fi
 
-    if [[ ":$PATH:" != *":$gobin:"* ]]; then
-        warn "${gobin} is not in your PATH"
-        warn "Add this to your shell profile: export PATH=\"\$PATH:${gobin}\""
-    fi
-
     success "Installed ${BINARY_NAME} via go install"
+
+    ensure_install_dir_on_path "$gobin"
 }
 
 prepend_go_env_pattern() {
@@ -571,14 +568,194 @@ install_binary() {
 
     success "Installed ${BINARY_NAME} to ${final}"
 
-    # Check if install dir is in PATH
-    if [[ ":$PATH:" != *":${install_dir}:"* ]]; then
-        warn "${install_dir} is not in your PATH"
-        echo ""
-        warn "Add this to your shell profile (~/.bashrc, ~/.zshrc, etc.):"
-        echo -e "  ${DIM}export PATH=\"\$PATH:${install_dir}\"${NC}"
-        echo ""
+    ensure_install_dir_on_path "$install_dir"
+}
+
+# ============================================================================
+# Shell PATH setup
+#
+# Mirrors the Gentle Shell web installer (gentle-pi scripts/bundled-install.mjs
+# profileFor/profileState/pathEntryPlan): when the install dir is not on the
+# terminal's PATH, append one marked line to the startup file the user's shell
+# reads for new terminals. The line is never duplicated and never written
+# through a symlink (stow, chezmoi and home-manager lay dotfiles out as links).
+# ============================================================================
+
+PATH_SETUP_MARK="# gentle-ai installer"
+
+# Whether dir is an entry of the current PATH (trailing slashes ignored).
+path_has_dir() {
+    local dir="${1%/}" entry
+    local IFS=:
+    for entry in $PATH; do
+        [ "${entry%/}" = "$dir" ] && return 0
+    done
+    return 1
+}
+
+# The startup file the user's shell reads for the terminals they open:
+# - zsh: $ZDOTDIR/.zshrc (or ~/.zshrc);
+# - bash on macOS, where terminals start login shells: the first existing of
+#   ~/.bash_profile, ~/.bash_login and ~/.profile (login bash reads exactly
+#   one), else ~/.bash_profile;
+# - bash elsewhere: ~/.bashrc, read by interactive non-login bash;
+# - fish: our own conf.d file; anything else: ~/.profile.
+shell_profile_for() {
+    local shell os name config
+    shell="$(basename -- "${SHELL:-}")"
+    os="${OS:-}"
+    if [ -z "$os" ]; then
+        case "$(uname -s)" in
+            Darwin) os="darwin" ;;
+            *) os="linux" ;;
+        esac
     fi
+
+    case "$shell" in
+        zsh)
+            case "${ZDOTDIR:-}" in
+                /*) printf '%s\n' "${ZDOTDIR%/}/.zshrc" ;;
+                *) printf '%s\n' "${HOME}/.zshrc" ;;
+            esac
+            ;;
+        bash)
+            if [ "$os" = "darwin" ]; then
+                for name in .bash_profile .bash_login .profile; do
+                    if [ -e "${HOME}/${name}" ] || [ -L "${HOME}/${name}" ]; then
+                        printf '%s\n' "${HOME}/${name}"
+                        return
+                    fi
+                done
+                printf '%s\n' "${HOME}/.bash_profile"
+            else
+                printf '%s\n' "${HOME}/.bashrc"
+            fi
+            ;;
+        fish)
+            case "${XDG_CONFIG_HOME:-}" in
+                /*) config="${XDG_CONFIG_HOME%/}" ;;
+                *) config="${HOME}/.config" ;;
+            esac
+            printf '%s\n' "${config}/fish/conf.d/${BINARY_NAME}.fish"
+            ;;
+        *)
+            printf '%s\n' "${HOME}/.profile"
+            ;;
+    esac
+}
+
+# Whether folder (an existing directory) is reached without symlinks below HOME.
+profile_folder_is_real() {
+    local folder="$1" relative real_home real_folder
+    case "$folder" in
+        "$HOME") relative="" ;;
+        "$HOME"/*) relative="${folder#"$HOME"}" ;;
+        *) return 0 ;;
+    esac
+    real_home="$(cd -- "$HOME" && pwd -P)" || return 1
+    real_folder="$(cd -- "$folder" && pwd -P)" || return 1
+    [ "$real_folder" = "${real_home}${relative}" ]
+}
+
+# Whether the installer may edit file: "file" (a writable regular file in real
+# folders) or "absent" (creatable inside real, writable folders); otherwise why
+# not: "symlink", "not-a-file" or "not-writable".
+profile_state() {
+    local file="$1" folder
+    if [ -L "$file" ]; then
+        echo "symlink"; return
+    fi
+    if [ -e "$file" ]; then
+        if [ ! -f "$file" ]; then echo "not-a-file"; return; fi
+        if ! profile_folder_is_real "$(dirname -- "$file")"; then echo "symlink"; return; fi
+        if [ -w "$file" ]; then echo "file"; else echo "not-writable"; fi
+        return
+    fi
+
+    folder="$(dirname -- "$file")"
+    while [ ! -e "$folder" ] && [ ! -L "$folder" ]; do
+        if [ "$(dirname -- "$folder")" = "$folder" ]; then echo "not-a-file"; return; fi
+        folder="$(dirname -- "$folder")"
+    done
+    if [ -L "$folder" ]; then echo "symlink"; return; fi
+    if [ ! -d "$folder" ]; then echo "not-a-file"; return; fi
+    if ! profile_folder_is_real "$folder"; then echo "symlink"; return; fi
+    if [ -w "$folder" ]; then echo "absent"; else echo "not-writable"; fi
+}
+
+# Puts dir on PATH for future terminals by appending one marked line to the
+# shell startup file. Writes nothing when dir is already on PATH.
+ensure_install_dir_on_path() {
+    local dir="${1%/}"
+    [ -n "$dir" ] || return 0
+    path_has_dir "$dir" && return 0
+
+    local profile line
+    profile="$(shell_profile_for)"
+    case "$profile" in
+        *.fish)
+            case "$dir" in
+                *"'"*|*"\\"*|*$'\n'*)
+                    warn "${dir} is not on your PATH and cannot be added safely to ${profile}; add it manually."
+                    return 0
+                    ;;
+            esac
+            line="set -gx PATH '${dir}' \$PATH ${PATH_SETUP_MARK}"
+            ;;
+        *)
+            case "$dir" in
+                *'"'*|*"\\"*|*'$'*|*'`'*|*$'\n'*)
+                    warn "${dir} is not on your PATH and cannot be added safely to ${profile}; add it manually."
+                    return 0
+                    ;;
+            esac
+            line="export PATH=\"${dir}:\$PATH\" ${PATH_SETUP_MARK}"
+            ;;
+    esac
+
+    echo ""
+    echo -e "Current terminal: ${BOLD}export PATH=\"${dir}:\$PATH\"${NC}"
+    echo "Future terminals: open a new terminal"
+
+    if [ -f "$profile" ] && grep -Fxq -- "$line" "$profile" 2>/dev/null; then
+        info "PATH is already configured in ${profile}"
+        echo ""
+        return 0
+    fi
+
+    local state
+    state="$(profile_state "$profile")"
+    case "$state" in
+        absent)
+            # noclobber: never write through a file or link created meanwhile.
+            if mkdir -p -- "$(dirname -- "$profile")" && (set -C; printf '%s\n' "$line" > "$profile") 2>/dev/null; then
+                success "PATH was added to ${profile}"
+            else
+                warn "Could not create ${profile}. Add this line to it:"
+                echo "  ${line}"
+            fi
+            ;;
+        file)
+            local separator=""
+            if [ -s "$profile" ] && [ -n "$(tail -c 1 -- "$profile")" ]; then
+                separator=$'\n'
+            fi
+            if [ ! -L "$profile" ] && printf '%s%s\n' "$separator" "$line" >> "$profile"; then
+                success "PATH was added to ${profile}"
+            else
+                warn "Could not edit ${profile}. Add this line to it:"
+                echo "  ${line}"
+            fi
+            ;;
+        *)
+            warn "${profile} was not edited (${state}). Add this line to it:"
+            echo "  ${line}"
+            ;;
+    esac
+    echo ""
+
+    # Let verify_installation find the binary in this process.
+    export PATH="${dir}:${PATH}"
 }
 
 # ============================================================================
