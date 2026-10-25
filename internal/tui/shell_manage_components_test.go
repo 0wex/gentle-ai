@@ -17,9 +17,13 @@ import (
 )
 
 // setManifestCodeGraph records the installed CodeGraph component the way a
-// completed install does: the installation manifest bit.
+// completed install does: the installation manifest bit (Windows: the
+// runtime tree, through platformSetInstalledCodeGraph).
 func setManifestCodeGraph(t *testing.T, target string, on bool) {
 	t.Helper()
+	if platformSetInstalledCodeGraph(t, target, on) {
+		return
+	}
 	path := filepath.Join(target, "installation.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -352,6 +356,9 @@ const shellAgentCodeGraphReason = "CodeGraph needs a Separate install; it stays 
 // there: choosing the target turns it off with the reason, and turning it
 // back on is refused with the same reason.
 func TestShellAgentTargetNeverOffersCodeGraphOn(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows supports Separate install only; there is no On my existing Pi target to keep CodeGraph off for")
+	}
 	agent := restrictedAgentHome(t)
 	m := openTargetConfiguration(t)
 	if m.shellExperience.profile.CodeGraph != "on" {
@@ -378,6 +385,9 @@ func TestShellAgentTargetNeverOffersCodeGraphOn(t *testing.T) {
 
 // Manage of an agent installation refuses CodeGraph ON with the same reason.
 func TestShellManageAgentInstallNeverOffersCodeGraphOn(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows supports Separate install only; there is no On my existing Pi target to keep CodeGraph off for")
+	}
 	home := shellTestHome(t)
 	t.Setenv("HOME", home)
 	if err := os.MkdirAll(filepath.Join(home, ".pi", "agent"), 0700); err != nil {

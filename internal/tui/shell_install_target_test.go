@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -70,6 +71,14 @@ func TestShellAgentReuseOption(t *testing.T) {
 	m = experienceFocus(t, m, screens.ShellExperienceInstallTarget, "agent")
 	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = next.(Model)
+	if runtime.GOOS == "windows" {
+		// Windows supports Separate only: the row is disabled with the Windows
+		// reason and the request stays Separate.
+		if m.shellExperience.mode != "separate" || m.shellExperience.err == nil || !strings.Contains(m.shellExperience.err.Error(), "Windows supports Separate install only") {
+			t.Fatalf("Windows accepted agent reuse: %+v", m.shellExperience)
+		}
+		return
+	}
 	if m.shellExperience.mode != "agent" || m.shellExperience.choice != "agent" {
 		t.Fatalf("agent reuse was not selected: %+v", m.shellExperience)
 	}
