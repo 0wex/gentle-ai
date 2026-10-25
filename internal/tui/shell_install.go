@@ -474,9 +474,17 @@ func (m Model) updateShellManage(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if result, ok := msg.(shellUninstallResult); ok {
 		manage.working = false
+		manage.uninstallErr = nil
 		if result.err != nil {
-			manage.uninstallErr = result.err
-			return m, nil
+			// An uninstall that completed with a note (for example a Pi tool
+			// kept because Pi replaced it) is a success; on the uninstalled
+			// screen uninstallErr carries that note, rendered as a note.
+			var note interface{ UninstallNote() string }
+			if result.backup == "" || !errors.As(result.err, &note) {
+				manage.uninstallErr = result.err
+				return m, nil
+			}
+			manage.uninstallErr = errors.New(note.UninstallNote())
 		}
 		manage.backup, manage.uninstalled = result.backup, true
 		return m, nil

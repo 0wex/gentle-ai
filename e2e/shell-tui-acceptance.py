@@ -321,6 +321,61 @@ def summarize(results):
     return summary, 1 if any(status == 'FAIL' for status, _ in results.values()) else 0
 
 
+
+def pi_first_run_path(directory, node_path, tools_path):
+    """A PATH directory exposing only node, npm and Pi's archive extractors.
+
+    Pi uses fd/rg found on PATH instead of downloading its own; hosts that
+    ship them (Homebrew, nix, apt) would never reproduce a stock agent bin.
+    Pi extracts its downloads with tar (GNU tar calls gzip).
+    """
+    directory = pathlib.Path(directory)
+    directory.mkdir(mode=0o700)
+    for name, search in (('node', node_path), ('npm', node_path), ('tar', tools_path), ('gzip', tools_path)):
+        found = shutil.which(name, path=search)
+        if found:
+            os.symlink(os.path.realpath(found), directory / name)
+        elif name != 'gzip':
+            raise Fail(f'{name} is required for the first Pi run and is not on {search!r}')
+    return directory
+
+
+def tool_images(bin_dir):
+    """Mode, size and digest of the fd/rg in an agent bin, without following links."""
+    images = {}
+    for name in ('fd', 'rg'):
+        path = pathlib.Path(bin_dir) / name
+        if not os.path.lexists(path):
+            continue
+        info = path.lstat()
+        data = path.read_bytes() if stat.S_ISREG(info.st_mode) else b''
+        images[name] = {'regular': stat.S_ISREG(info.st_mode), 'mode': stat.S_IMODE(info.st_mode),
+                        'size': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
+    return images
+
+
+def verify_set_aside(target, agent, pi_tools):
+    """Problems with the installation's backup of Pi's own fd/rg."""
+    target = pathlib.Path(target)
+    problems = []
+    evidence = _read_json(target / 'state/agent-tools.json', problems, 'state/agent-tools.json')
+    if evidence is None:
+        return problems
+    if evidence.get('schema') != 'gentle-shell-agent-tools/v1' or evidence.get('agent') != str(agent):
+        problems.append(f'state/agent-tools.json schema/agent={evidence.get("schema")!r}/{evidence.get("agent")!r}')
+    recorded = evidence.get('files') or {}
+    if sorted(recorded) != sorted(pi_tools):
+        problems.append(f'state/agent-tools.json files={sorted(recorded)} want {sorted(pi_tools)}')
+    for name, image in pi_tools.items():
+        want = {'sha256': image['sha256'], 'size': image['size'], 'mode': '%04o' % image['mode']}
+        if recorded.get(name) != want:
+            problems.append(f'set-aside {name}: evidence {recorded.get(name)!r} want {want!r}')
+        backup = target / 'backup/agent-tools' / name
+        digest = hashlib.sha256(backup.read_bytes()).hexdigest() if backup.is_file() else None
+        if digest != image['sha256']:
+            problems.append(f'set-aside {name}: backup digest {digest!r} want {image["sha256"]!r}')
+    return problems
+
 # ------------------------------------------------------------------ tmux driver
 
 class Tui:
@@ -679,18 +734,27 @@ def scenario_g(ctx):
     first = subprocess.run([str(pi), '--version'], env=host_env, cwd=ctx.home, capture_output=True, text=True, timeout=120)
     ctx.log(f'pi --version -> {first.stdout.strip()!r}')
     agent = ctx.home / '.pi/agent'
-    if not agent.is_dir():
-        # A real first interactive run creates the agent directory.
-        session = ctx.tui('pi', str(pi), host_env)
-        deadline = time.monotonic() + 60
-        while not agent.is_dir() and time.monotonic() < deadline:
-            time.sleep(1)
-        session.snap('pi-first-run')
-        session.close()
-    if not agent.is_dir():
-        raise Fail('running Pi once did not create ~/.pi/agent')
+    bin_dir = agent / 'bin'
+    # A real first interactive run creates the agent and downloads Pi's own
+    # fd/rg into agent/bin; its PATH hides any fd/rg the host already has.
+    first_path = pi_first_run_path(ctx.home.parent / 'pi-first-run-path', os.pathsep.join([os.path.dirname(node), os.path.dirname(npm)]), ctx.env['PATH'])
+    session = ctx.tui('pi', str(pi), dict(ctx.env, PATH=str(first_path)))
+    deadline, last = time.monotonic() + 300, None
+    while time.monotonic() < deadline:
+        current = tool_images(bin_dir)
+        if sorted(current) == ['fd', 'rg'] and all(image['size'] for image in current.values()) and current == last:
+            break
+        last = current
+        time.sleep(3)
+    session.snap('pi-first-run')
+    session.close()
+    pi_tools = tool_images(bin_dir)
+    if sorted(pi_tools) != ['fd', 'rg'] or not all(image['regular'] and image['size'] for image in pi_tools.values()):
+        raise Fail(f'running Pi once did not download its own fd/rg into {bin_dir}: {pi_tools}')
+    ctx.log('Pi downloaded its own fd/rg: ' + ', '.join(f'{n} {i["size"]} B {i["mode"]:04o}' for n, i in sorted(pi_tools.items())))
     before = snapshot_tree(agent)
-    want = dict(DEFAULTS, target='agent')
+    # The agent target has no CodeGraph producer; the TUI keeps it off (T11).
+    want = dict(DEFAULTS, target='agent', codegraph='off')
     try:
         fresh_install(ctx, want, 'install')
     except Fail as error:
@@ -698,16 +762,47 @@ def scenario_g(ctx):
         (ctx.evidence / 'agent-diff.txt').write_text('\n'.join(changes) + '\n')
         state = 'byte-identical' if not changes else f'MODIFIED ({len(changes)} entries, e.g. {changes[:5]})'
         raise Fail(f'{error}; ~/.pi/agent after the failed attempt: {state}')
-    manifest = json.loads((ctx.home / TARGET_REL / 'installation.json').read_bytes())
+    target = ctx.home / TARGET_REL
+    manifest = json.loads((target / 'installation.json').read_bytes())
     ctx.keep_files('install')
     problems = verify_install(ctx.home, want)
     if manifest.get('Agent') != str(agent):
         problems.append(f'installation.json Agent={manifest.get("Agent")!r} want {agent}')
+    problems += verify_set_aside(target, agent, pi_tools)
+    pinned = tool_images(bin_dir)
+    if sorted(pinned) != ['fd', 'rg'] or any(image['mode'] != 0o700 for image in pinned.values()):
+        problems.append(f'pinned fd/rg not bound into {bin_dir}: {pinned}')
     after = subprocess.run([str(pi), '--version'], env=host_env, cwd=ctx.home, capture_output=True, text=True, timeout=120)
     if after.returncode != 0:
         problems.append(f'pi --version after install exit={after.returncode}')
     if problems:
         raise Fail('install: ' + '; '.join(problems))
+    ctx.log('install: files match profile; Pi fd/rg set aside with their evidence')
+    tui = open_manage(ctx, 'uninstall')
+    tui.move_to('Uninstall this installation')
+    tui.send('Enter')
+    tui.wait_text('Uninstall (keep backup)')
+    tui.move_to('Uninstall (keep backup)')
+    tui.send('Enter')
+    screen_before = tui.capture()
+    screen = tui.wait(lambda s: 'Installation uninstalled.' in s or ('Working' not in s and new_rows(screen_before, s)), 180, 'uninstall')
+    tui.snap('uninstalled', screen)
+    problems = verify_uninstalled(ctx.home, backup_path(screen))
+    if 'Installation uninstalled.' not in screen:
+        problems.append('no success text: ' + screen_digest(screen))
+    restored = tool_images(bin_dir)
+    if restored != pi_tools:
+        problems.append(f'fd/rg after uninstall {restored} want Pi\'s own {pi_tools}')
+    changes = diff_snapshots(before, snapshot_tree(agent))
+    (ctx.evidence / 'agent-diff-after-uninstall.txt').write_text('\n'.join(changes) + '\n')
+    if changes:
+        problems.append(f'~/.pi/agent after uninstall differs from before install: {changes}')
+    final = subprocess.run([str(pi), '--version'], env=host_env, cwd=ctx.home, capture_output=True, text=True, timeout=120)
+    if final.returncode != 0:
+        problems.append(f'pi --version after uninstall exit={final.returncode}')
+    if problems:
+        raise Fail('uninstall: ' + '; '.join(problems))
+    ctx.log(f'uninstall: backup {backup_path(screen)}; ~/.pi/agent byte-identical to before install, Pi fd/rg restored')
 
 
 RUNNERS = {'A': scenario_a, 'B': scenario_b, 'C': scenario_c, 'D': scenario_d,
