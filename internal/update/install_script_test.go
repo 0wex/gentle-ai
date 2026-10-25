@@ -417,8 +417,12 @@ func TestInstallScriptPathSetupChoosesStartupFilePerShell(t *testing.T) {
 			if got := readFileString(t, profile); got != want {
 				t.Fatalf("%s content = %q, want %q", tt.want, got, want)
 			}
+			current := `Current terminal: export PATH="` + dir + `:$PATH"`
+			if tt.fish {
+				current = "Current terminal: set -gx PATH '" + dir + "' $PATH"
+			}
 			for _, msg := range []string{
-				`Current terminal: export PATH="` + dir + `:$PATH"`,
+				current,
 				"Future terminals: open a new terminal",
 				"PATH was added to " + profile,
 			} {
@@ -436,8 +440,10 @@ func TestInstallScriptPathSetupChoosesStartupFilePerShell(t *testing.T) {
 			if got := readFileString(t, profile); got != want {
 				t.Fatalf("second run changed %s: %q, want %q", tt.want, got, want)
 			}
-			if !strings.Contains(again, "PATH is already configured in "+profile) {
-				t.Errorf("second run output missing already-configured message\noutput: %s", again)
+			for _, msg := range []string{current, "Future terminals: open a new terminal", "PATH is already configured in " + profile} {
+				if !strings.Contains(again, msg) {
+					t.Errorf("second run output missing %q\noutput: %s", msg, again)
+				}
 			}
 		})
 	}
@@ -483,13 +489,18 @@ func TestInstallScriptPathSetupRefusesSymlinkedStartupFile(t *testing.T) {
 		t.Fatalf("%s is no longer a symlink (err=%v)", profile, err)
 	}
 	line := `export PATH="` + dir + `:$PATH" ` + installPathMark
-	for _, msg := range []string{profile, line, `Current terminal: export PATH="` + dir + `:$PATH"`} {
+	for _, msg := range []string{
+		"Add this line to " + profile + ", then open a new terminal:\n  " + line,
+		`Current terminal: export PATH="` + dir + `:$PATH"`,
+	} {
 		if !strings.Contains(out, msg) {
 			t.Errorf("output missing %q\noutput: %s", msg, out)
 		}
 	}
-	if strings.Contains(out, "PATH was added") {
-		t.Errorf("output claims PATH was added through a symlink\noutput: %s", out)
+	for _, claim := range []string{"PATH was added", "Future terminals"} {
+		if strings.Contains(out, claim) {
+			t.Errorf("output claims %q although nothing was written\noutput: %s", claim, out)
+		}
 	}
 }
 
@@ -518,6 +529,26 @@ func TestInstallScriptPathSetupRefusesSymlinkedFolderUnderHome(t *testing.T) {
 	}
 }
 
+func TestInstallScriptPathSetupPutsDirOnProcessPathWhenAlreadyConfigured(t *testing.T) {
+	home := t.TempDir()
+	dir := filepath.Join(home, ".local", "bin")
+	runInstallPathSetup(t, home, "/bin/zsh", "darwin", "/usr/bin:/bin", dir)
+
+	script, err := filepath.Abs(filepath.Join("..", "..", "scripts", "install.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("bash", "-c", `source "$1"; setup_colors; OS=darwin; ensure_install_dir_on_path "$2" >/dev/null; printf '%s' "$PATH"`, "_", script, dir)
+	cmd.Env = []string{"HOME=" + home, "SHELL=/bin/zsh", "PATH=/usr/bin:/bin", "TERM=dumb"}
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("second run failed: %v\noutput: %s", err, out)
+	}
+	if got, want := string(out), dir+":/usr/bin:/bin"; got != want {
+		t.Fatalf("process PATH after already-configured run = %q, want %q", got, want)
+	}
+}
+
 func TestInstallScriptPathSetupKeepsFileWithoutTrailingNewline(t *testing.T) {
 	home := t.TempDir()
 	dir := filepath.Join(home, ".local", "bin")
@@ -535,14 +566,30 @@ func TestInstallScriptPathSetupKeepsFileWithoutTrailingNewline(t *testing.T) {
 }
 
 func TestInstallScriptPathSetupRefusesUnsafeDir(t *testing.T) {
-	for _, tc := range []struct{ shell, dir string }{
-		{"/bin/zsh", `/opt/we"ird/bin`},
-		{"/bin/zsh", "/opt/$HOME/bin"},
-		{"/bin/zsh", "/opt/back`tick/bin"},
-		{"/usr/bin/fish", "/opt/it's/bin"},
+	for _, tc := range []struct{ shell, dir, current string }{
+		{"/bin/zsh", `/opt/we"ird/bin`, `export PATH='/opt/we"ird/bin':"$PATH"`},
+		{"/bin/zsh", "/opt/$HOME/bin", `export PATH='/opt/$HOME/bin':"$PATH"`},
+		{"/bin/zsh", "/opt/back`tick/bin", "export PATH='/opt/back`tick/bin':\"$PATH\""},
+		{"/usr/bin/fish", "/opt/it's/bin", `set -gx PATH '/opt/it\'s/bin' $PATH`},
+		{"/usr/bin/fish", `/opt/back\slash/bin`, `set -gx PATH '/opt/back\\slash/bin' $PATH`},
 	} {
 		home := t.TempDir()
 		out := runInstallPathSetup(t, home, tc.shell, "linux", "/usr/bin:/bin", tc.dir)
+		profile := filepath.Join(home, ".zshrc")
+		if strings.HasSuffix(tc.shell, "fish") {
+			profile = filepath.Join(home, ".config", "fish", "conf.d", "gentle-ai.fish")
+		}
+		for _, msg := range []string{
+			"Current terminal: " + tc.current,
+			"Add this line to " + profile + ", then open a new terminal:\n  " + tc.current + " " + installPathMark,
+		} {
+			if !strings.Contains(out, msg) {
+				t.Errorf("%s %q: output missing %q\noutput: %s", tc.shell, tc.dir, msg, out)
+			}
+		}
+		if strings.Contains(out, "Future terminals") {
+			t.Errorf("%s %q: output claims future terminals work\noutput: %s", tc.shell, tc.dir, out)
+		}
 		entries, err := os.ReadDir(home)
 		if err != nil {
 			t.Fatal(err)
@@ -622,8 +669,11 @@ func TestWindowsInstallScriptPersistsUserPath(t *testing.T) {
 		}
 	}
 	install := powershellFunction(t, script, "Install-ViaGo")
-	if !strings.Contains(install, "Add-UserPathEntry -Directory $gobin") {
-		t.Error("Install-ViaGo must persist GOBIN with Add-UserPathEntry")
+	if !strings.Contains(install, "Add-InstallDirToPath -Directory $gobin") {
+		t.Error("Install-ViaGo must persist GOBIN with Add-InstallDirToPath")
+	}
+	if !strings.Contains(powershellFunction(t, script, "Add-InstallDirToPath"), "Add-UserPathEntry -Directory $Directory") {
+		t.Error("Add-InstallDirToPath must persist the directory with Add-UserPathEntry")
 	}
 	if strings.Contains(script, "Add it to your PATH environment variable.") {
 		t.Error("scripts/install.ps1 still prints the old manual PATH hint")
@@ -674,5 +724,42 @@ foreach ($c in $cases) {
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("Add-UserPathEntry results:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// TestWindowsInstallScriptSkipsDirAlreadyOnSessionPath pins S6 on Windows: a
+// directory the session already resolves (Machine PATH, $PROFILE) is neither
+// written to HKCU nor reported.
+func TestWindowsInstallScriptSkipsDirAlreadyOnSessionPath(t *testing.T) {
+	pwsh, err := exec.LookPath("pwsh")
+	if err != nil {
+		t.Skip("pwsh is not installed")
+	}
+	script := readWindowsInstallScript(t)
+	harness := powershellFunction(t, script, "Add-UserPathEntry") + powershellFunction(t, script, "Add-InstallDirToPath") + `
+function Get-UserEnv { param([string]$Key) return 'C:\a' }
+function Set-UserEnv { param([string]$Key, [string]$Value) $script:writes++ }
+function Write-Success { param([string]$Message) Write-Host $Message }
+$sep = [IO.Path]::PathSeparator
+foreach ($session in @('/Users/u/go/bin', '/USERS/U/GO/BIN')) {
+  $script:writes = 0
+  $env:PATH = ($session + $sep + '/usr/bin')
+  $before = $env:PATH
+  $output = (Add-InstallDirToPath -Directory '/Users/u/go/bin' *>&1 | Out-String).Trim()
+  Write-Output ('writes={0}|output=[{1}]|unchanged={2}' -f $script:writes, $output, ($env:PATH -eq $before))
+}
+`
+	harnessPath := filepath.Join(t.TempDir(), "harness.ps1")
+	if err := os.WriteFile(harnessPath, []byte(harness), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command(pwsh, "-NoProfile", "-NonInteractive", "-File", harnessPath).CombinedOutput()
+	if err != nil {
+		t.Fatalf("pwsh harness failed: %v\noutput: %s", err, out)
+	}
+	got := strings.TrimSpace(strings.ReplaceAll(string(out), "\r\n", "\n"))
+	want := "writes=0|output=[]|unchanged=True\nwrites=0|output=[]|unchanged=True"
+	if got != want {
+		t.Fatalf("dir already on session PATH:\n%s\nwant:\n%s", got, want)
 	}
 }

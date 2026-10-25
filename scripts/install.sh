@@ -683,79 +683,101 @@ profile_state() {
     if [ -w "$folder" ]; then echo "absent"; else echo "not-writable"; fi
 }
 
+# Quotes value for a single-quoted shell word: POSIX sh closes and reopens the
+# quotes around a ', fish escapes ' and \ inside them.
+shell_single_quote() {
+    local style="$1" value="$2" quoted="" ch i
+    for ((i = 0; i < ${#value}; i++)); do
+        ch="${value:i:1}"
+        case "$style:$ch" in
+            "sh:'") quoted+="'\\''" ;;
+            "fish:'"|"fish:\\") quoted+="\\${ch}" ;;
+            *) quoted+="$ch" ;;
+        esac
+    done
+    printf "'%s'" "$quoted"
+}
+
 # Puts dir on PATH for future terminals by appending one marked line to the
-# shell startup file. Writes nothing when dir is already on PATH.
+# shell startup file. Writes nothing when dir is already on PATH. A dir that
+# cannot be written verbatim (quotes, $, backticks) is only printed, quoted.
 ensure_install_dir_on_path() {
     local dir="${1%/}"
     [ -n "$dir" ] || return 0
     path_has_dir "$dir" && return 0
 
-    local profile line
+    local profile command reason=""
     profile="$(shell_profile_for)"
     case "$profile" in
         *.fish)
             case "$dir" in
                 *"'"*|*"\\"*|*$'\n'*)
-                    warn "${dir} is not on your PATH and cannot be added safely to ${profile}; add it manually."
-                    return 0
+                    reason="unsafe path"
+                    command="set -gx PATH $(shell_single_quote fish "$dir") \$PATH"
                     ;;
+                *) command="set -gx PATH '${dir}' \$PATH" ;;
             esac
-            line="set -gx PATH '${dir}' \$PATH ${PATH_SETUP_MARK}"
             ;;
         *)
             case "$dir" in
                 *'"'*|*"\\"*|*'$'*|*'`'*|*$'\n'*)
-                    warn "${dir} is not on your PATH and cannot be added safely to ${profile}; add it manually."
-                    return 0
+                    reason="unsafe path"
+                    command="export PATH=$(shell_single_quote sh "$dir"):\"\$PATH\""
                     ;;
+                *) command="export PATH=\"${dir}:\$PATH\"" ;;
             esac
-            line="export PATH=\"${dir}:\$PATH\" ${PATH_SETUP_MARK}"
             ;;
     esac
+    local line="${command} ${PATH_SETUP_MARK}"
 
     echo ""
-    echo -e "Current terminal: ${BOLD}export PATH=\"${dir}:\$PATH\"${NC}"
-    echo "Future terminals: open a new terminal"
+    printf 'Current terminal: %b%s%b\n' "$BOLD" "$command" "$NC"
 
-    if [ -f "$profile" ] && grep -Fxq -- "$line" "$profile" 2>/dev/null; then
+    # Let verify_installation find the binary in this process.
+    export PATH="${dir}:${PATH}"
+
+    if [ -z "$reason" ] && [ -f "$profile" ] && grep -Fxq -- "$line" "$profile" 2>/dev/null; then
+        echo "Future terminals: open a new terminal"
         info "PATH is already configured in ${profile}"
         echo ""
         return 0
     fi
 
-    local state
-    state="$(profile_state "$profile")"
-    case "$state" in
-        absent)
-            # noclobber: never write through a file or link created meanwhile.
-            if mkdir -p -- "$(dirname -- "$profile")" && (set -C; printf '%s\n' "$line" > "$profile") 2>/dev/null; then
-                success "PATH was added to ${profile}"
-            else
-                warn "Could not create ${profile}. Add this line to it:"
-                echo "  ${line}"
-            fi
-            ;;
-        file)
-            local separator=""
-            if [ -s "$profile" ] && [ -n "$(tail -c 1 -- "$profile")" ]; then
-                separator=$'\n'
-            fi
-            if [ ! -L "$profile" ] && printf '%s%s\n' "$separator" "$line" >> "$profile"; then
-                success "PATH was added to ${profile}"
-            else
-                warn "Could not edit ${profile}. Add this line to it:"
-                echo "  ${line}"
-            fi
-            ;;
-        *)
-            warn "${profile} was not edited (${state}). Add this line to it:"
-            echo "  ${line}"
-            ;;
-    esac
-    echo ""
+    if [ -z "$reason" ]; then
+        case "$(profile_state "$profile")" in
+            absent)
+                # noclobber: never write through a file or link created meanwhile.
+                if mkdir -p -- "$(dirname -- "$profile")" && (set -C; printf '%s\n' "$line" > "$profile") 2>/dev/null; then
+                    echo "Future terminals: open a new terminal"
+                    success "PATH was added to ${profile}"
+                    echo ""
+                    return 0
+                fi
+                reason="could not create it"
+                ;;
+            file)
+                local separator=""
+                if [ -s "$profile" ] && [ -n "$(tail -c 1 -- "$profile")" ]; then
+                    separator=$'\n'
+                fi
+                if [ ! -L "$profile" ] && printf '%s%s\n' "$separator" "$line" >> "$profile"; then
+                    echo "Future terminals: open a new terminal"
+                    success "PATH was added to ${profile}"
+                    echo ""
+                    return 0
+                fi
+                reason="could not edit it"
+                ;;
+            *)
+                reason="$(profile_state "$profile")"
+                ;;
+        esac
+    fi
 
-    # Let verify_installation find the binary in this process.
-    export PATH="${dir}:${PATH}"
+    warn "${profile} was not edited (${reason})."
+    echo "Add this line to ${profile}, then open a new terminal:"
+    printf '  %s\n' "$line"
+    echo ""
 }
 
 # ============================================================================

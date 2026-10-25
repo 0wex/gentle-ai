@@ -135,12 +135,19 @@ function Install-ViaGo {
     }
     Write-Success "Installed $BINARY_NAME from source via go install"
 
-    if ((Add-UserPathEntry -Directory $gobin) -eq "added") {
-        Write-Host ""
-        Write-Host ("Current terminal: {0} was added to PATH" -f $gobin)
-        Write-Host "Future terminals: open a new terminal"
-        Write-Success ("PATH was added to the user environment (HKCU\Environment Path): {0}" -f $gobin)
-    }
+    Add-InstallDirToPath -Directory $gobin
+}
+
+# Puts the install dir on PATH for this session and future terminals, and says
+# where. Prints nothing when the session already resolves the directory.
+function Add-InstallDirToPath {
+    param([string]$Directory)
+
+    if ((Add-UserPathEntry -Directory $Directory) -ne "added") { return }
+    Write-Host ""
+    Write-Host ("Current terminal: {0} was added to PATH" -f $Directory)
+    Write-Host "Future terminals: open a new terminal"
+    Write-Success ("PATH was added to the user environment (HKCU\Environment Path): {0}" -f $Directory)
 }
 
 # Reads a user environment variable as stored, keeping %VAR% references
@@ -196,9 +203,10 @@ public static extern IntPtr SendMessageTimeout(
     [Win32.GentleAiNativeMethods]::SendMessageTimeout($hwndBroadcast, $wmSettingChange, [UIntPtr]::Zero, "Environment", 2, 5000, [ref]$result) | Out-Null
 }
 
-# Puts Directory first on the persisted user PATH (HKCU\Environment) when it is
-# not there yet, and on this session's PATH. Returns "added" when the user PATH
-# was written, "present" when it already held Directory (nothing is written).
+# Puts Directory first on the persisted user PATH (HKCU\Environment) and on this
+# session's PATH. Returns "session" when this session already resolves Directory
+# (Machine PATH, $PROFILE): nothing is written. Returns "present" when only the
+# user PATH held it (the session gains it), and "added" when it was written.
 function Add-UserPathEntry {
     param([string]$Directory)
 
@@ -208,6 +216,10 @@ function Add-UserPathEntry {
     }
     $wanted = & $normalize $Directory
 
+    $separator = [string][IO.Path]::PathSeparator
+    $session = @($env:PATH -split [regex]::Escape($separator) | Where-Object { $_ })
+    if (@($session | Where-Object { (& $normalize $_) -eq $wanted }).Count -gt 0) { return "session" }
+
     $current = Get-UserEnv -Key "Path"
     $entries = @()
     if ($current) { $entries = @($current -split ";" | Where-Object { $_ }) }
@@ -216,11 +228,7 @@ function Add-UserPathEntry {
         Set-UserEnv -Key "Path" -Value ((@($Directory) + $entries) -join ";")
     }
 
-    $separator = [string][IO.Path]::PathSeparator
-    $session = @($env:PATH -split [regex]::Escape($separator) | Where-Object { $_ })
-    if (@($session | Where-Object { (& $normalize $_) -eq $wanted }).Count -eq 0) {
-        $env:PATH = ((@($Directory) + $session) -join $separator)
-    }
+    $env:PATH = ((@($Directory) + $session) -join $separator)
 
     if ($present) { return "present" }
     return "added"
