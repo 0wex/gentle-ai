@@ -26,16 +26,18 @@ func TestShellExistingPiTargetDisabledOnWindows(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := openTargetConfiguration(t)
-	// First render, before any key reaches Configure: the reason is already
-	// shown and the generic detection text never appears.
-	if view := m.View(); !strings.Contains(view, "Windows supports Separate install only") || strings.Contains(view, "No Pi agent was detected") {
-		t.Fatalf("first Configure frame lacks the Windows target reason:\n%s", view)
+	// Configure shows a row's description only in the detail panel of the
+	// focused row, and the first frame focuses the persona. The first frame
+	// must already carry the Windows reason as the detection note (no key
+	// has reached the platform hook yet) and never the generic text.
+	if view := m.View(); strings.Contains(view, "No Pi agent was detected") {
+		t.Fatalf("first Configure frame shows the generic detection text:\n%s", view)
 	}
 	if m.shellExperience == nil || m.shellExperience.piNote != shellPlatformTargetNote {
-		t.Fatalf("Windows detection note differs: %+v", m.shellExperience)
+		t.Fatalf("Windows detection note differs on the first frame: %+v", m.shellExperience)
 	}
 	m = experienceFocus(t, m, screens.ShellExperienceInstallTarget, "agent")
-	if view := m.View(); !strings.Contains(view, "Windows supports Separate install only") {
+	if view := m.View(); !strings.Contains(view, "Windows supports Separate install only") || strings.Contains(view, "No Pi agent was detected") {
 		t.Fatalf("existing-Pi row does not show the Windows reason before Continue:\n%s", view)
 	}
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})

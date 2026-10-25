@@ -414,7 +414,7 @@ func CheckUserShellUpdate(ctx context.Context, install UserShellInstall) (UserSh
 		}
 		return update, nil
 	}
-	self, err := os.Executable()
+	self, err := userWindowsExecutable()
 	if err != nil {
 		return update, err
 	}
