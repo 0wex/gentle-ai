@@ -12,7 +12,7 @@ import (
 
 func TestShellInstallerWelcomeOptIn(t *testing.T) {
 	stubShellKernelGate(t)
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", shellTestHome(t))
 	ordinary := NewModel(system.DetectionResult{}, "dev")
 	ordinary.Width, ordinary.Height = 80, 30
 	if ordinary.optionCount() != 12 || strings.Contains(ordinary.View(), "Install Gentle-Shell, our own agent") {
@@ -32,6 +32,7 @@ func TestShellInstallerWelcomeOptIn(t *testing.T) {
 	if m.Screen != ScreenShellInstall || cmd != nil || !strings.Contains(m.View(), "Configure Gentle-Shell experience") {
 		t.Fatal("welcome starts a program or fails to enter the selector")
 	}
+	m = shellHostCodeGraph(t, m)
 	final, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnd})
 	m = final.(Model)
 	final, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})

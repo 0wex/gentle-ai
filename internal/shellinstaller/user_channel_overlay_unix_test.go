@@ -1,5 +1,8 @@
 //go:build linux && amd64
 
+// The overlay exists only on Linux amd64 (user_channel_overlay_unix.go);
+// user_channel_overlay_darwin_test.go pins the macOS full-reconfigure fallback.
+
 package shellinstaller
 
 import (

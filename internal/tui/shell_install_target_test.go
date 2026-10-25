@@ -22,7 +22,7 @@ func openTargetConfiguration(t *testing.T) Model {
 func restrictedAgentHome(t *testing.T) string {
 	t.Helper()
 	t.Setenv("NPM_CONFIG_PREFIX", "")
-	home := t.TempDir()
+	home := shellTestHome(t)
 	if err := os.Chmod(home, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func restrictedAgentHome(t *testing.T) string {
 
 func TestShellAgentReuseRequiresDetection(t *testing.T) {
 	t.Setenv("NPM_CONFIG_PREFIX", "")
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", shellTestHome(t))
 	m := openTargetConfiguration(t)
 	m = experienceFocus(t, m, screens.ShellExperienceInstallTarget, "agent")
 	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -69,6 +69,7 @@ func TestShellAgentReuseOption(t *testing.T) {
 	if m.shellExperience.mode != "agent" || m.shellExperience.choice != "agent" {
 		t.Fatalf("agent reuse was not selected: %+v", m.shellExperience)
 	}
+	m = shellHostCodeGraph(t, m)
 	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnd})
 	m = next.(Model)
 	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -78,6 +79,7 @@ func TestShellAgentReuseOption(t *testing.T) {
 		t.Fatalf("agent reuse request differs: %+v", request)
 	}
 	// Main preview is part of the same selections now.
+	skipDarwinMainPreview(t)
 	restrictedAgentHome(t)
 	main := openTargetConfiguration(t)
 	main = experienceFocus(t, main, screens.ShellExperienceInstallTarget, "agent")
