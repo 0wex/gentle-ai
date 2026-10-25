@@ -470,7 +470,7 @@ func userPublishManifest(ctx context.Context, root, prefix, agent string, manife
 	}
 	userRecordPublishedShell(manifest)
 	if manifest.Mode == "separate" {
-		if err := PublishUserShellLauncher(manifest.Destination); err != nil {
+		if _, err := PublishUserShellLauncher(manifest.Destination); err != nil {
 			return result, fmt.Errorf("installation published but launcher registration failed: %w", err)
 		}
 	}
