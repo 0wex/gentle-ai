@@ -2,6 +2,7 @@ package shellinstaller
 
 import (
 	"encoding/json"
+	"errors"
 	"runtime"
 )
 
@@ -45,10 +46,24 @@ func userQualifiedMainExperience(profile *UserExperience) bool {
 		profile.SDKSource == "main-preview" && profile.GGA != "on"
 }
 
-// Both qualified distributions share the canonical private writers.
-func userQualifiedPrivateChoices(profile *UserExperience) bool {
-	return userQualifiedStockExperience(profile) || userQualifiedMainExperience(profile)
+// macOS arm64 Stable has no native runtime, but the darwin flow stages every
+// base and private preference through the same canonical writers as Linux.
+// CodeGraph ON and Main preview still have no darwin producer.
+func userQualifiedDarwinExperience(profile *UserExperience) bool {
+	return profile != nil && runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" &&
+		profile.SDKSource != "main-preview" && profile.GGA != "on" && profile.CodeGraph != "on"
 }
+
+// Every qualified distribution shares the canonical private writers.
+func userQualifiedPrivateChoices(profile *UserExperience) bool {
+	return userQualifiedStockExperience(profile) || userQualifiedMainExperience(profile) || userQualifiedDarwinExperience(profile)
+}
+
+// The TUI names these refusals verbatim; the CLI has no flag that selects them.
+var (
+	errUserDarwinCodeGraph = errors.New("CodeGraph is not available on macOS yet; turn CodeGraph off to install")
+	errUserDarwinMain      = errors.New("Main preview is not available on macOS yet; choose Stable to install")
+)
 
 // The legacy authenticated worker acquires and installs GGA with its own setup
 // instructions, so GGA ON keeps the same private writers on Linux amd64. The
@@ -63,6 +78,9 @@ func userValidateMainExperience(profile *UserExperience) error {
 	}
 	if runtime.GOOS == "windows" {
 		return nil // The Windows native installer consumes the Main channel.
+	}
+	if runtime.GOOS == "darwin" {
+		return errUserDarwinMain
 	}
 	return experienceError("SDK Main + stock provider is qualified on Linux amd64 today; macOS support is being completed")
 }
@@ -79,10 +97,11 @@ func userExperienceSupported(profile *UserExperience) error {
 	if profile.SDKSource == "main-preview" {
 		return userValidateMainExperience(profile)
 	}
-	if (profile.GlobalRDD != "" || profile.Context7 != "" || profile.StrictTDD != "") && runtime.GOOS != "windows" && !userQualifiedStockExperience(profile) && !userQualifiedLegacyExperience(profile) {
-		return experienceError("selected additional experience preferences require a compatible installed runtime")
+	if profile.CodeGraph == "on" && runtime.GOOS == "darwin" {
+		return errUserDarwinCodeGraph
 	}
-	if profile.CodeGraph != "" && runtime.GOOS != "windows" && !userQualifiedStockExperience(profile) && !userQualifiedLegacyExperience(profile) {
+	qualified := userQualifiedStockExperience(profile) || userQualifiedLegacyExperience(profile) || userQualifiedDarwinExperience(profile)
+	if (profile.GlobalRDD != "" || profile.Context7 != "" || profile.StrictTDD != "" || profile.CodeGraph != "") && runtime.GOOS != "windows" && !qualified {
 		return experienceError("selected additional experience preferences require a compatible installed runtime")
 	}
 	if profile.GGA != "" && profile.GGA != "off" && !userQualifiedStockExperience(profile) && !userQualifiedLegacyExperience(profile) {
