@@ -245,8 +245,9 @@ func userCreateLauncherProfile(path, line string) error {
 }
 
 // userRemoveLauncherPath removes exactly our marked lines from every startup
-// file the choice could have named. A shared startup file is never deleted;
-// only our own fish file is, once nothing else is left in it.
+// file the choice could have named. A file left exactly empty (0 bytes) is
+// deleted, and so is our own fish file once nothing else is left in it; a file
+// with any other content is always kept.
 func userRemoveLauncherPath(home string) error {
 	candidates := userLauncherHomeCandidates(home)
 	for _, paths := range userLauncherProfileFiles(runtime.GOOS, os.Getenv, home) {
@@ -268,7 +269,7 @@ func userRemoveLauncherPath(home string) error {
 			continue
 		}
 		text := strings.Join(kept, "\n")
-		if filepath.Base(path) == userLauncherFishFile && text == "" {
+		if text == "" || filepath.Base(path) == userLauncherFishFile && strings.TrimSpace(text) == "" {
 			if err := os.Remove(path); err != nil {
 				return err
 			}

@@ -86,7 +86,8 @@ func userShellLauncherNote(report userShellLauncherReport) string {
 	if len(published) > 0 {
 		lines = append([]string{fmt.Sprintf("Commands: %s", strings.Join(published, " and "))}, lines...)
 	}
-	if report.LauncherDir != "" && !report.DirOnPath {
+	// Without a served launcher no PATH step was planned and none is shown.
+	if report.LauncherDir != "" && !report.DirOnPath && report.ProfileState != "" {
 		lines = append(lines, report.LauncherDir+" is not on this terminal's PATH.", "Current terminal: "+userLauncherPathCommand(report.Fish))
 		switch report.ProfileState {
 		case userLauncherProfileAdded:

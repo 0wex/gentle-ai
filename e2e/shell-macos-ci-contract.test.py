@@ -199,6 +199,17 @@ class MacOSQualificationContract(unittest.TestCase):
             os.makedirs(os.path.join(home, '.local/bin'))
             link = os.path.join(home, '.local/bin/gentle-shell')
             os.symlink(binding, link)
+            with self.assertRaises(failure):
+                home_launcher(home, separate)  # Without SHELL, ~/.profile carries the PATH line.
+            profile = os.path.join(home, '.profile')
+            line = 'export PATH="$HOME/.local/bin:$PATH" # gentle-ai: gentle-shell launcher\n'
+            for wrong in ['', line + line, '# mine\n' + line, line.rstrip('\n')]:
+                with open(profile, 'w') as handle:
+                    handle.write(wrong)
+                with self.assertRaises(failure):
+                    home_launcher(home, separate)  # Exactly our one marked line, nothing else.
+            with open(profile, 'w') as handle:
+                handle.write(line)
             self.assertEqual(home_launcher(home, separate), ['.local/bin/gentle-shell'])
             gs = os.path.join(home, '.local/bin/gs')
             os.symlink(binding, gs)  # `gs` is published unless the name is occupied.

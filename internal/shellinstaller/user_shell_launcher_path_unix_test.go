@@ -335,7 +335,7 @@ func TestRemoveUserShellLauncherRemovesThePathLine(t *testing.T) {
 			t.Fatalf("profile after uninstall = %q", got)
 		}
 	})
-	t.Run("never deletes a shared startup file", func(t *testing.T) {
+	t.Run("deletes a startup file left exactly empty", func(t *testing.T) {
 		target := launcherTestTarget(t)
 		launcherShellEnv(t, "/bin/zsh")
 		profile := filepath.Join(os.Getenv("HOME"), ".zshrc")
@@ -345,7 +345,25 @@ func TestRemoveUserShellLauncherRemovesThePathLine(t *testing.T) {
 		if err := RemoveUserShellLauncher(target); err != nil {
 			t.Fatal(err)
 		}
-		if got := readProfile(t, profile); got != "" {
+		if _, err := os.Lstat(profile); !os.IsNotExist(err) {
+			t.Fatalf("startup file holding only our line kept after uninstall: %v", err)
+		}
+	})
+	t.Run("keeps a startup file with any other content", func(t *testing.T) {
+		target := launcherTestTarget(t)
+		launcherShellEnv(t, "/bin/zsh")
+		profile := filepath.Join(os.Getenv("HOME"), ".zshrc")
+		if _, err := PublishUserShellLauncher(target); err != nil {
+			t.Fatal(err)
+		}
+		// A lone blank line is the user's content, not ours.
+		if err := os.WriteFile(profile, []byte("\n"+readProfile(t, profile)), 0644); err != nil {
+			t.Fatal(err)
+		}
+		if err := RemoveUserShellLauncher(target); err != nil {
+			t.Fatal(err)
+		}
+		if got := readProfile(t, profile); got != "\n" {
 			t.Fatalf("profile after uninstall = %q", got)
 		}
 	})
@@ -400,6 +418,35 @@ func TestRemoveUserShellLauncherRemovesThePathLine(t *testing.T) {
 			t.Fatalf("linked profile edited on uninstall: %q", got)
 		}
 	})
+}
+
+// With every name occupied no launcher is served: nothing is written and no
+// PATH guidance is shown.
+func TestPublishUserShellLauncherAllOccupiedShowsNoPathGuidance(t *testing.T) {
+	target := launcherTestTarget(t)
+	launcherShellEnv(t, "/bin/zsh")
+	for _, name := range userShellLauncherNames {
+		if err := os.MkdirAll(filepath.Dir(launcherLink(t, name)), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(launcherLink(t, name), []byte("#!/bin/sh\n"), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	report, err := PublishUserShellLauncher(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(filepath.Join(os.Getenv("HOME"), ".zshrc")); !os.IsNotExist(err) {
+		t.Fatalf("profile written with every name occupied: %v", err)
+	}
+	note := userShellLauncherNote(report)
+	if strings.Contains(note, "PATH") || strings.Contains(note, "startup file") {
+		t.Fatalf("PATH guidance shown with every name occupied:\n%s", note)
+	}
+	if strings.Count(note, "is occupied by") != 2 {
+		t.Fatalf("occupied lines missing:\n%s", note)
+	}
 }
 
 // macOS bash reads exactly one login file; creating ~/.bash_profile would hide
