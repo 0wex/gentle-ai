@@ -24,7 +24,7 @@ The main `gentle-ai` menu entry **Install Gentle-Shell, our own agent** installs
 | Background subagents, Strict TDD | Supported, ON or OFF (`config/background-subagents.json`, `config/strict-tdd.json`, both with their `schema`). |
 | Global RDD | Supported, ON or OFF (`home/.gentle-ai/state.json` `rdd_mode`). |
 | Context7 | Supported, ON or OFF (`agent/mcp.json` `context7` entry with `url`, `enabled` and `exposure`). |
-| CodeGraph | OFF only. ON refuses at Continue: "CodeGraph is not available on macOS yet; turn CodeGraph off to install". The menu preselects ON, so turn it off first. |
+| CodeGraph | Supported, ON (the default) or OFF. ON stages the pinned `@colbymchenry/codegraph` 1.4.1 darwin-arm64 library under `runtime/codegraph`, records `"codegraph": true` in `installation.json` and puts `runtime/codegraph/bin/codegraph` on the launched Separate shell's PATH. |
 | SDK source | Stable only. Main preview refuses when selected: "Main preview is not available on macOS yet; choose Stable to install". |
 
 A Stable-to-Main reconfigure on macOS keeps the full reinstall path; the in-place channel overlay is Linux amd64 only.
@@ -93,6 +93,13 @@ Each archive pin equals its publisher's checksum. Member pins are derived from t
 | `gentle-ai` member | 16047186 | `18a9f7fae55d85c95684b6d512a4a148d0cb24a856325f72573c34caf65159eb` |
 | `fd-v10.5.0-aarch64-apple-darwin.tar.gz` | 1334374 | `b67e1836c468e42e411984b56e52fa7abec08c2bd22c867398e7cc134aac5e12` |
 | `ripgrep-15.2.0-aarch64-apple-darwin.tar.gz` | 1764284 | `3750b2e93f37e0c692657da574d7019a101c0084da05a790c83fd335bad973e4` |
+
+CodeGraph ON adds two npm archives of the same 1.4.1 release as Linux, each pinned to its registry `dist.integrity` (SHA-512). The bundled `node` member of the darwin-arm64 archive (120573328 bytes) is never written; the library runs on the pinned Node above.
+
+| Artifact (registry.npmjs.org) | Bytes | Integrity |
+| --- | --- | --- |
+| `@colbymchenry/codegraph-1.4.1.tgz` | 210435 | `sha512-xZayboJt6T3QBzBsBsI0eJ3J/tN4vYs6LMuvrxJVdM71yQFjrFKFeV3KsbicAgkj6AHnTXxUNk26g9BYwkNMgg==` |
+| `@colbymchenry/codegraph-darwin-arm64-1.4.1.tgz` | 50996796 | `sha512-USSpExjuxZWN0OeNexZp2V5fCfOI4ZekqE79CJiBdGdPbqGTB+857ImIqzWGyF/rAyyED94Wc0Cd82t+uWD30w==` |
 
 Stock Pi and its npm graph come from the same frozen lock as Linux, with the darwin arm64 optional packages selected.
 
