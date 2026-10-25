@@ -334,10 +334,15 @@ func TestUserWindowsChannelOverlayMainToStable(t *testing.T) {
 	if _, err := userWindowsManifestRead(root); err != nil {
 		t.Fatalf("restored manifest readback refused: %v", err)
 	}
-	// Sequence: Main overlay provisioning, then the pre-rebind verify, then
-	// the commit verification; the Main snapshot is acquired exactly once.
-	if len(provisions) != 3 || provisions[0] != "overlay" || provisions[1] != "verify" || provisions[2] != "verify" {
+	// Provisioning sequence: the Main overlay, then the pre-rebind
+	// composition verify of the restored package. The integrity gate and the
+	// commit verification of each overlay run through the tree verifier
+	// (verifies), not the provisioner. The Main snapshot is acquired once.
+	if len(provisions) != 2 || provisions[0] != "overlay" || provisions[1] != "verify" {
 		t.Fatalf("Main -> Stable provisioning differs: %v", provisions)
+	}
+	if verifies != 4 {
+		t.Fatalf("two overlays ran %d tree verifications; want a gate and a commit check each", verifies)
 	}
 	if snapshotCalls != 1 {
 		t.Fatalf("Main -> Stable acquired the snapshot %d times", snapshotCalls)

@@ -28,6 +28,11 @@ const managedInstallDisplayTarget = `~\AppData\Local\gentle-shell\install`
 // user, with a canonical manifest.json bound to selection.json and the
 // retained lock. Field order mirrors the product manifest so the canonical
 // byte comparison holds; the fixture is validated through real discovery.
+// The preference files are the ones the Windows stage writes for the default
+// TUI profile (persona, background, Strict TDD, Global RDD state, Context7
+// MCP; no CodeGraph runtime), so the loaded profile is a real install's.
+// Installs that lack an optional preference file are not modelled here:
+// TestWindowsChannelPreferenceAndCheckRouting covers that case.
 func platformManagedInstallFixture(t *testing.T) (home, target string, ok bool) {
 	t.Helper()
 	home = t.TempDir()
@@ -42,7 +47,7 @@ func platformManagedInstallFixture(t *testing.T) (home, target string, ok bool) 
 	}
 	windowsTestPrivateDir(t, base)
 	windowsTestPrivateDir(t, target)
-	for _, dir := range []string{"config", "agent", "source"} {
+	for _, dir := range []string{"config", "agent", "source", "home", `home\.gentle-ai`} {
 		if err := os.Mkdir(filepath.Join(target, dir), 0700); err != nil {
 			t.Fatal(err)
 		}
@@ -69,6 +74,9 @@ func platformManagedInstallFixture(t *testing.T) (home, target string, ok bool) 
 	for relative, data := range map[string][]byte{
 		`config\persona.json`:              []byte(`{"mode":"gentleman"}`),
 		`config\background-subagents.json`: []byte(`{"schema":"gentle-pi.background-subagents/v1","policy":"on"}`),
+		`config\strict-tdd.json`:           []byte(`{"schema":"gentle-pi.strict-tdd/v1","policy":"on"}`),
+		`home\.gentle-ai\state.json`:       []byte(`{"rdd_mode":"on"}`),
+		`agent\mcp.json`:                   []byte(`{"mcpServers":{"context7":{"url":"https://mcp.context7.com/mcp","enabled":true,"exposure":"codemode"}}}`),
 		`source\package-lock.json`:         lock,
 		`selection.json`:                   selection,
 		`manifest.json`:                    append(encoded, '\n'),
@@ -77,8 +85,12 @@ func platformManagedInstallFixture(t *testing.T) (home, target string, ok bool) 
 			t.Fatal(err)
 		}
 	}
-	if got := shellinstaller.DiscoverUserShellInstalls(home); len(got) != 1 || got[0].Target != target || got[0].Mode != "separate" {
+	got := shellinstaller.DiscoverUserShellInstalls(home)
+	if len(got) != 1 || got[0].Target != target || got[0].Mode != "separate" {
 		t.Fatalf("Windows fixture is not a discoverable managed installation: %+v", got)
+	}
+	if profile, err := shellinstaller.LoadUserShellExperience(got[0]); err != nil || profile.Persona != "gentleman" || profile.StrictTDD != "on" || profile.GlobalRDD != "on" || profile.Context7 != "on" || profile.CodeGraph != "" {
+		t.Fatalf("Windows fixture profile does not load as the default install: %+v %v", profile, err)
 	}
 	return home, target, true
 }

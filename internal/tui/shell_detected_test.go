@@ -170,7 +170,7 @@ func TestShellUninstallSeparateKeepsBackup(t *testing.T) {
 	}
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyDown})  // Back is first; Uninstall is last.
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // Uninstall.
-	if !m.shellManage.confirm || !strings.Contains(m.View(), "Uninstall (keep backup)") {
+	if m.shellManage == nil || !m.shellManage.confirm || !strings.Contains(m.View(), "Uninstall (keep backup)") {
 		t.Fatalf("uninstall confirmation is missing:\n%s", m.View())
 	}
 	next, uninstallCmd := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
