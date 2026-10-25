@@ -18,13 +18,15 @@ Or run `gentle-ai shell install` with no flags for the installer TUI: Enter revi
 
 The main `gentle-ai` menu entry **Install Gentle-Shell, our own agent** installs Separate into `~/.local/share/gentle-shell/install` and publishes `~/.local/bin/gentle-shell`. On macOS it writes the same canonical preference files as Linux amd64; **Manage → Apply preferences** rewrites those same files in place.
 
+In Manage, a component change (CodeGraph, or any change on an **On my existing Pi** install) shows **COMPONENT CHANGES** and offers **Update installation**: it reinstalls the target with the selected profile, including the preference changes of the same summary. Preference-only changes keep **Apply preferences**. **On my existing Pi** never offers CodeGraph ON: choosing it turns CodeGraph off with "CodeGraph needs a Separate install; it stays off for On my existing Pi".
+
 | Option | macOS |
 | --- | --- |
 | Persona: Gentleman, Neutral, Custom | Supported. Custom leaves `config/persona.json` untouched. |
 | Background subagents, Strict TDD | Supported, ON or OFF (`config/background-subagents.json`, `config/strict-tdd.json`, both with their `schema`). |
 | Global RDD | Supported, ON or OFF (`home/.gentle-ai/state.json` `rdd_mode`). |
 | Context7 | Supported, ON or OFF (`agent/mcp.json` `context7` entry with `url`, `enabled` and `exposure`). |
-| CodeGraph | Supported, ON (the default) or OFF. ON stages the pinned `@colbymchenry/codegraph` 1.4.1 darwin-arm64 library under `runtime/codegraph`, records `"codegraph": true` in `installation.json` and puts `runtime/codegraph/bin/codegraph` on the launched Separate shell's PATH. |
+| CodeGraph | Supported, ON (the default) or OFF. ON stages the pinned `@colbymchenry/codegraph` 1.4.1 darwin-arm64 library under `runtime/codegraph`, records `"codegraph": true` in `installation.json` and puts `runtime/codegraph/bin/codegraph` on the launched Separate shell's PATH. Adding or removing CodeGraph on a managed install uses Manage → Update installation. |
 | SDK source | Stable or Main preview, exactly as on Linux amd64. Main preview keeps stock Pi installed and composes the latest Gentle Shell `main` snapshot as a private package under `runtime/main-sdk` (with the pinned darwin-arm64 stock native member and the `runtime/node_modules -> ../prefix/lib/node_modules` link), then selects it in `agent/settings.json`. `installation.json` records it under `main_sdk`. Every other option above works with either channel. |
 
 ### Switching Stable and Main preview
