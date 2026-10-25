@@ -49,6 +49,8 @@ For Shared, use `--mode shared` and supply `--prefix /owned/selected-prefix --ag
 
 Launch `TARGET/bin/gentle-shell` or `TARGET/bin/pi`. Normal launches have no installer menu; `TARGET/bin/gentle-shell install` reopens it. The installer does not modify PATH or shell files, replace an unrelated `pi`, or require a root installation.
 
+The installer TUI runs the portable direct worker, so it first probes the delegated systemd unit every later launch uses. When that probe fails (for example no `XDG_RUNTIME_DIR=/run/user/UID` or no user manager), the install is refused **before any change**: no target, launcher or registry entry is created. A published installation is recorded in `~/.gentle-ai/shell-installs.json` (0600) for Manage. That directory may be gentle-ai's usual `0755` state directory, but it must be owned by you, not a symlink, and not writable by group or others. If the installation cannot be recorded, the completion output says so; the installation itself is kept.
+
 ## Shared settings: preview before confirming
 
 Inspect prints the selected agent's `settings.json` path and **only** its `packages` and `npmCommand` before/after values, including actual physical paths:
