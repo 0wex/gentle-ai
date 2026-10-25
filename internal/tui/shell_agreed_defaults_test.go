@@ -37,17 +37,8 @@ func TestShellAgreedFreshDefaults(t *testing.T) {
 	if strings.Contains(m.View(), "Inherited") || strings.Contains(m.View(), "ADVANCED") || strings.Contains(m.View(), "GGA provider") {
 		t.Error("fresh menu still inherits or exposes an inactive provider")
 	}
+	// CodeGraph ON reaches the plan on macOS arm64 exactly as on Linux amd64.
 	planned := want
-	if runtime.GOOS == "darwin" {
-		// CodeGraph ON is refused on macOS with its precise reason; the
-		// remaining agreed defaults continue unchanged.
-		refused := experienceKey(experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd}), tea.KeyMsg{Type: tea.KeyEnter})
-		if refused.shellExperience == nil || refused.shellExperience.err == nil || refused.shellExperience.err.Error() != "CodeGraph is not available on macOS yet; turn CodeGraph off to install" {
-			t.Fatalf("macOS CodeGraph ON was not refused precisely: %+v", refused.shellExperience)
-		}
-		m = shellHostCodeGraph(t, m)
-		planned.CodeGraph = "off"
-	}
 	for _, key := range []tea.KeyMsg{{Type: tea.KeyEnd}, {Type: tea.KeyEnter}} {
 		next, cmd = m.Update(key)
 		m = next.(Model)
@@ -105,23 +96,27 @@ func TestShellAgreedDefaultsWithoutCodeGraphReachPlan(t *testing.T) {
 	}
 }
 
-// macOS names Main preview as unavailable when it is chosen, and the channel
-// stays Stable so Continue still reaches the plan.
-func TestShellDarwinMainPreviewRefusedPrecisely(t *testing.T) {
-	if runtime.GOOS != "darwin" {
-		t.Skip("macOS channel boundary")
+// macOS arm64 ships the Main composition: choosing Main preview with every
+// agreed default (CodeGraph ON included) reaches the inspected plan.
+func TestShellDarwinMainPreviewReachesPlan(t *testing.T) {
+	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+		t.Skip("macOS arm64 channel boundary")
 	}
 	m := experienceStart(t)
 	m = experienceFocus(t, m, screens.ShellExperienceSDK, "main-preview")
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	if m.shellExperience.err == nil || m.shellExperience.err.Error() != "Main preview is not available on macOS yet; choose Stable to install" || m.shellExperience.profile.SDKSource == "main-preview" {
-		t.Fatalf("Main preview was not refused precisely: %+v", m.shellExperience)
+	if m.shellExperience.err != nil || m.shellExperience.profile.SDKSource != "main-preview" {
+		t.Fatalf("Main preview was not selected on macOS: %+v", m.shellExperience)
 	}
-	if !strings.Contains(m.View(), "Main preview is not available on macOS yet") {
-		t.Fatalf("refusal is not shown:\n%s", m.View())
+	if strings.Contains(m.View(), "not available on macOS") {
+		t.Fatalf("macOS still names Main preview as unavailable:\n%s", m.View())
 	}
 	_, request := experiencePlan(t, m)
-	if request.Experience == nil || request.Experience.SDKSource == "main-preview" {
-		t.Fatalf("refused channel leaked into the plan: %+v", request.Experience)
+	want := shellinstaller.UserExperience{
+		Persona: "gentleman", BackgroundSubagents: "on", StrictTDD: "on",
+		GlobalRDD: "on", CodeGraph: "on", Context7: "on", GGA: "off", SDKSource: "main-preview",
+	}
+	if request.Experience == nil || *request.Experience != want || request.Mode != "separate" {
+		t.Fatalf("Main preview plan differs: %+v %+v", request, request.Experience)
 	}
 }

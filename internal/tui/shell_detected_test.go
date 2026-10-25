@@ -58,7 +58,7 @@ func addAgentInstall(t *testing.T, home string) string {
 }
 
 func TestShellManageAppliesSDKSourceAsPreference(t *testing.T) {
-	skipDarwinMainPreview(t)
+	skipUnqualifiedMainPreview(t)
 	_, target := managedInstallFixture(t)
 	m := NewModel(system.DetectionResult{}, "detected").WithShellInstaller()
 	m.Width, m.Height = 120, 35

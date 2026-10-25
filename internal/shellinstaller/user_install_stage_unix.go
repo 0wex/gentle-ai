@@ -39,8 +39,8 @@ func userPrepareInstallStage(ctx context.Context, root, mode string, profile *Us
 			return experienceError("Main SDK requires a Separate or agent stage")
 		}
 	}
-	if profile != nil && profile.CodeGraph != "" && (runtime.GOOS != "linux" || runtime.GOARCH != "amd64") && !userQualifiedDarwinExperience(profile) {
-		return experienceError("explicit CodeGraph requires Linux amd64")
+	if profile != nil && profile.CodeGraph != "" && (runtime.GOOS != "linux" || runtime.GOARCH != "amd64") && !userQualifiedDarwinExperience(profile) && !userQualifiedMainExperience(profile) {
+		return experienceError("explicit CodeGraph requires Linux amd64 or macOS arm64")
 	}
 	files, err := userExperienceConfigFiles(profile)
 	if err != nil {

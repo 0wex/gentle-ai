@@ -39,19 +39,28 @@ func userQualifiedStockExperience(profile *UserExperience) bool {
 }
 
 // Main preview delivers the same private preference consumers through the
-// legacy authenticated Main worker, including the CodeGraph runtime staged
-// before the SDK overlay. GGA ON keeps the same refusal as the stock path.
+// authenticated Main worker, including the CodeGraph runtime staged before the
+// SDK overlay. The POSIX flow composes Main identically on Linux amd64 and
+// macOS arm64 (pinned stock native member for each release). GGA ON keeps the
+// same refusal as the stock path.
 func userQualifiedMainExperience(profile *UserExperience) bool {
-	return profile != nil && runtime.GOOS == "linux" && runtime.GOARCH == "amd64" &&
+	return profile != nil && userMainPlatform() &&
 		profile.SDKSource == "main-preview" && profile.GGA != "on"
 }
 
+// userMainPlatform names the POSIX platforms whose shared install flow and
+// owned provisioner compose the Main SDK.
+func userMainPlatform() bool {
+	return (runtime.GOOS == "linux" && runtime.GOARCH == "amd64") || (runtime.GOOS == "darwin" && runtime.GOARCH == "arm64")
+}
+
 // macOS arm64 Stable has no native runtime, but the darwin flow stages every
-// base and private preference through the same canonical writers as Linux.
-// CodeGraph ON and Main preview still have no darwin producer.
+// base and private preference through the same canonical writers as Linux,
+// including the pinned darwin-arm64 CodeGraph library. Main preview is the
+// separate userQualifiedMainExperience qualification.
 func userQualifiedDarwinExperience(profile *UserExperience) bool {
 	return profile != nil && runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" &&
-		profile.SDKSource != "main-preview" && profile.GGA != "on" && profile.CodeGraph != "on"
+		profile.SDKSource != "main-preview" && profile.GGA != "on"
 }
 
 // Every qualified distribution shares the canonical private writers.
@@ -59,11 +68,8 @@ func userQualifiedPrivateChoices(profile *UserExperience) bool {
 	return userQualifiedStockExperience(profile) || userQualifiedMainExperience(profile) || userQualifiedDarwinExperience(profile)
 }
 
-// The TUI names these refusals verbatim; the CLI has no flag that selects them.
-var (
-	errUserDarwinCodeGraph = errors.New("CodeGraph is not available on macOS yet; turn CodeGraph off to install")
-	errUserDarwinMain      = errors.New("Main preview is not available on macOS yet; choose Stable to install")
-)
+// The TUI names this refusal verbatim; the CLI has no flag that selects it.
+var errUserDarwinMain = errors.New("Main preview is qualified on macOS arm64 only; choose Stable to install")
 
 // The legacy authenticated worker acquires and installs GGA with its own setup
 // instructions, so GGA ON keeps the same private writers on Linux amd64. The
@@ -73,7 +79,7 @@ func userQualifiedLegacyExperience(profile *UserExperience) bool {
 }
 
 func userValidateMainExperience(profile *UserExperience) error {
-	if runtime.GOOS == "linux" && runtime.GOARCH == "amd64" {
+	if userMainPlatform() {
 		return nil
 	}
 	if runtime.GOOS == "windows" {
@@ -96,9 +102,6 @@ func userExperienceSupported(profile *UserExperience) error {
 	}
 	if profile.SDKSource == "main-preview" {
 		return userValidateMainExperience(profile)
-	}
-	if profile.CodeGraph == "on" && runtime.GOOS == "darwin" {
-		return errUserDarwinCodeGraph
 	}
 	qualified := userQualifiedStockExperience(profile) || userQualifiedLegacyExperience(profile) || userQualifiedDarwinExperience(profile)
 	if (profile.GlobalRDD != "" || profile.Context7 != "" || profile.StrictTDD != "" || profile.CodeGraph != "") && runtime.GOOS != "windows" && !qualified {
