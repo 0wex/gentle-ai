@@ -305,7 +305,7 @@ func TestShellManagePreferenceOnlyDeltaKeepsApplyPreferences(t *testing.T) {
 // A channel-only delta keeps Apply preferences in Manage and the in-place
 // overlay on Update now; it never becomes a component reconfigure.
 func TestShellManageChannelOnlyDeltaKeepsOverlay(t *testing.T) {
-	skipDarwinMainPreview(t)
+	skipUnqualifiedMainPreview(t)
 	_, target := managedInstallFixture(t)
 	m := openManagedConfiguration(t)
 	m = toggleExperience(t, m, screens.ShellExperienceSDK, "main-preview")

@@ -24,8 +24,8 @@ func TestShellExperienceSDKSourceHandoff(t *testing.T) {
 	}
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyDown})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
-	// Main is offered on Linux amd64 and on Windows (shellMainPlatformError).
-	if (runtime.GOOS != "linux" || runtime.GOARCH != "amd64") && runtime.GOOS != "windows" {
+	// Main is offered on Linux amd64, macOS arm64 and Windows (shellMainPlatformError).
+	if !(runtime.GOOS == "linux" && runtime.GOARCH == "amd64") && !(runtime.GOOS == "darwin" && runtime.GOARCH == "arm64") && runtime.GOOS != "windows" {
 		if m.shellExperience.profile.SDKSource != "stable" || m.shellExperience.err == nil {
 			t.Fatal("unqualified Main choice offered")
 		}

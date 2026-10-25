@@ -91,7 +91,7 @@ func TestShellAgentReuseOption(t *testing.T) {
 	// Main preview is part of the same selections now. Its SDK selection binds
 	// the agent as a private 0700 directory: a stock 0755 agent is refused up
 	// front with the exact fix, and a 0700 agent is admitted.
-	skipDarwinMainPreview(t)
+	skipUnqualifiedMainPreview(t)
 	stock := restrictedAgentHome(t)
 	refused := shellAgentMainSelection(t)
 	if refused.shellExperience == nil || refused.shellPlan != nil || refused.shellExperience.err == nil ||
