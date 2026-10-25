@@ -54,6 +54,8 @@ On an installed Separate target, **Manage → SDK source → Apply preferences**
 
 The installer does not modify PATH or shell files, replace an unrelated `pi`, or require a root installation. It writes pinned `fd` and `rg` (the `aarch64-apple-darwin` builds below) into `AGENT/bin`, which stock Pi prefers over PATH: the private agent (Separate) or the selected `--agent` (Shared). Shared never replaces personal tools: an existing `fd` or `rg` (including links), or an `AGENT/bin` that is not an owned physical `0700`/`0755` directory with clean metadata, refuses at inspect and confirmation before any change.
 
+"On my existing Pi" reuses your Pi agent (`~/.pi/agent`, `0755` as Pi creates it) and follows the same agent checks and rollback as on Linux. See [On my existing Pi](gentle-shell-linux-install.md#on-my-existing-pi-agent-checks-and-rollback). Pi's own `bin/fd` and `bin/rg` must be moved out of `AGENT/bin` first. Every other refusal also happens before any write, and a failure after the first write restores the agent exactly.
+
 ## Undo Shared changes
 
 Use the **actual installed TARGET**, never a prefix or agent:

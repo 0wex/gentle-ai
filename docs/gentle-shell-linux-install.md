@@ -66,6 +66,26 @@ Inspect prints the selected agent's `settings.json` path and **only** its `packa
 
 Shared also writes **two new files** into the selected agent: `AGENT/bin/fd` (fd 10.5.0) and `AGENT/bin/rg` (ripgrep 15.2.0), which stock Pi prefers over PATH. Personal tools are never replaced: an existing `fd` or `rg` (including links), or an `AGENT/bin` that is not an owned physical `0700`/`0755` directory, refuses at inspect and confirmation before any change. Both pinned archives are downloaded and verified in the private stage before the prefix or settings change.
 
+## On my existing Pi: agent checks and rollback
+
+"On my existing Pi" keeps a private prefix and runtime and reuses your Pi agent (`~/.pi/agent`). The agent may be `0755`, as Pi creates it. It must be a directory you own that no other user can write. The install writes `settings.json` (`packages`, `npmCommand`), `mcp.json` when Context7 is selected, and the pinned `bin/fd` and `bin/rg`.
+
+These conditions refuse before anything is written, and the message names the path and the fix:
+
+| Condition | Fix |
+| --- | --- |
+| `AGENT/bin/fd` or `AGENT/bin/rg` already exists (Pi downloads its own on first run) | Move both out of `AGENT/bin`. Pi downloads them again if they are ever missing. |
+| `settings.json` sets `npmCommand` or already declares `gentle-pi` (often left by an earlier attempt) | Remove that key or `packages` entry. |
+| `settings.json` or `mcp.json` is not a JSON object, is a link, has extra hard links, or is writable by other users | Fix the file (`chmod go-w FILE` for permissions). |
+| The agent is writable by other users | `chmod go-w AGENT`. |
+| The agent is a symbolic link | Select its real path instead. |
+| macOS: the agent has an ACL or BSD file flags (immutable, append-only) | `chmod -N AGENT` for an ACL; `chflags nouchg,nouappnd AGENT` for flags. |
+| Main preview with an agent that is not `0700` | `chmod 700 AGENT`, or choose Stable or Separate. |
+
+If the install fails after its first write, the installer puts back the exact bytes, modes and presence of every file it touched in the agent. It also removes its own temporaries and any `bin` directory it created. If the agent was replaced during the install, the installer does not write into it. Instead, the original files are saved beside the target, and the failure message gives their path.
+
+Once the installation is published, the agent is not rolled back. A later failure (readback, cleanup or timeout) is reported, and the agent keeps the bindings the published install records. Uninstall restores the agent from that evidence.
+
 ## Undo Shared changes
 
 Use the **actual installed TARGET**, never a prefix or agent:
