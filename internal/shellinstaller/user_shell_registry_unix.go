@@ -140,6 +140,13 @@ func DiscoverUserShellInstalls(home string) []UserShellInstall {
 	seen := map[string]bool{}
 	var installs []UserShellInstall
 	for _, candidate := range candidates {
+		// Manifests record the canonical destination; a HOME spelled through
+		// a symlink must resolve before the literal comparison below.
+		canonical, err := filepath.EvalSymlinks(candidate.Target)
+		if err != nil {
+			continue
+		}
+		candidate.Target = canonical
 		if seen[candidate.Target] || strings.Contains(filepath.Base(candidate.Target), ".replaced-") {
 			continue
 		}

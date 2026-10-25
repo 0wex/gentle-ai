@@ -3,6 +3,7 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -54,7 +55,7 @@ func experienceFocus(t *testing.T, m Model, control screens.ShellExperienceContr
 
 func experienceStart(t *testing.T) Model {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", shellTestHome(t))
 	m := NewModel(system.DetectionResult{}, "dev").WithShellInstaller()
 	m.Width, m.Height = 120, 30
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
@@ -64,10 +65,32 @@ func experienceStart(t *testing.T) Model {
 	return m
 }
 
+// shellHostCodeGraph turns CodeGraph OFF on macOS, where CodeGraph ON is
+// still refused, so flows written against the agreed defaults keep
+// exercising every other selection natively.
+func shellHostCodeGraph(t *testing.T, m Model) Model {
+	t.Helper()
+	if runtime.GOOS != "darwin" || m.shellExperience == nil || m.shellExperience.profile.CodeGraph != "on" {
+		return m
+	}
+	m = experienceFocus(t, m, screens.ShellExperienceCodeGraph, "")
+	return experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+}
+
+// skipDarwinMainPreview keeps Main preview flows on the platforms that ship
+// its producer; macOS refuses the channel until its runtime is ported.
+func skipDarwinMainPreview(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "darwin" {
+		t.Skip("Main preview is not available on macOS yet")
+	}
+}
+
 // experiencePlan ends configuration and returns the installation plan request.
 func experiencePlan(t *testing.T, m Model) (Model, shellinstaller.UserInstallRequest) {
 	t.Helper()
 	stubShellKernelGate(t)
+	m = shellHostCodeGraph(t, m)
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd})
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
 	if m.shellPlan == nil || m.shellExperience != nil {

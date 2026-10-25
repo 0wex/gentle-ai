@@ -14,6 +14,21 @@ For Shared, use `--mode shared` and supply `--prefix /owned/selected-prefix --ag
 
 Or run `gentle-ai shell install` with no flags for the installer TUI: Enter reviews, `y` confirms and closes the TUI before installation starts, Escape aborts. Launch `TARGET/bin/gentle-shell` or `TARGET/bin/pi`; `TARGET/bin/gentle-shell install` reopens the installer.
 
+## Installing from the gentle-ai TUI
+
+The main `gentle-ai` menu entry **Install Gentle-Shell, our own agent** installs Separate into `~/.local/share/gentle-shell/install` and publishes `~/.local/bin/gentle-shell`. On macOS it writes the same canonical preference files as Linux amd64; **Manage → Apply preferences** rewrites those same files in place.
+
+| Option | macOS |
+| --- | --- |
+| Persona: Gentleman, Neutral, Custom | Supported. Custom leaves `config/persona.json` untouched. |
+| Background subagents, Strict TDD | Supported, ON or OFF (`config/background-subagents.json`, `config/strict-tdd.json`, both with their `schema`). |
+| Global RDD | Supported, ON or OFF (`home/.gentle-ai/state.json` `rdd_mode`). |
+| Context7 | Supported, ON or OFF (`agent/mcp.json` `context7` entry with `url`, `enabled` and `exposure`). |
+| CodeGraph | OFF only. ON refuses at Continue: "CodeGraph is not available on macOS yet; turn CodeGraph off to install". The menu preselects ON, so turn it off first. |
+| SDK source | Stable only. Main preview refuses when selected: "Main preview is not available on macOS yet; choose Stable to install". |
+
+A Stable-to-Main reconfigure on macOS keeps the full reinstall path; the in-place channel overlay is Linux amd64 only.
+
 ## Requirements
 
 | Check | Requirement |

@@ -494,7 +494,9 @@ func (m Model) updateShellManage(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.setScreen(ScreenWelcome)
 		return m, nil
 	}
-	if manage.uninstalled {
+	// Both final summaries promise "Enter: back to menu"; detection reloads
+	// the installed preferences when the operator returns.
+	if manage.uninstalled || manage.applied {
 		if key.String() == "enter" || key.String() == "esc" || key.String() == "ctrl+c" {
 			return backToMenu()
 		}
