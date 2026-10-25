@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"syscall"
 )
 
@@ -101,9 +100,9 @@ func userUnixChannelOverlay(ctx context.Context, req UserInstallRequest) (result
 	if req.Experience == nil || userReconfigureTarget() != root {
 		return UserInstallResult{}, false, nil
 	}
-	// The Main composition runtime is a Linux amd64 qualification; every
-	// other platform keeps its existing full reconfigure flow untouched.
-	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" {
+	// The Main composition runtime is qualified on Linux amd64 and macOS
+	// arm64; every other platform keeps its existing full reconfigure flow.
+	if !userMainPlatform() {
 		return UserInstallResult{}, false, nil
 	}
 	if _, statErr := os.Lstat(root); statErr != nil {

@@ -90,33 +90,41 @@ func assertStableCanonicalFiles(t *testing.T, root string, profile UserExperienc
 	}
 }
 
-// Main preview has no macOS producer yet and stays refused with a precise
-// reason, while Stable never refuses.
-func TestUserDarwinRefusesOnlyUnportedExperience(t *testing.T) {
-	if runtime.GOOS != "darwin" {
-		t.Skip("macOS admission boundary")
-	}
-	base := UserExperience{Persona: "gentleman", BackgroundSubagents: "on", StrictTDD: "on", GlobalRDD: "on", Context7: "on", CodeGraph: "on", GGA: "off"}
-	for _, tt := range []struct {
-		name string
-		edit func(*UserExperience)
-		want string
-	}{
-		{"main-preview", func(p *UserExperience) { p.SDKSource = "main-preview" }, "Main preview is not available on macOS yet; choose Stable to install"},
+// Main preview reuses the Stable private writers on both qualified unix
+// distributions: the TUI defaults (CodeGraph ON) and the all-OFF Custom
+// profile reach physical review and stage the same canonical files. The Main
+// composition itself is produced after the runtime, never by the stage, and
+// the retained Shared prefix keeps refusing Main.
+func TestUserMainPreviewStagesCanonicalFiles(t *testing.T) {
+	skipUnqualifiedStableHost(t)
+	for _, profile := range []UserExperience{
+		{Persona: "gentleman", BackgroundSubagents: "on", StrictTDD: "on", GlobalRDD: "on", Context7: "on", CodeGraph: "on", GGA: "off", SDKSource: "main-preview"},
+		{Persona: "unmanaged", BackgroundSubagents: "off", StrictTDD: "off", GlobalRDD: "off", Context7: "off", CodeGraph: "off", GGA: "off", SDKSource: "main-preview"},
 	} {
-		t.Run(tt.name, func(t *testing.T) {
-			profile := base
-			tt.edit(&profile)
+		t.Run(profile.Persona, func(t *testing.T) {
 			target := filepath.Join(userUnixTempRoot(t), "target")
 			req := UserInstallRequest{Destination: target, Mode: "separate", Experience: &profile}
-			if token, err := InspectUserInstall(req); err == nil || token != "" || err.Error() != tt.want {
-				t.Fatalf("unported selection was not refused precisely: %q, %v", token, err)
-			}
-			if err := userPrepareInstallStage(context.Background(), target, req.Mode, req.Experience); err == nil || err.Error() != tt.want {
-				t.Fatalf("stage admitted an unported selection: %v", err)
+			if token, err := InspectUserInstall(req); err != nil || token == "" {
+				t.Fatalf("Main preview refused at physical review: %q, %v", token, err)
 			}
 			if _, err := os.Lstat(target); !os.IsNotExist(err) {
-				t.Fatal("refused stage created the target")
+				t.Fatal("inspection created the target before consent")
+			}
+			if err := userPrepareInstallStage(context.Background(), target, req.Mode, req.Experience); err != nil {
+				t.Fatalf("Main preview refused at the stage: %v", err)
+			}
+			assertStableCanonicalFiles(t, target, profile)
+			for _, relative := range userUnixOverlayMainPaths {
+				if _, err := os.Lstat(filepath.Join(target, relative)); !os.IsNotExist(err) {
+					t.Fatalf("the stage invented the Main composition %s: %v", relative, err)
+				}
+			}
+			shared := filepath.Join(userUnixTempRoot(t), "shared")
+			if err := userPrepareInstallStage(context.Background(), shared, "shared", &profile); err == nil || !strings.Contains(err.Error(), "Main SDK requires a Separate or agent stage") {
+				t.Fatalf("Main reached the Shared stage: %v", err)
+			}
+			if _, err := os.Lstat(shared); !os.IsNotExist(err) {
+				t.Fatal("refused Shared stage created the target")
 			}
 		})
 	}

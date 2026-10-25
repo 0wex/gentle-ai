@@ -25,9 +25,11 @@ The main `gentle-ai` menu entry **Install Gentle-Shell, our own agent** installs
 | Global RDD | Supported, ON or OFF (`home/.gentle-ai/state.json` `rdd_mode`). |
 | Context7 | Supported, ON or OFF (`agent/mcp.json` `context7` entry with `url`, `enabled` and `exposure`). |
 | CodeGraph | Supported, ON (the default) or OFF. ON stages the pinned `@colbymchenry/codegraph` 1.4.1 darwin-arm64 library under `runtime/codegraph`, records `"codegraph": true` in `installation.json` and puts `runtime/codegraph/bin/codegraph` on the launched Separate shell's PATH. |
-| SDK source | Stable only. Main preview refuses when selected: "Main preview is not available on macOS yet; choose Stable to install". |
+| SDK source | Stable or Main preview, exactly as on Linux amd64. Main preview keeps stock Pi installed and composes the latest Gentle Shell `main` snapshot as a private package under `runtime/main-sdk` (with the pinned darwin-arm64 stock native member and the `runtime/node_modules -> ../prefix/lib/node_modules` link), then selects it in `agent/settings.json`. `installation.json` records it under `main_sdk`. Every other option above works with either channel. |
 
-A Stable-to-Main reconfigure on macOS keeps the full reinstall path; the in-place channel overlay is Linux amd64 only.
+### Switching Stable and Main preview
+
+On an installed Separate target, **Manage → SDK source → Apply preferences** records the channel in `config/update-channel.json` (`{"channel":"main"}` or `{"channel":"stable"}`), then **Update now** applies it with the in-place channel overlay, as on Linux amd64. The overlay changes only the SDK declaration and `installation.json` `main_sdk`. Node, `fd`, `rg`, CodeGraph, preferences, the agent home and the supervisor stay untouched. Going back to Stable removes `runtime/main`, `runtime/main-source`, `runtime/main-sdk` and `runtime/node_modules`. If any step fails, every overlay path is removed again, the previous `settings.json` and `installation.json` bytes come back, and the next attempt starts clean.
 
 ## Requirements
 

@@ -5,7 +5,6 @@ package shellinstaller
 import (
 	"context"
 	"path/filepath"
-	"runtime"
 	"strings"
 )
 
@@ -89,11 +88,11 @@ func userVerifyInstalledGlobal(ctx context.Context, root string, manifest userMa
 	if manifest.MainSDK == nil {
 		return userVerifyGlobal(ctx, root, manifest.Prefix, manifest.Agent, manifest.Prefix, root, manifest.Mode)
 	}
-	if runtime.GOOS != "linux" || runtime.GOARCH != "amd64" || (manifest.Mode != "separate" && manifest.Mode != "agent") || manifest.Destination != root || manifest.Prefix != filepath.Join(root, "prefix") {
-		return experienceError("Main SDK manifest requires qualified Linux amd64 bindings for On my existing Pi or Separate")
+	if !userMainPlatform() || (manifest.Mode != "separate" && manifest.Mode != "agent") || manifest.Destination != root || manifest.Prefix != filepath.Join(root, "prefix") {
+		return experienceError("Main SDK manifest requires qualified Linux amd64 or macOS arm64 bindings for On my existing Pi or Separate")
 	}
 	if manifest.Mode == "separate" && manifest.Agent != filepath.Join(root, "agent") {
-		return experienceError("Main SDK manifest requires qualified Linux amd64 bindings for On my existing Pi or Separate")
+		return experienceError("Main SDK manifest requires qualified Linux amd64 or macOS arm64 bindings for On my existing Pi or Separate")
 	}
 	if manifest.Mode == "agent" && (manifest.Agent == "" || !privateHierarchyPath(manifest.Agent) || strings.HasPrefix(manifest.Agent, root+"/")) {
 		return experienceError("Main SDK manifest requires a qualified external agent")

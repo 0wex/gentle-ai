@@ -79,7 +79,7 @@ func TestShellAgentReuseOption(t *testing.T) {
 		t.Fatalf("agent reuse request differs: %+v", request)
 	}
 	// Main preview is part of the same selections now.
-	skipDarwinMainPreview(t)
+	skipUnqualifiedMainPreview(t)
 	restrictedAgentHome(t)
 	main := openTargetConfiguration(t)
 	main = experienceFocus(t, main, screens.ShellExperienceInstallTarget, "agent")
