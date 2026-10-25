@@ -174,13 +174,16 @@ func userWindowsBinding(root, product string) []byte {
 }
 
 // Canonical complete JSON rejects missing, duplicate, aliased and unknown fields.
+// The retained selection is the six-field provision ABI: install writes it
+// without the profile, whose preferences live in the staged config/state/mcp
+// files, so a retained Experience is never consumed and is refused.
 func userWindowsSelection(data []byte, root string) (UserInstallRequest, error) {
 	var req UserInstallRequest
 	if err := json.Unmarshal(data, &req); err != nil {
 		return UserInstallRequest{}, err
 	}
-	if err := userExperienceSupported(req.Experience); err != nil {
-		return UserInstallRequest{}, err
+	if req.Experience != nil {
+		return UserInstallRequest{}, errors.New("Windows retained selection carries an experience profile; preferences are retained only in the staged configuration")
 	}
 	canonical, _ := json.Marshal(req)
 	if string(data) != string(canonical) || req.Destination != root || req.Mode != "separate" || req.SharedPrefix != "" || req.SharedAgent != "" || (req.Channel != "stable" && req.Channel != "main") {

@@ -608,11 +608,12 @@ func (m Model) manageDetectedInstall() Model {
 		profile = loaded
 	}
 	_, _, found, note := shellDetectPi()
-	m.shellExperience = &shellExperienceConfig{
+	config, _ := shellPlatformConfigure(shellExperienceConfig{
 		profile: profile, mode: install.Mode, choice: "existing",
 		prefix: install.Prefix, agent: install.Agent, piFound: found, piNote: note,
 		existing: []shellinstaller.UserShellInstall{install}, reconfigure: true, target: install.Target,
-	}
+	}, nil)
+	m.shellExperience = &config
 	m.shellInstallModel = cli.NewShellInstallModelWithExperience(nil, profile)
 	m.shellDetected, m.shellDetectedProfiles = nil, nil
 	m.shellDetectedCursor = 0
@@ -769,6 +770,12 @@ func (m Model) updateShellInstall(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if m.shellExperience != nil {
+		// Platform-unsupported targets stay disabled with their reason.
+		config, refused := shellPlatformConfigure(*m.shellExperience, msg)
+		m.shellExperience = &config
+		if refused {
+			return m, nil
+		}
 		return m.configureShellExperience(msg)
 	}
 	if key, ok := msg.(tea.KeyMsg); ok {

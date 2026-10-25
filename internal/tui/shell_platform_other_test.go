@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/gentleman-programming/gentle-ai/v4/internal/shellinstaller"
 )
 
 // managedInstallDisplayTarget is how the detection screen shows the default
@@ -30,3 +32,7 @@ func assertShellPrivateParent(t *testing.T, base string) {
 		t.Fatalf("default parent is not private: %v %v", info, err)
 	}
 }
+
+// shellAssertPlatformWorkerHandoff has no channel field to check on Unix: the
+// SDK source travels only inside the experience profile.
+func shellAssertPlatformWorkerHandoff(*testing.T, shellinstaller.UserInstallRequest) {}

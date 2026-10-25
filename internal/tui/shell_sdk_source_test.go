@@ -41,6 +41,7 @@ func TestShellExperienceSDKSourceHandoff(t *testing.T) {
 	if m.ShellInstallSelection().Confirmed {
 		t.Fatal("plan inspection forged consent")
 	}
+	shellAssertPlatformWorkerHandoff(t, request)
 	back := experienceKey(m, tea.KeyMsg{Type: tea.KeyEsc})
 	if back.shellExperience == nil {
 		t.Fatal("plan escape lost Configure")

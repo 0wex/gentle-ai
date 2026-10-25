@@ -399,48 +399,85 @@ func TestUserWindowsChannelOverlayRefusesFailingVerification(t *testing.T) {
 }
 
 // A failure after the physical swap unwinds every compensated mutation: the
-// previous valid Stable installation remains byte-identical.
+// previous valid Stable installation remains byte-identical. The fixture
+// carries runtime/archives, so each failure is injected deliberately: a
+// refused main.zip write (after main.json already exists) and a refused owned
+// provision (after both Main authority files exist).
 func TestUserWindowsChannelOverlayUnwindsAfterProvisionFailure(t *testing.T) {
-	root := userWindowsOverlayFixture(t)
-	t.Setenv("GENTLE_AI_RECONFIGURE_TARGET", root)
-	commit := strings.Repeat("a", 40)
-	artifact, data := userWindowsOverlayMainFixture(t, commit)
-	verifies, snapshotCalls := 0, 0
-	var provisions []string
-	userWindowsOverlaySeams(t, &artifact, &data, &verifies, &provisions, &snapshotCalls)
-	gentle := filepath.Join(root, "prefix", "node_modules", "gentle-pi")
-	userWindowsOverlayProvision = func(ctx context.Context, root, action string, _, _ io.Writer) error {
-		provisions = append(provisions, action)
-		return errors.New("owned provision refused")
-	}
+	for _, tc := range []struct {
+		name, failWrite, failAction string
+		wantProvisions              int
+	}{
+		{name: "main.zip write refused", failWrite: "main.zip", wantProvisions: 0},
+		{name: "provision refused", failAction: "overlay", wantProvisions: 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := userWindowsOverlayFixture(t)
+			userWindowsOverlayArchives(t, root)
+			t.Setenv("GENTLE_AI_RECONFIGURE_TARGET", root)
+			commit := strings.Repeat("a", 40)
+			artifact, data := userWindowsOverlayMainFixture(t, commit)
+			verifies, snapshotCalls := 0, 0
+			var provisions []string
+			userWindowsOverlaySeams(t, &artifact, &data, &verifies, &provisions, &snapshotCalls)
+			previousWrite := userWindowsOverlayWrite
+			t.Cleanup(func() { userWindowsOverlayWrite = previousWrite })
+			var written []string
+			userWindowsOverlayWrite = func(path string, body []byte) error {
+				if tc.failWrite != "" && filepath.Base(path) == tc.failWrite {
+					return errors.New("injected exclusive write refusal")
+				}
+				written = append(written, filepath.Base(path))
+				return previousWrite(path, body)
+			}
+			userWindowsOverlayProvision = func(ctx context.Context, root, action string, _, _ io.Writer) error {
+				provisions = append(provisions, action)
+				if action == tc.failAction {
+					return errors.New("owned provision refused")
+				}
+				return nil
+			}
+			manifestBefore := userWindowsOverlayRead(t, filepath.Join(root, "manifest.json"))
+			gentle := filepath.Join(root, "prefix", "node_modules", "gentle-pi")
 
-	_, applied, err := userWindowsChannelOverlay(context.Background(), userWindowsOverlayRequest(root, "main"))
-	if err == nil || !applied {
-		t.Fatalf("provision failure did not fail the overlay: applied=%v err=%v", applied, err)
-	}
-	if got := userWindowsOverlayRead(t, filepath.Join(gentle, "package.json")); got != "stock package\n" {
-		t.Fatalf("unwound SDK package.json differs: %q", got)
-	}
-	if got := userWindowsOverlayRead(t, filepath.Join(gentle, "node_modules", "dep", "index.js")); got != "stock dependency\n" {
-		t.Fatalf("unwound dependency custody differs: %q", got)
-	}
-	if _, err := os.Lstat(filepath.Join(gentle, "sdk", "main.mjs")); !os.IsNotExist(err) {
-		t.Fatal("unwound SDK kept Main source")
-	}
-	if _, err := os.Lstat(filepath.Join(root, "stock-gentle-pi")); !os.IsNotExist(err) {
-		t.Fatal("unwound overlay kept the stock copy")
-	}
-	if _, err := os.Lstat(filepath.Join(root, "main.json")); !os.IsNotExist(err) {
-		t.Fatal("unwound overlay kept the Main descriptor")
-	}
-	if _, err := os.Lstat(filepath.Join(root, "runtime", "archives", "main.zip")); !os.IsNotExist(err) {
-		t.Fatal("unwound overlay kept the Main archive")
-	}
-	selection, err := userWindowsRead(filepath.Join(root, "selection.json"), 4096)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if selected, selectionErr := userWindowsSelection(selection, root); selectionErr != nil || selected.Channel != "stable" {
-		t.Fatalf("unwound selection differs: %+v %v", selected, selectionErr)
+			_, applied, err := userWindowsChannelOverlay(context.Background(), userWindowsOverlayRequest(root, "main"))
+			if err == nil || !applied {
+				t.Fatalf("injected failure did not fail the overlay: applied=%v err=%v", applied, err)
+			}
+			if len(written) == 0 || written[0] != "main.json" {
+				t.Fatalf("failure was not injected after the Main descriptor write: %v", written)
+			}
+			if len(provisions) != tc.wantProvisions {
+				t.Fatalf("provisioning differs: %v", provisions)
+			}
+			if got := userWindowsOverlayRead(t, filepath.Join(gentle, "package.json")); got != "stock package\n" {
+				t.Fatalf("unwound SDK package.json differs: %q", got)
+			}
+			if got := userWindowsOverlayRead(t, filepath.Join(gentle, "node_modules", "dep", "index.js")); got != "stock dependency\n" {
+				t.Fatalf("unwound dependency custody differs: %q", got)
+			}
+			if _, err := os.Lstat(filepath.Join(gentle, "sdk", "main.mjs")); !os.IsNotExist(err) {
+				t.Fatal("unwound SDK kept Main source")
+			}
+			if _, err := os.Lstat(filepath.Join(root, "stock-gentle-pi")); !os.IsNotExist(err) {
+				t.Fatal("unwound overlay kept the stock copy")
+			}
+			if _, err := os.Lstat(filepath.Join(root, "main.json")); !os.IsNotExist(err) {
+				t.Fatal("unwound overlay kept the Main descriptor")
+			}
+			if _, err := os.Lstat(filepath.Join(root, "runtime", "archives", "main.zip")); !os.IsNotExist(err) {
+				t.Fatal("unwound overlay kept the Main archive")
+			}
+			if got := userWindowsOverlayRead(t, filepath.Join(root, "manifest.json")); got != manifestBefore {
+				t.Fatal("unwound overlay changed the manifest")
+			}
+			selection, err := userWindowsRead(filepath.Join(root, "selection.json"), 4096)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if selected, selectionErr := userWindowsSelection(selection, root); selectionErr != nil || selected.Channel != "stable" {
+				t.Fatalf("unwound selection differs: %+v %v", selected, selectionErr)
+			}
+		})
 	}
 }
