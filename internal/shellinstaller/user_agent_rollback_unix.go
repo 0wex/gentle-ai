@@ -4,6 +4,7 @@ package shellinstaller
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -202,4 +203,32 @@ func (g *userAgentRollback) keep(parent string) string {
 		return fmt.Sprintf("its pre-install files could not be saved (%v); preserve the agent as it is", err)
 	}
 	return fmt.Sprintf("its pre-install files are saved in %q; restore them by hand", saved)
+}
+
+type userPublicationCommitKey struct{}
+
+// userWithPublicationCommit returns a context whose publication marks the
+// returned flag once its rename has committed the destination.
+func userWithPublicationCommit(ctx context.Context) (context.Context, *bool) {
+	committed := new(bool)
+	return context.WithValue(ctx, userPublicationCommitKey{}, committed), committed
+}
+
+// userMarkPublicationCommitted records that the destination is published with
+// its manifest bound to the selected agent.
+func userMarkPublicationCommitted(ctx context.Context) {
+	if committed, ok := ctx.Value(userPublicationCommitKey{}).(*bool); ok {
+		*committed = true
+	}
+}
+
+// settle decides the agent outcome of a failed install. Before the
+// publication commit the agent is restored. After it, the published manifest
+// and its uninstall evidence are bound to the agent's current bindings, so a
+// restore would orphan them: the failure is reported and the agent is kept.
+func (g *userAgentRollback) settle(cause error, committed bool, parent string) error {
+	if committed {
+		return fmt.Errorf("%w; the installation was already published, so the Pi agent %q keeps the published bindings; uninstall restores it", cause, g.agent)
+	}
+	return g.rollback(cause, parent)
 }

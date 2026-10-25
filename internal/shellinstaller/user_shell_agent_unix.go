@@ -43,7 +43,7 @@ func userAgentPreflight(agent, destination string, profile *UserExperience) erro
 		return privateError("refused", fmt.Errorf(format, args...))
 	}
 	if _, err := userOwnedIdentity(agent); err != nil {
-		return refuse("the Pi agent %q must be a physical directory you own that no other user can write (run chmod go-w %q), or choose Separate: %w", agent, agent, err)
+		return privateError("refused", userAgentCustodyProblem(agent, err))
 	}
 	if profile != nil && profile.SDKSource == "main-preview" {
 		// The Main SDK selection binds the agent as a private 0700 directory.
@@ -111,6 +111,35 @@ func userAgentPreflight(agent, destination string, profile *UserExperience) erro
 		}
 	}
 	return nil
+}
+
+// userAgentCustodyProblem names why userOwnedIdentity refused the agent and
+// the fix for that cause; mode advice is given only for mode problems.
+func userAgentCustodyProblem(agent string, cause error) error {
+	info, err := os.Lstat(agent)
+	switch {
+	case err != nil:
+		return fmt.Errorf("the Pi agent %q cannot be inspected (%v); run Pi once to create it, or choose Separate", agent, err)
+	case info.Mode()&os.ModeSymlink != 0:
+		real, _ := filepath.EvalSymlinks(agent)
+		return fmt.Errorf("the Pi agent %q is a symbolic link; select its real path %q instead, or choose Separate", agent, real)
+	case !info.IsDir():
+		return fmt.Errorf("the Pi agent %q is not a directory; run Pi once to create its agent directory, or choose Separate", agent)
+	case info.Sys().(*syscall.Stat_t).Uid != uint32(os.Getuid()):
+		return fmt.Errorf("the Pi agent %q is owned by another user; take ownership of it, or choose Separate", agent)
+	case info.Mode().Perm()&0022 != 0:
+		return fmt.Errorf("the Pi agent %q is writable by other users; run chmod go-w %q, then retry", agent, agent)
+	}
+	if real, err := filepath.EvalSymlinks(agent); err == nil && real != agent {
+		return fmt.Errorf("the Pi agent %q is reached through a symbolic link; select its real path %q instead, or choose Separate", agent, real)
+	}
+	if metadata := privateExtendedMetadata(agent, info, false); metadata != nil {
+		if strings.HasPrefix(metadata.Error(), "BSD file flags refused") {
+			return fmt.Errorf("the Pi agent %q has BSD file flags such as immutable or append-only (see ls -lOd %q); clear them with chflags nouchg,nouappnd %q, then retry: %w", agent, agent, agent, metadata)
+		}
+		return fmt.Errorf("the Pi agent %q has an ACL that grants access beyond its mode bits (see ls -led %q); remove it with chmod -N %q, then retry: %w", agent, agent, agent, metadata)
+	}
+	return fmt.Errorf("the Pi agent %q must be a physical directory you own that no other user can write, or choose Separate: %w", agent, cause)
 }
 
 // userAgentPreflightFile admits an absent file or a bounded regular file the

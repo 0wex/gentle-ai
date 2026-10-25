@@ -262,10 +262,13 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	defer cancel()
 	// Registered before the workspace finish so it observes the final outcome:
 	// any failure after the first write to the operator's Pi agent restores it.
+	// Once publication commits, the manifest is bound to the agent and the
+	// rollback is disarmed: later failures are reported, never restored.
 	var agentRollback *userAgentRollback
+	ctx, published := userWithPublicationCommit(ctx)
 	defer func() {
 		if agentRollback != nil && err != nil {
-			result, err = UserInstallResult{}, agentRollback.rollback(err, filepath.Dir(req.Destination))
+			result, err = UserInstallResult{}, agentRollback.settle(err, *published, filepath.Dir(req.Destination))
 		}
 	}()
 	if _, statErr := os.Lstat(req.Destination); statErr == nil && userReconfigureTarget() == req.Destination {
@@ -480,6 +483,7 @@ func userPublishManifest(ctx context.Context, root, prefix, agent string, manife
 		return result, err
 	}
 	switched = true
+	userMarkPublicationCommitted(ctx)
 	if err = userDirectorySync(filepath.Dir(manifest.Destination)); err != nil {
 		return result, privateError("uncertain", err)
 	}

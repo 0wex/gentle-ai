@@ -74,9 +74,13 @@ These conditions refuse before anything is written, and the message names the pa
 | `settings.json` sets `npmCommand` or already declares `gentle-pi` (often left by an earlier attempt) | Remove that key or `packages` entry. |
 | `settings.json` or `mcp.json` is not a JSON object, is a link, has extra hard links, or is writable by other users | Fix the file (`chmod go-w FILE` for permissions). |
 | The agent is writable by other users | `chmod go-w AGENT`. |
+| The agent is a symbolic link | Select its real path instead. |
+| macOS: the agent has an ACL or BSD file flags (immutable, append-only) | `chmod -N AGENT` for an ACL; `chflags nouchg,nouappnd AGENT` for flags. |
 | Main preview with an agent that is not `0700` | `chmod 700 AGENT`, or choose Stable or Separate. |
 
 If the install fails after its first write, the installer puts back the exact bytes, modes and presence of every file it touched in the agent. It also removes its own temporaries and any `bin` directory it created. If the agent was replaced during the install, the installer does not write into it. Instead, the original files are saved beside the target, and the failure message gives their path.
+
+Once the installation is published, the agent is not rolled back. A later failure (readback, cleanup or timeout) is reported, and the agent keeps the bindings the published install records. Uninstall restores the agent from that evidence.
 
 ## Undo Shared changes
 

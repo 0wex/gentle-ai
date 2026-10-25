@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -490,5 +491,180 @@ func TestAgentTargetSeparateSelectionUnchanged(t *testing.T) {
 	}
 	if after := agentTargetRecord(t, parent); after != before {
 		t.Fatalf("Separate preflight had effects:\n%s\n->\n%s", before, after)
+	}
+}
+
+// A2: an agent refused for custody gets the fix for its actual cause; mode
+// advice (chmod go-w) is given only when the mode bits are the problem.
+func TestAgentTargetAgentCustodyRefusalNamesTheCause(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		darwinOnly bool
+		prepare    func(t *testing.T, req *UserInstallRequest)
+		want       []string
+		modeAdvice bool
+	}{
+		{name: "writable by others", modeAdvice: true, prepare: func(t *testing.T, req *UserInstallRequest) {
+			if err := os.Chmod(req.SharedAgent, 0775); err != nil {
+				t.Fatal(err)
+			}
+		}, want: []string{"{agent}", "writable by other users", "chmod go-w"}},
+		{name: "symbolic link", prepare: func(t *testing.T, req *UserInstallRequest) {
+			link := filepath.Join(filepath.Dir(req.SharedAgent), "agent-link")
+			if err := os.Symlink(req.SharedAgent, link); err != nil {
+				t.Fatal(err)
+			}
+			req.SharedAgent = link
+		}, want: []string{"{agent}", "symbolic link", "real path", filepath.Join("{parent}", "agent")}},
+		{name: "not a directory", prepare: func(t *testing.T, req *UserInstallRequest) {
+			file := filepath.Join(filepath.Dir(req.SharedAgent), "agent-file")
+			agentTargetWrite(t, file, []byte("x"), 0600)
+			req.SharedAgent = file
+		}, want: []string{"{agent}", "not a directory"}},
+		{name: "allow ACL", darwinOnly: true, prepare: func(t *testing.T, req *UserInstallRequest) {
+			if output, err := exec.Command("/bin/chmod", "+a", "everyone allow read", req.SharedAgent).CombinedOutput(); err != nil {
+				t.Fatalf("chmod +a: %v %s", err, output)
+			}
+		}, want: []string{"{agent}", "ACL", "chmod -N"}},
+		{name: "immutable flag", darwinOnly: true, prepare: func(t *testing.T, req *UserInstallRequest) {
+			if output, err := exec.Command("/usr/bin/chflags", "uchg", req.SharedAgent).CombinedOutput(); err != nil {
+				t.Fatalf("chflags uchg: %v %s", err, output)
+			}
+			agent := req.SharedAgent
+			t.Cleanup(func() { _ = exec.Command("/usr/bin/chflags", "nouchg", agent).Run() })
+		}, want: []string{"{agent}", "file flags", "chflags nouchg"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.darwinOnly && runtime.GOOS != "darwin" {
+				t.Skip("ACLs and BSD file flags are darwin metadata")
+			}
+			parent, req := agentTargetFixture(t, false)
+			tc.prepare(t, &req)
+			want := append([]string(nil), tc.want...)
+			for index := range want {
+				want[index] = strings.NewReplacer("{agent}", req.SharedAgent, "{parent}", parent).Replace(want[index])
+			}
+			agentTargetRefusesEverywhere(t, parent, req, want...)
+			if err := ValidateUserInstall(req); err == nil || strings.Contains(err.Error(), "chmod go-w") != tc.modeAdvice {
+				t.Fatalf("mode advice = %v, want %v: %v", err != nil && strings.Contains(err.Error(), "chmod go-w"), tc.modeAdvice, err)
+			}
+		})
+	}
+}
+
+// agentTargetCommitFixture is an agent install at the publication boundary:
+// the agent already carries the install's bindings, the stage holds the
+// manifest evidence, and publish is reached with a commit marker.
+func agentTargetCommitFixture(t *testing.T) (parent string, req UserInstallRequest, stage string, manifest userManifest, guard *userAgentRollback, before string) {
+	t.Helper()
+	parent, req = agentTargetFixture(t, false)
+	agent := req.SharedAgent
+	stage = filepath.Join(parent, "stage")
+	for _, dir := range []string{stage, stage + "/prefix", stage + "/bin", stage + "/state", stage + "/state/agent.preimage"} {
+		if err := os.Mkdir(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before = agentTargetRecord(t, agent)
+	var err error
+	if guard, err = userBeginAgentRollback(agent); err != nil {
+		t.Fatal(err)
+	}
+	agentTargetWrite(t, filepath.Join(stage, "state/agent.preimage/settings.json"), []byte(agentTargetSettings), 0600)
+	agentTargetWrite(t, filepath.Join(agent, "settings.json"), []byte(`{"packages":["/x"],"npmCommand":["/n"]}`+"\n"), 0600)
+	for _, tool := range []struct {
+		name string
+		size int
+	}{{"fd", agentTargetStockFDSize}, {"rg", agentTargetStockRGSize}} {
+		if err := userToolWrite(filepath.Join(agent, "bin", tool.name), agentTargetBytes(tool.size, tool.name[0]), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := userCaptureAgentPostImages(agent, stage); err != nil {
+		t.Fatal(err)
+	}
+	manifest = userManifest{Schema: userSchema, Destination: req.Destination, Prefix: stage + "/prefix", Agent: agent, Mode: "agent"}
+	if manifest.PrefixIdentity, err = userIdentity(stage + "/prefix"); err != nil {
+		t.Fatal(err)
+	}
+	if manifest.AgentIdentity, err = userSelectedAgentIdentity("agent", agent); err != nil {
+		t.Fatal(err)
+	}
+	original := userPublishEphemeralCleanup
+	t.Cleanup(func() { userPublishEphemeralCleanup = original })
+	userPublishEphemeralCleanup = func(string) error { return nil }
+	return parent, req, stage, manifest, guard, before
+}
+
+// A1, before the commit point: a publication refused before its rename is
+// not committed, and the agent is restored byte-for-byte.
+func TestAgentTargetFailureBeforePublicationCommitRestores(t *testing.T) {
+	parent, req, stage, manifest, guard, before := agentTargetCommitFixture(t)
+	manifest.AgentIdentity = "changed"
+	ctx, committed := userWithPublicationCommit(context.Background())
+	_, publishErr := userPublishManifest(ctx, stage, stage+"/prefix", req.SharedAgent, manifest)
+	var failure *PrivateRuntimeError
+	if !errors.As(publishErr, &failure) || failure.Kind != "preimage" || *committed {
+		t.Fatalf("pre-rename refusal = %v committed=%v", publishErr, *committed)
+	}
+	if _, err := os.Lstat(req.Destination); !os.IsNotExist(err) {
+		t.Fatalf("pre-rename refusal published the target: %v", err)
+	}
+	err := guard.settle(publishErr, *committed, parent)
+	if !errors.Is(err, publishErr) || !strings.Contains(err.Error(), "restored to its pre-install state") {
+		t.Fatalf("settle before commit = %v", err)
+	}
+	if after := agentTargetRecord(t, req.SharedAgent); after != before {
+		t.Fatalf("failure before commit left the agent changed:\n%s\n->\n%s", before, after)
+	}
+}
+
+// A1, after the commit point: once the rename published the manifest bound
+// to the agent, later failures (uncertain readback, workspace cleanup, an
+// expired context) keep the agent bindings, and the published install stays
+// consistent: its uninstall evidence still matches and restores the agent.
+func TestAgentTargetFailureAfterPublicationCommitKeepsBindings(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		cause func(publishErr error) error
+	}{
+		{"uncertain readback", func(publishErr error) error { return publishErr }},
+		{"workspace cleanup", func(error) error { return privateError("uncertain", errors.New("workspace cleanup failed")) }},
+		{"context expired", func(error) error { return context.DeadlineExceeded }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			parent, req, stage, manifest, guard, _ := agentTargetCommitFixture(t)
+			installed := agentTargetRecord(t, req.SharedAgent)
+			ctx, committed := userWithPublicationCommit(context.Background())
+			// The incomplete stage fails the post-rename readback as uncertain.
+			_, publishErr := userPublishManifest(ctx, stage, stage+"/prefix", req.SharedAgent, manifest)
+			var failure *PrivateRuntimeError
+			if !errors.As(publishErr, &failure) || failure.Kind != "uncertain" || !*committed {
+				t.Fatalf("post-rename failure = %v committed=%v", publishErr, *committed)
+			}
+			cause := tc.cause(publishErr)
+			err := guard.settle(cause, *committed, parent)
+			if !errors.Is(err, cause) || !strings.Contains(err.Error(), "keeps the published bindings") || strings.Contains(err.Error(), "restored to its pre-install state") {
+				t.Fatalf("settle after commit = %v", err)
+			}
+			if after := agentTargetRecord(t, req.SharedAgent); after != installed {
+				t.Fatalf("failure after commit changed the agent bindings:\n%s\n->\n%s", installed, after)
+			}
+			if _, err := os.Lstat(filepath.Join(req.Destination, "installation.json")); err != nil {
+				t.Fatalf("published manifest missing: %v", err)
+			}
+			if err := userRestoreAgentImages(req.Destination, req.SharedAgent); err != nil {
+				t.Fatalf("published install is inconsistent with its agent: %v", err)
+			}
+			// Uninstall evidence restores contents and presence.
+			if data, err := os.ReadFile(filepath.Join(req.SharedAgent, "settings.json")); err != nil || string(data) != agentTargetSettings {
+				t.Fatalf("uninstall did not restore settings: %q %v", data, err)
+			}
+			for _, name := range []string{"bin/fd", "bin/rg", "mcp.json"} {
+				if _, err := os.Lstat(filepath.Join(req.SharedAgent, name)); !os.IsNotExist(err) {
+					t.Fatalf("uninstall left %s: %v", name, err)
+				}
+			}
+		})
 	}
 }
