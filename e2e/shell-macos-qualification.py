@@ -296,20 +296,24 @@ def residue(work):
 
 
 def home_launcher(home, separate):
-    """The redirected HOME holds exactly the Separate launcher symlink.
+    """The redirected HOME holds exactly the Separate launcher symlinks.
 
-    Separate installs publish ~/.local/bin/gentle-shell pointing at the
-    target's bin/gentle-shell; nothing else may appear in HOME.
+    Separate installs publish ~/.local/bin/gentle-shell and, unless the name
+    is occupied, ~/.local/bin/gs, both pointing at the target's
+    bin/gentle-shell; nothing else may appear in HOME.
     """
     found = sorted(os.path.relpath(os.path.join(directory, name), home)
                    for directory, names, files in os.walk(home) for name in names + files)
-    expected = ['.local', '.local/bin', '.local/bin/gentle-shell']
-    require(found == expected, 'redirected home holds more than the Separate launcher: %s' % found[:8])
-    link = os.path.join(home, '.local/bin/gentle-shell')
+    launchers = [entry for entry in ('.local/bin/gentle-shell', '.local/bin/gs') if entry in found]
+    expected = sorted(['.local', '.local/bin'] + launchers)
+    require('.local/bin/gentle-shell' in launchers and found == expected,
+            'redirected home holds more than the Separate launchers: %s' % found[:8])
     target = os.path.join(os.path.realpath(separate), 'bin/gentle-shell')
-    require(os.path.islink(link) and os.readlink(link) == target, 'launcher is not a symlink into the Separate target')
+    for entry in launchers:
+        link = os.path.join(home, entry)
+        require(os.path.islink(link) and os.readlink(link) == target, '%s is not a symlink into the Separate target' % entry)
     require(os.path.isfile(target) and os.access(target, os.X_OK), 'launcher target is not the executable Separate binding')
-    return os.path.relpath(link, home)
+    return launchers
 
 
 def real_home_snapshot(home):

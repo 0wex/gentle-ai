@@ -199,7 +199,15 @@ class MacOSQualificationContract(unittest.TestCase):
             os.makedirs(os.path.join(home, '.local/bin'))
             link = os.path.join(home, '.local/bin/gentle-shell')
             os.symlink(binding, link)
-            self.assertEqual(home_launcher(home, separate), '.local/bin/gentle-shell')
+            self.assertEqual(home_launcher(home, separate), ['.local/bin/gentle-shell'])
+            gs = os.path.join(home, '.local/bin/gs')
+            os.symlink(binding, gs)  # `gs` is published unless the name is occupied.
+            self.assertEqual(home_launcher(home, separate), ['.local/bin/gentle-shell', '.local/bin/gs'])
+            os.unlink(gs)
+            os.symlink(os.path.join(root, 'elsewhere'), gs)
+            with self.assertRaises(failure):
+                home_launcher(home, separate)
+            os.unlink(gs)
             with open(os.path.join(home, '.npmrc'), 'w') as handle:
                 handle.write('residue\n')
             with self.assertRaises(failure):
