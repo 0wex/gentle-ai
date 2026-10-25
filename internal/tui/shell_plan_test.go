@@ -18,7 +18,7 @@ import (
 
 func openInstallationPlan(t *testing.T) (Model, shellinstaller.UserInstallRequest) {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", shellTestHome(t))
 	m := NewModel(system.DetectionResult{}, "plan-test").WithShellInstaller()
 	m.Width, m.Height = 120, 30
 	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})

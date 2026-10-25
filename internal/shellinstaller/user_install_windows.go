@@ -471,7 +471,7 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 			if cleanupErr := userWindowsEphemeralCleanup(req.Destination); cleanupErr != nil {
 				fmt.Fprintf(os.Stderr, "Windows installation is verified, but ephemeral cleanup failed; installer caches may remain in %q: %v\n", req.Destination, cleanupErr)
 			}
-			return UserInstallResult{req.Destination, filepath.Join(req.Destination, "prefix"), filepath.Join(req.Destination, "agent"), "already-installed"}, nil
+			return UserInstallResult{req.Destination, filepath.Join(req.Destination, "prefix"), filepath.Join(req.Destination, "agent"), "already-installed", ""}, nil
 		}
 		// A reconfigure that only changes the SDK update channel swaps the
 		// installed SDK in place; components, preferences, runtimes and the
@@ -765,7 +765,7 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	if cleanupErr := userWindowsEphemeralCleanup(req.Destination); cleanupErr != nil {
 		fmt.Fprintf(os.Stderr, "Windows installation is published and verified, but ephemeral cleanup failed; installer caches may remain in %q: %v\n", req.Destination, cleanupErr)
 	}
-	return UserInstallResult{req.Destination, filepath.Join(req.Destination, "prefix"), filepath.Join(req.Destination, "agent"), "installed"}, nil
+	return UserInstallResult{req.Destination, filepath.Join(req.Destination, "prefix"), filepath.Join(req.Destination, "agent"), "installed", ""}, nil
 }
 
 // userWindowsPublishLauncher puts a tiny .cmd shim in the user's WindowsApps

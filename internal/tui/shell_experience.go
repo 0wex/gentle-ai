@@ -456,6 +456,9 @@ func shellMainPlatformError() error {
 	if runtime.GOOS == "windows" {
 		return nil
 	}
+	if runtime.GOOS == "darwin" {
+		return errors.New("Main preview is not available on macOS yet; choose Stable to install")
+	}
 	return errors.New("SDK Main + stock provider is qualified on Linux amd64 today; macOS support is being completed")
 }
 

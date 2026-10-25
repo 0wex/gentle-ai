@@ -149,7 +149,7 @@ func userWindowsChannelOverlay(ctx context.Context, req UserInstallRequest) (res
 	if cleanup != nil {
 		cleanup()
 	}
-	return UserInstallResult{root, filepath.Join(root, "prefix"), filepath.Join(root, "agent"), "channel-overlay"}, true, nil
+	return UserInstallResult{root, filepath.Join(root, "prefix"), filepath.Join(root, "agent"), "channel-overlay", ""}, true, nil
 }
 
 // userWindowsOverlayToMain swaps the installed Stable SDK for a freshly

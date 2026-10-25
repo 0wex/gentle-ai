@@ -9,7 +9,7 @@ func userValidateStageExperience(profile *UserExperience) error {
 	if err := userValidateStagePreferences(profile); err != nil {
 		return err
 	}
-	if userQualifiedStockExperience(profile) {
+	if userQualifiedStockExperience(profile) || userQualifiedDarwinExperience(profile) {
 		return nil
 	}
 	if profile != nil && profile.SDKSource == "main-preview" && runtime.GOOS != "windows" {
