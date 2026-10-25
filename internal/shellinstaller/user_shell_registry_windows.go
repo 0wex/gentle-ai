@@ -148,8 +148,17 @@ func LoadUserShellExperience(install UserShellInstall) (UserExperience, error) {
 	if info, err := os.Stat(filepath.Join(install.Target, "runtime", "codegraph")); err == nil && info.IsDir() {
 		profile.CodeGraph = "on"
 	}
+	// Like Unix, the installed composition always names its SDK source: the
+	// retained selection is Stable unless it records the Main channel, and
+	// the persisted channel preference overrides it for this projection.
+	profile.SDKSource = "stable"
 	if install.Channel == "main" || install.Channel == "main-preview" {
 		profile.SDKSource = "main-preview"
+	} else if data, err := userWindowsRead(filepath.Join(install.Target, "selection.json"), 4096); err == nil {
+		var selection struct{ Channel string }
+		if json.Unmarshal(data, &selection) == nil && selection.Channel == "main" {
+			profile.SDKSource = "main-preview"
+		}
 	}
 	if data, err := userWindowsRead(userUpdateChannelPath(install.Target), 4096); err == nil {
 		if preferred, ok := userUpdateChannelFromBytes(data); ok {

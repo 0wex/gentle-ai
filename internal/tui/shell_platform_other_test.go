@@ -20,6 +20,10 @@ func platformManagedInstallFixture(*testing.T) (home, target string, ok bool) {
 	return "", "", false
 }
 
+// platformSetInstalledCodeGraph reports no platform seam: Unix records the
+// installed CodeGraph component in installation.json (setManifestCodeGraph).
+func platformSetInstalledCodeGraph(*testing.T, string, bool) bool { return false }
+
 // shellDefaultTestDestination is the default Separate target the TUI selects.
 func shellDefaultTestDestination() string {
 	return filepath.Join(os.Getenv("HOME"), ".local", "share", "gentle-shell", "install")
