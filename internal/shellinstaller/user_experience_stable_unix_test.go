@@ -1,0 +1,124 @@
+//go:build linux || darwin
+
+package shellinstaller
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+)
+
+// skipUnqualifiedStableHost keeps these Stable profile tests on the two
+// qualified unix distributions: Linux amd64 and macOS arm64.
+func skipUnqualifiedStableHost(t *testing.T) {
+	t.Helper()
+	if !(runtime.GOOS == "linux" && runtime.GOARCH == "amd64") && !(runtime.GOOS == "darwin" && runtime.GOARCH == "arm64") {
+		t.Skip("Stable experience is qualified on Linux amd64 and macOS arm64")
+	}
+}
+
+// The TUI always emits explicit ON/OFF values with CodeGraph OFF and GGA OFF.
+// Every such Stable profile reaches physical review and stages the same
+// canonical files on Linux amd64 and macOS arm64.
+func TestUserStableTUIProfileStagesCanonicalFiles(t *testing.T) {
+	skipUnqualifiedStableHost(t)
+	toggles := []string{"on", "off"}
+	for _, persona := range []string{"gentleman", "neutral", "unmanaged"} {
+		for _, background := range toggles {
+			for _, tdd := range toggles {
+				for _, rdd := range toggles {
+					for _, context7 := range toggles {
+						for _, sdk := range []string{"", "stable"} {
+							name := strings.Join([]string{persona, background, tdd, rdd, context7, sdk}, "-")
+							t.Run(name, func(t *testing.T) {
+								profile := UserExperience{Persona: persona, BackgroundSubagents: background, StrictTDD: tdd, GlobalRDD: rdd, Context7: context7, CodeGraph: "off", GGA: "off", SDKSource: sdk}
+								target := filepath.Join(userUnixTempRoot(t), "target")
+								req := UserInstallRequest{Destination: target, Mode: "separate", Experience: &profile}
+								if token, err := InspectUserInstall(req); err != nil || token == "" {
+									t.Fatalf("Stable TUI profile refused at physical review: %q, %v", token, err)
+								}
+								if _, err := os.Lstat(target); !os.IsNotExist(err) {
+									t.Fatal("inspection created the target before consent")
+								}
+								if err := userPrepareInstallStage(context.Background(), target, req.Mode, req.Experience); err != nil {
+									t.Fatalf("Stable TUI profile refused at the stage: %v", err)
+								}
+								assertStableCanonicalFiles(t, target, profile)
+							})
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+func assertStableCanonicalFiles(t *testing.T, root string, profile UserExperience) {
+	t.Helper()
+	assertExperienceFile(t, filepath.Join(root, "config/background-subagents.json"), "{\n  \"schema\": \"gentle-pi.background-subagents/v1\",\n  \"policy\": \""+profile.BackgroundSubagents+"\"\n}\n")
+	assertExperienceFile(t, filepath.Join(root, "config/strict-tdd.json"), "{\n  \"schema\": \"gentle-pi.strict-tdd/v1\",\n  \"policy\": \""+profile.StrictTDD+"\"\n}\n")
+	personaPath := filepath.Join(root, "config/persona.json")
+	if profile.Persona == "unmanaged" {
+		if _, err := os.Lstat(personaPath); !os.IsNotExist(err) {
+			t.Fatalf("unmanaged persona wrote a file: %v", err)
+		}
+	} else {
+		assertExperienceFile(t, personaPath, "{\n  \"mode\": \""+profile.Persona+"\"\n}\n")
+	}
+	var state struct {
+		RDD        string `json:"rdd_mode"`
+		RecordedAt string `json:"rdd_mode_recorded_at"`
+	}
+	data, err := os.ReadFile(filepath.Join(root, "home/.gentle-ai/state.json"))
+	if err != nil || json.Unmarshal(data, &state) != nil || state.RDD != profile.GlobalRDD || state.RecordedAt == "" {
+		t.Fatalf("global RDD state differs: %s, %v", data, err)
+	}
+	var mcp struct {
+		Servers map[string]map[string]any `json:"mcpServers"`
+	}
+	data, err = os.ReadFile(filepath.Join(root, "agent/mcp.json"))
+	if err != nil || json.Unmarshal(data, &mcp) != nil {
+		t.Fatalf("Context7 MCP entry is missing: %s, %v", data, err)
+	}
+	entry := mcp.Servers["context7"]
+	if len(mcp.Servers) != 1 || len(entry) != 3 || entry["url"] != "https://mcp.context7.com/mcp" || entry["enabled"] != (profile.Context7 == "on") || entry["exposure"] != "codemode" {
+		t.Fatalf("Context7 MCP entry differs: %s", data)
+	}
+}
+
+// CodeGraph ON and Main preview have no macOS producer yet: both stay refused
+// with a precise reason, while CodeGraph OFF and Stable never refuse.
+func TestUserDarwinRefusesOnlyUnportedExperience(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("macOS admission boundary")
+	}
+	base := UserExperience{Persona: "gentleman", BackgroundSubagents: "on", StrictTDD: "on", GlobalRDD: "on", Context7: "on", CodeGraph: "off", GGA: "off"}
+	for _, tt := range []struct {
+		name string
+		edit func(*UserExperience)
+		want string
+	}{
+		{"codegraph-on", func(p *UserExperience) { p.CodeGraph = "on" }, "CodeGraph is not available on macOS yet; turn CodeGraph off to install"},
+		{"main-preview", func(p *UserExperience) { p.SDKSource = "main-preview" }, "Main preview is not available on macOS yet; choose Stable to install"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			profile := base
+			tt.edit(&profile)
+			target := filepath.Join(userUnixTempRoot(t), "target")
+			req := UserInstallRequest{Destination: target, Mode: "separate", Experience: &profile}
+			if token, err := InspectUserInstall(req); err == nil || token != "" || err.Error() != tt.want {
+				t.Fatalf("unported selection was not refused precisely: %q, %v", token, err)
+			}
+			if err := userPrepareInstallStage(context.Background(), target, req.Mode, req.Experience); err == nil || err.Error() != tt.want {
+				t.Fatalf("stage admitted an unported selection: %v", err)
+			}
+			if _, err := os.Lstat(target); !os.IsNotExist(err) {
+				t.Fatal("refused stage created the target")
+			}
+		})
+	}
+}

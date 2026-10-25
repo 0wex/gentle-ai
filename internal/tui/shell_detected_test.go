@@ -19,7 +19,7 @@ func managedInstallFixture(t *testing.T) (string, string) {
 	if home, target, ok := platformManagedInstallFixture(t); ok {
 		return home, target
 	}
-	home := t.TempDir()
+	home := shellTestHome(t)
 	t.Setenv("HOME", home)
 	target := filepath.Join(home, ".local", "share", "gentle-shell", "install")
 	if err := os.MkdirAll(target, 0700); err != nil {
@@ -62,6 +62,7 @@ func addAgentInstall(t *testing.T, home string) string {
 }
 
 func TestShellManageAppliesSDKSourceAsPreference(t *testing.T) {
+	skipDarwinMainPreview(t)
 	_, target := managedInstallFixture(t)
 	m := NewModel(system.DetectionResult{}, "detected").WithShellInstaller()
 	m.Width, m.Height = 120, 35
@@ -303,6 +304,13 @@ func TestShellDetectsManagedInstallAndManage(t *testing.T) {
 	loaded, err := shellinstaller.LoadUserShellExperience(shellinstaller.UserShellInstall{Target: target, Mode: "separate"})
 	if err != nil || loaded.Persona != "neutral" {
 		t.Fatalf("persona was not applied in place: %+v %v", loaded, err)
+	}
+	if view := m.View(); !strings.Contains(view, "Preferences updated.") || !strings.Contains(view, "Enter: back to menu") {
+		t.Fatalf("applied summary differs:\n%s", view)
+	}
+	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.Screen != ScreenWelcome || m.shellManage != nil || m.shellExperience != nil || m.shellInstallSelection.Confirmed {
+		t.Fatalf("Enter after Preferences updated did not return to the menu: screen=%v manage=%+v experience=%+v", m.Screen, m.shellManage, m.shellExperience)
 	}
 }
 
