@@ -153,7 +153,7 @@ func TestShellManageComponentDeltaAppliesThroughUpdateInstallation(t *testing.T)
 		from, to            string
 	}{
 		{name: "remove CodeGraph", installed: "on", selected: "off", from: "On", to: "Off"},
-		{name: "add CodeGraph", installed: "off", selected: "on", from: "Off", to: "On"},
+		{name: "add CodeGraph", installed: "off", selected: "on", from: "Inherit", to: "On"}, // an install without CodeGraph loads as Inherit
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.selected == "on" && runtime.GOOS == "darwin" {
