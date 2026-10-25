@@ -3,6 +3,7 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -78,12 +79,40 @@ func TestShellAgentReuseOption(t *testing.T) {
 	if m.shellPlan == nil || request.Mode != "agent" || request.SharedAgent != agent || request.SharedPrefix != "" {
 		t.Fatalf("agent reuse request differs: %+v", request)
 	}
-	// Main preview is part of the same selections now.
+	// Main preview is part of the same selections now. Its SDK selection binds
+	// the agent as a private 0700 directory: a stock 0755 agent is refused up
+	// front with the exact fix, and a 0700 agent is admitted.
 	skipDarwinMainPreview(t)
-	restrictedAgentHome(t)
+	stock := restrictedAgentHome(t)
+	refused := shellAgentMainSelection(t)
+	if refused.shellExperience == nil || refused.shellPlan != nil || refused.shellExperience.err == nil ||
+		!strings.Contains(refused.shellExperience.err.Error(), "Main preview on your existing Pi") ||
+		!strings.Contains(refused.shellExperience.err.Error(), "chmod 700 "+strconv.Quote(stock)) {
+		t.Fatalf("Main on a 0755 agent was not refused up front: plan=%v err=%v", refused.shellPlan != nil, refused.shellExperience)
+	}
+	if info, err := os.Lstat(stock); err != nil || info.Mode().Perm() != 0755 {
+		t.Fatalf("refused Main selection changed the agent: %v %v", info, err)
+	}
+	private := restrictedAgentHome(t)
+	if err := os.Chmod(private, 0700); err != nil {
+		t.Fatal(err)
+	}
+	main := shellAgentMainSelection(t)
+	if main.shellExperience != nil {
+		t.Fatalf("Main was not admitted for a 0700 agent reuse: %v", main.shellExperience.err)
+	}
+	if main.shellPlan == nil || main.shellPlanRequest.SharedAgent != private || main.shellPlanRequest.Experience == nil || main.shellPlanRequest.Experience.SDKSource != "main-preview" {
+		t.Fatalf("Main selection was dropped: %+v", main.shellPlanRequest.Experience)
+	}
+}
+
+// shellAgentMainSelection selects "On my existing Pi" with Main preview and
+// confirms the experience screen.
+func shellAgentMainSelection(t *testing.T) Model {
+	t.Helper()
 	main := openTargetConfiguration(t)
 	main = experienceFocus(t, main, screens.ShellExperienceInstallTarget, "agent")
-	next, _ = main.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	next, _ := main.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	main = next.(Model)
 	profile := main.shellExperience.profile
 	profile.SDKSource = "main-preview"
@@ -91,13 +120,7 @@ func TestShellAgentReuseOption(t *testing.T) {
 	next, _ = main.Update(tea.KeyMsg{Type: tea.KeyEnd})
 	main = next.(Model)
 	next, _ = main.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	main = next.(Model)
-	if main.shellExperience != nil {
-		t.Fatalf("Main was not admitted for agent reuse: %v", main.shellExperience.err)
-	}
-	if main.shellPlan == nil || main.shellPlanRequest.Experience == nil || main.shellPlanRequest.Experience.SDKSource != "main-preview" {
-		t.Fatalf("Main selection was dropped: %+v", main.shellPlanRequest.Experience)
-	}
+	return next.(Model)
 }
 
 func containsText(value, part string) bool {

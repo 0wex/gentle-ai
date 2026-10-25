@@ -153,7 +153,24 @@ func agentTargetRefusesEverywhere(t *testing.T, parent string, req UserInstallRe
 func TestAgentTargetStockPiToolsRefuseUpFront(t *testing.T) {
 	parent, req := agentTargetFixture(t, true)
 	bin := filepath.Join(req.SharedAgent, "bin")
-	agentTargetRefusesEverywhere(t, parent, req, "agent bin", filepath.Join(bin, "fd"), filepath.Join(bin, "rg"), "move", "retry")
+	agentTargetRefusesEverywhere(t, parent, req, "agent bin", "already contains fd", "and rg", filepath.Join(bin, "fd"), filepath.Join(bin, "rg"), "move", "retry")
+}
+
+// The Shared refusal keeps its message contract ("already contains fd", the
+// macOS qualification harness consumes it) and still names the path.
+func TestAgentTargetSharedToolConflictKeepsMessageContract(t *testing.T) {
+	_, req := agentTargetFixture(t, false)
+	bin := filepath.Join(req.SharedAgent, "bin")
+	agentTargetWrite(t, filepath.Join(bin, "fd"), []byte("#!/bin/sh\nexit 0\n"), 0700)
+	before := agentTargetRecord(t, req.SharedAgent)
+	err := userToolBinAvailable(req.SharedAgent)
+	var failure *PrivateRuntimeError
+	if !errors.As(err, &failure) || failure.Kind != "refused" || !strings.Contains(err.Error(), "already contains fd") || !strings.Contains(err.Error(), filepath.Join(bin, "fd")) || strings.Contains(err.Error(), "and rg") {
+		t.Fatalf("Shared tool conflict message = %v", err)
+	}
+	if after := agentTargetRecord(t, req.SharedAgent); after != before {
+		t.Fatalf("tool conflict check changed the agent:\n%s\n->\n%s", before, after)
+	}
 }
 
 // Rule 1: every precondition the agent target refuses on later is checked

@@ -651,7 +651,7 @@ func userToolBinAvailable(agent string) error {
 	var present []string
 	for _, source := range userToolSources {
 		if _, err := os.Lstat(filepath.Join(bin, source.name)); !errors.Is(err, os.ErrNotExist) {
-			present = append(present, filepath.Join(bin, source.name))
+			present = append(present, fmt.Sprintf("%s (%q)", source.name, filepath.Join(bin, source.name)))
 		}
 	}
 	if len(present) != 0 {
