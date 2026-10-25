@@ -36,6 +36,8 @@ Fresh private-stage creation and preferences are now composed by the installatio
 
 Persona/background serialization now has one side-effect-free canonical codec consumed by the POSIX writer. Native custody, exclusive writes and staged readback remain in that writer; Windows non-nil profiles stay refused and no Windows guest qualification is admitted.
 
+Manage on a detected installation splits the selected delta: preference-only changes use **Apply preferences** in place; a component change (CodeGraph, or any change on an **On my existing Pi** install) offers **Update installation**, which reinstalls the target with the selected profile, including the preference changes of the same summary. **On my existing Pi** never offers CodeGraph ON: the CodeGraph library stages only into a Separate or Shared install.
+
 The confirmation review wraps to terminal width. Use PgUp/PgDn to scroll and Home/End to reach the first/last page, including the full Shared settings preview and recovery warnings; scrolling or resizing does not confirm or change your selection.
 
 For command-line installation, inspect, then use the **exact fresh printed confirmation** for that unchanged selection:

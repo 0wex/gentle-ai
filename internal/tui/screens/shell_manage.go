@@ -41,9 +41,9 @@ func RenderShellManage(target, mode string, preferences, components []ShellManag
 		lines = append(lines, "")
 	}
 	if len(components) > 0 {
-		lines = append(lines, styles.WarningStyle.Render("COMPONENT CHANGES (not applied here)"))
+		lines = append(lines, styles.WarningStyle.Render("COMPONENT CHANGES"))
 		lines = append(lines, changeLines(components)...)
-		lines = append(lines, detectedSubtleStyle.Render("These need a component update; changing preferences does not reinstall the stack."), "")
+		lines = append(lines, detectedSubtleStyle.Render("Update installation reinstalls the stack with every selected change."), "")
 	}
 	if applyErr != "" {
 		lines = append(lines, styles.ErrorStyle.Render(applyErr), "")
