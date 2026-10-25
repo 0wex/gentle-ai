@@ -160,9 +160,6 @@ func TestShellManageComponentDeltaAppliesThroughUpdateInstallation(t *testing.T)
 		{name: "add CodeGraph", installed: "off", selected: "on", from: "Inherit", to: "On"}, // an install without CodeGraph loads as Inherit
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if tt.selected == "on" && runtime.GOOS == "darwin" {
-				t.Skip("CodeGraph ON has no macOS producer until T9; the remove case proves the route natively")
-			}
 			_, target := managedInstallFixture(t)
 			setManifestCodeGraph(t, target, tt.installed == "on")
 			want := installedProfile(t, target)
@@ -410,18 +407,23 @@ func TestShellManageAgentInstallNeverOffersCodeGraphOn(t *testing.T) {
 }
 
 // A refused component update stays on the Manage summary with the reason and
-// prepares no plan (macOS refuses CodeGraph ON until T9).
+// prepares no plan. The target's parent stops being private before the update,
+// a refusal every Unix inspection applies.
 func TestShellManageRefusedComponentUpdateStaysOnSummary(t *testing.T) {
-	if runtime.GOOS != "darwin" {
-		t.Skip("only macOS refuses CodeGraph ON at admission today")
+	if runtime.GOOS == "windows" {
+		t.Skip("POSIX parent privacy refusal; Windows custody is covered by its own fixtures")
 	}
-	managedInstallFixture(t)
+	_, target := managedInstallFixture(t)
 	m := openManagedConfiguration(t)
 	m = toggleExperience(t, m, screens.ShellExperienceCodeGraph, "")
 	m = continueManagedConfiguration(m)
+	if err := os.Chmod(filepath.Dir(target), 0755); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(filepath.Dir(target), 0700) })
 	m = experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter}) // Update installation.
 	if m.shellManage == nil || m.shellPlan != nil || m.shellInstallSelection.Confirmed {
 		t.Fatalf("refused component update left Manage: %+v", m.shellManage)
 	}
-	assertViewContains(t, m.View(), "CodeGraph is not available on macOS yet; turn CodeGraph off to install", " ▸ Update installation")
+	assertViewContains(t, m.View(), "private installation", " ▸ Update installation")
 }
