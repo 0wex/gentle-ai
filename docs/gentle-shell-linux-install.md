@@ -70,11 +70,23 @@ Shared also writes **two new files** into the selected agent: `AGENT/bin/fd` (fd
 
 "On my existing Pi" keeps a private prefix and runtime and reuses your Pi agent (`~/.pi/agent`). The agent may be `0755`, as Pi creates it. It must be a directory you own that no other user can write. The install writes `settings.json` (`packages`, `npmCommand`), `mcp.json` when Context7 is selected, and the pinned `bin/fd` and `bin/rg`.
 
+Pi downloads its own `fd` and `rg` into `AGENT/bin` on its first run. The install does not refuse them. It sets them aside instead:
+
+1. It moves Pi's `bin/fd` and `bin/rg` into `TARGET/backup/agent-tools/`. Their SHA-256, size and mode are recorded in `TARGET/state/agent-tools.json`.
+2. It writes the pinned `fd` and `rg` in their place.
+3. Uninstall removes the pinned copies and puts Pi's back, with the same bytes and modes.
+
+If `bin/fd` or `bin/rg` changed after the install (for example, Pi downloaded a newer copy), uninstall does not overwrite it. Pi's original is kept in `TARGET.removed-UTC.pi-tools/`, next to its `agent-tools.json`. Uninstall still completes, and Manage shows it as a success with a note naming that path. A slot that is now empty gets Pi's original back.
+
+Only regular files are set aside. These are refused as before: a link, a directory or another entry in place of `fd` or `rg`; a tool with extra hard links; a tool other users can write; and, on macOS, a tool with an ACL or BSD file flags.
+
+Shared mode keeps its refusal of an existing `fd` or `rg`. It has no agent rollback image and no uninstall that could put them back.
+
 These conditions refuse before anything is written, and the message names the path and the fix:
 
 | Condition | Fix |
 | --- | --- |
-| `AGENT/bin/fd` or `AGENT/bin/rg` already exists (Pi downloads its own on first run) | Move both out of `AGENT/bin`. Pi downloads them again if they are ever missing. |
+| `AGENT/bin/fd` or `AGENT/bin/rg` is a link, a directory or another non-regular entry, has extra hard links, or is writable by other users | Move it out of `AGENT/bin` (`chmod go-w FILE` for permissions). Pi downloads its own again if it is ever missing. |
 | `settings.json` sets `npmCommand` or already declares `gentle-pi` (often left by an earlier attempt) | Remove that key or `packages` entry. |
 | `settings.json` or `mcp.json` is not a JSON object, is a link, has extra hard links, or is writable by other users | Fix the file (`chmod go-w FILE` for permissions). |
 | The agent is writable by other users | `chmod go-w AGENT`. |
@@ -82,9 +94,11 @@ These conditions refuse before anything is written, and the message names the pa
 | macOS: the agent has an ACL or BSD file flags (immutable, append-only) | `chmod -N AGENT` for an ACL; `chflags nouchg,nouappnd AGENT` for flags. |
 | Main preview with an agent that is not `0700` | `chmod 700 AGENT`, or choose Stable or Separate. |
 
-If the install fails after its first write, the installer puts back the exact bytes, modes and presence of every file it touched in the agent. It also removes its own temporaries and any `bin` directory it created. If the agent was replaced during the install, the installer does not write into it. Instead, the original files are saved beside the target, and the failure message gives their path.
+If the install fails after its first write, the installer puts back the exact bytes, modes and presence of every file it touched in the agent, including Pi's own `fd` and `rg` once they were set aside. It also removes its own temporaries and any `bin` directory it created. If the agent was replaced during the install, the installer does not write into it. Instead, the original files are saved beside the target, and the failure message gives their path.
 
 Once the installation is published, the agent is not rolled back. A later failure (readback, cleanup or timeout) is reported, and the agent keeps the bindings the published install records. Uninstall restores the agent from that evidence.
+
+Uninstall puts `settings.json` and `mcp.json` back as they were before the install: the same bytes and mode (Pi creates `settings.json` as `0644`). A file that did not exist before the install, such as an `mcp.json` that only Context7 created, is removed. The install records each file's presence and mode in `TARGET/state/agent.preimage.json`. Installs made before this record existed restore these files as owner-only `0600`, which never widens access. Uninstall refuses before any change when the agent changed since the install or the evidence is damaged.
 
 ## Undo Shared changes
 

@@ -395,6 +395,14 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	if err != nil {
 		return result, fmt.Errorf("Main SDK + stock provider: %w", err)
 	}
+	if _, statErr := os.Lstat(req.Destination); req.Mode == "agent" && errors.Is(statErr, os.ErrNotExist) {
+		// A fresh agent install sets Pi's own fd/rg aside inside the stage;
+		// the agent rollback restores them on any failure before the commit.
+		userShellDetail(ctx, 4, 5, "Setting Pi's own fd/rg aside inside the installation")
+		if err = userSetAsideAgentTools(ctx, agent, root); err != nil {
+			return result, fmt.Errorf("set aside Pi's fd/rg: %w", err)
+		}
+	}
 	// A bind refusal here follows Shared provisioning: it stays uncertain and
 	// keeps the staged recovery root instead of claiming an atomic rollback.
 	userShellDetail(ctx, 4, 5, "Binding pinned tools into the agent")
@@ -639,8 +647,10 @@ func userBootstrap(ctx context.Context, root, workspace string) error {
 	return userBootstrapPublish(ctx, output, filepath.Join(root, "runtime/node"))
 }
 
-// Selected personal tools are never replaced. AGENT/bin must be absent or an
+// Selected Shared tools are never replaced. AGENT/bin must be absent or an
 // owned physical 0700/0755 directory without fd or rg; links are not followed.
+// The agent target admits Pi's own fd/rg for its set-aside instead
+// (userAgentToolsAdmit); at bind time both find free slots here.
 func userToolBinAvailable(agent string) error {
 	bin := filepath.Join(agent, "bin")
 	if _, err := os.Lstat(bin); errors.Is(err, os.ErrNotExist) {

@@ -51,7 +51,8 @@ func userAgentPreflight(agent, destination string, profile *UserExperience) erro
 			return refuse("Main preview on your existing Pi needs the agent %q to be private: run chmod 700 %q, or choose Stable or Separate", agent, agent)
 		}
 	}
-	if err := userToolBinAvailable(agent); err != nil {
+	// Pi's own regular fd/rg are set aside at install, not refused.
+	if _, err := userAgentToolsAdmit(agent); err != nil {
 		return err
 	}
 	settingsPath := filepath.Join(agent, "settings.json")
@@ -189,7 +190,9 @@ func userStageOwnedAgentContext7(ctx context.Context, agent, choice, stage strin
 		return err
 	}
 	path := filepath.Join(agent, "mcp.json")
-	original := []byte("{}\n")
+	// An absent mcp.json merges into an empty object, but its preimage is
+	// recorded as absent so uninstall removes the file again.
+	original, existed := []byte("{}\n"), os.FileInfo(nil)
 	if info, err := os.Lstat(path); err == nil {
 		if !info.Mode().IsRegular() || info.Sys().(*syscall.Stat_t).Nlink != 1 || info.Mode().Perm()&0022 != 0 || info.Sys().(*syscall.Stat_t).Uid != uint32(os.Getuid()) || info.Size() > 1<<20 {
 			return privateError("preimage", nil)
@@ -198,6 +201,7 @@ func userStageOwnedAgentContext7(ctx context.Context, agent, choice, stage strin
 		if err != nil {
 			return err
 		}
+		existed = info
 	} else if !os.IsNotExist(err) {
 		return err
 	}
@@ -212,11 +216,16 @@ func userStageOwnedAgentContext7(ctx context.Context, agent, choice, stage strin
 	if err != nil {
 		return err
 	}
-	backup := filepath.Join(stage, "state/agent.preimage")
-	if err := os.MkdirAll(backup, 0700); err != nil {
-		return err
+	if existed != nil {
+		backup := filepath.Join(stage, "state/agent.preimage")
+		if err := os.MkdirAll(backup, 0700); err != nil {
+			return err
+		}
+		if err := userToolWrite(filepath.Join(backup, "mcp.json"), original, 0600); err != nil {
+			return err
+		}
 	}
-	if err := userToolWrite(filepath.Join(backup, "mcp.json"), original, 0600); err != nil {
+	if err := userRecordAgentPreimage(stage, "mcp.json", existed); err != nil {
 		return err
 	}
 	temporary := path + ".new"
@@ -292,9 +301,11 @@ func userCaptureAgentPostImages(agent, root string) error {
 	return userToolWrite(filepath.Join(root, "state/agent.post.json"), data, 0600)
 }
 
-func userRestoreAgentImages(target, agent string) error {
+// userRestoreAgentImages restores the agent preimages and returns the
+// set-aside Pi tools whose backup is kept because the agent bin changed.
+func userRestoreAgentImages(target, agent string) ([]string, error) {
 	if _, err := userOwnedIdentity(agent); err != nil {
-		return err
+		return nil, err
 	}
 	data, err := os.ReadFile(filepath.Join(target, "state/agent.post.json"))
 	var post struct {
@@ -302,45 +313,87 @@ func userRestoreAgentImages(target, agent string) error {
 		Files  map[string]userAgentPostFile `json:"files"`
 	}
 	if err != nil || json.Unmarshal(data, &post) != nil || post.Schema != userAgentPostSchema {
-		return errors.New("agent uninstall evidence is missing; reinstall this agent install with the current version first")
+		return nil, errors.New("agent uninstall evidence is missing; reinstall this agent install with the current version first")
+	}
+	// Pi's own fd/rg set aside at install follow their own plan, decided and
+	// verified here before any write.
+	tools, err := userPlanAgentToolsRestore(target, agent, post.Files)
+	if err != nil {
+		return nil, err
+	}
+	// settings.json and mcp.json come back with their recorded presence and
+	// mode; installs without that record restore owner-only, never wider.
+	preimages, err := userReadAgentPreimageRecord(target)
+	if err != nil {
+		return nil, err
+	}
+	recorded := func(name string) (userAgentPreimageFile, bool) {
+		if preimages == nil {
+			return userAgentPreimageFile{}, false
+		}
+		entry, ok := preimages.Files[name]
+		return entry, ok
+	}
+	if preimages != nil {
+		for name, entry := range preimages.Files {
+			if _, err := os.Lstat(filepath.Join(target, "state/agent.preimage", name)); entry.Exists != (err == nil) {
+				return nil, fmt.Errorf("the agent preimage of %q does not match its evidence; uninstall aborted without touching the agent", name)
+			}
+		}
 	}
 	for _, name := range userAgentTouchFiles {
 		evidence, ok := post.Files[name]
 		if !ok {
-			return errors.New("agent uninstall evidence is incomplete")
+			return nil, errors.New("agent uninstall evidence is incomplete")
+		}
+		if tools.skips(name) {
+			continue
 		}
 		path := filepath.Join(agent, filepath.FromSlash(name))
 		current, readErr := os.ReadFile(path)
 		if evidence.Exists {
 			if readErr != nil || fmt.Sprintf("%x", sha256.Sum256(current)) != evidence.SHA256 {
-				return errors.New("the Pi agent changed after installation; uninstall aborted without touching it")
+				return nil, errors.New("the Pi agent changed after installation; uninstall aborted without touching it")
 			}
 		} else if !os.IsNotExist(readErr) {
-			return errors.New("the Pi agent changed after installation; uninstall aborted without touching it")
+			return nil, errors.New("the Pi agent changed after installation; uninstall aborted without touching it")
 		}
 	}
 	for _, name := range userAgentTouchFiles {
+		if tools.skips(name) {
+			continue
+		}
 		evidence := post.Files[name]
 		path := filepath.Join(agent, filepath.FromSlash(name))
+		entry, hasEntry := recorded(name)
 		preimage, preimageErr := os.ReadFile(filepath.Join(target, "state/agent.preimage", name))
 		switch {
+		case hasEntry && !entry.Exists:
+			if err := userAgentRemoveRegular(path); err != nil {
+				return nil, err
+			}
 		case preimageErr == nil:
-			if err := atomicPreferenceWrite(path, preimage); err != nil {
-				return err
+			mode := userAgentPreimageLegacy
+			if hasEntry {
+				mode, _ = userAgentPreimageMode(entry)
+			}
+			if err := userAgentReplaceFile(path, preimage, mode); err != nil {
+				return nil, err
 			}
 		case evidence.Exists && os.IsNotExist(preimageErr):
 			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-				return err
+				return nil, err
 			}
 		case !os.IsNotExist(preimageErr):
-			return preimageErr
+			return nil, preimageErr
 		}
 	}
-	return nil
+	return tools.apply()
 }
 
 // userSnapshotOwnedAgentSettings retains the operator agent's settings inside
-// the target before the legacy provisioning writes its stock declaration.
+// the target before the legacy provisioning writes its stock declaration, and
+// records its presence and mode for uninstall.
 func userSnapshotOwnedAgentSettings(ctx context.Context, agent, root string) error {
 	if ctx == nil || ctx.Err() != nil {
 		return privateError("canceled", context.Canceled)
@@ -351,7 +404,7 @@ func userSnapshotOwnedAgentSettings(ctx context.Context, agent, root string) err
 	path := filepath.Join(agent, "settings.json")
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		return nil
+		return userRecordAgentPreimage(root, "settings.json", nil)
 	}
 	if err != nil || len(data) > 1<<20 {
 		return privateError("preimage", err)
@@ -364,5 +417,8 @@ func userSnapshotOwnedAgentSettings(ctx context.Context, agent, root string) err
 	if err := os.MkdirAll(backup, 0700); err != nil {
 		return err
 	}
-	return userToolWrite(filepath.Join(backup, "settings.json"), data, 0600)
+	if err := userToolWrite(filepath.Join(backup, "settings.json"), data, 0600); err != nil {
+		return err
+	}
+	return userRecordAgentPreimage(root, "settings.json", info)
 }

@@ -233,5 +233,71 @@ class FileAssertions(unittest.TestCase):
                          ['added mcp.json', 'changed bin', 'changed settings.json'])
 
 
+
+class ExistingPiTools(unittest.TestCase):
+    def setUp(self):
+        self.root = pathlib.Path(os.path.realpath(tempfile.mkdtemp()))
+
+    def executable(self, path, body='#!/bin/sh\nexit 0\n', mode=0o755):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(body)
+        os.chmod(path, mode)
+        return path
+
+    def test_first_run_path_hides_fd_and_rg_from_pi(self):
+        host = self.root / 'host-bin'
+        for name in ('node', 'npm', 'tar', 'gzip', 'fd', 'fdfind', 'rg'):
+            self.executable(host / name)
+        directory = acc.pi_first_run_path(self.root / 'pi-path', str(host), str(host))
+        self.assertEqual(sorted(os.listdir(directory)), ['gzip', 'node', 'npm', 'tar'])
+        for name in os.listdir(directory):
+            self.assertEqual(os.path.realpath(directory / name), str(host / name))
+
+    def test_first_run_path_requires_node_npm_and_tar(self):
+        host = self.root / 'host-bin'
+        self.executable(host / 'node')
+        with self.assertRaises(acc.Fail):
+            acc.pi_first_run_path(self.root / 'pi-path', str(host), str(host))
+
+    def agent_and_target(self):
+        bin_dir = self.root / 'agent/bin'
+        fd = self.executable(bin_dir / 'fd', 'pi fd')
+        rg = self.executable(bin_dir / 'rg', 'pi rg')
+        target = self.root / 'install'
+        pi_tools = acc.tool_images(bin_dir)
+        (target / 'backup/agent-tools').mkdir(parents=True)
+        (target / 'state').mkdir()
+        files = {}
+        for path in (fd, rg):
+            (target / 'backup/agent-tools' / path.name).write_bytes(path.read_bytes())
+            image = pi_tools[path.name]
+            files[path.name] = {'sha256': image['sha256'], 'size': image['size'], 'mode': '%04o' % image['mode']}
+        evidence = {'schema': 'gentle-shell-agent-tools/v1', 'agent': str(self.root / 'agent'), 'files': files}
+        (target / 'state/agent-tools.json').write_text(json.dumps(evidence))
+        return bin_dir, target, pi_tools
+
+    def test_tool_images_record_mode_size_and_digest(self):
+        bin_dir, _, pi_tools = self.agent_and_target()
+        self.assertEqual(sorted(pi_tools), ['fd', 'rg'])
+        self.assertEqual(pi_tools['fd']['mode'], 0o755)
+        self.assertEqual(pi_tools['fd']['size'], len('pi fd'))
+        os.chmod(bin_dir / 'fd', 0o700)
+        self.assertNotEqual(acc.tool_images(bin_dir), pi_tools)
+
+    def test_set_aside_evidence_matches(self):
+        _, target, pi_tools = self.agent_and_target()
+        self.assertEqual(acc.verify_set_aside(target, self.root / 'agent', pi_tools), [])
+
+    def test_set_aside_mismatches_are_reported(self):
+        _, target, pi_tools = self.agent_and_target()
+        (target / 'backup/agent-tools/rg').write_text('tampered')
+        evidence = json.loads((target / 'state/agent-tools.json').read_text())
+        evidence['files']['fd']['mode'] = '0700'
+        (target / 'state/agent-tools.json').write_text(json.dumps(evidence))
+        problems = acc.verify_set_aside(target, self.root / 'agent', pi_tools)
+        self.assertTrue(any(p.startswith('set-aside rg') for p in problems), problems)
+        self.assertTrue(any(p.startswith('set-aside fd') for p in problems), problems)
+        self.assertTrue(acc.verify_set_aside(self.root / 'missing', self.root / 'agent', pi_tools))
+
 if __name__ == '__main__':
     unittest.main()

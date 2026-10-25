@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -8,6 +10,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/gentleman-programming/gentle-ai/v4/internal/shellinstaller"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/system"
 	"github.com/gentleman-programming/gentle-ai/v4/internal/tui/screens"
 )
@@ -103,6 +106,101 @@ func TestShellAgentReuseOption(t *testing.T) {
 	}
 	if main.shellPlan == nil || main.shellPlanRequest.SharedAgent != private || main.shellPlanRequest.Experience == nil || main.shellPlanRequest.Experience.SDKSource != "main-preview" {
 		t.Fatalf("Main selection was dropped: %+v", main.shellPlanRequest.Experience)
+	}
+}
+
+// T16: a stock Pi agent holds Pi's own fd/rg in its bin. "On my existing Pi"
+// admits it and reaches the plan; the target says the tools are set aside
+// and restored on uninstall, and nothing in the agent changes before install.
+func TestShellAgentReuseSetsAsidePiTools(t *testing.T) {
+	agent := restrictedAgentHome(t)
+	bin := filepath.Join(agent, "bin")
+	if err := os.Mkdir(bin, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(bin, 0755); err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range []string{"fd", "rg"} {
+		if err := os.WriteFile(filepath.Join(bin, tool), []byte("pi's own "+tool), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chmod(filepath.Join(bin, tool), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	snapshot := func() string {
+		var lines []string
+		for _, name := range []string{"", "fd", "rg"} {
+			info, err := os.Lstat(filepath.Join(bin, name))
+			data, _ := os.ReadFile(filepath.Join(bin, name))
+			lines = append(lines, name+":"+info.Mode().String()+":"+string(data)+":"+strconv.FormatBool(err == nil))
+		}
+		return strings.Join(lines, "\n")
+	}
+	before := snapshot()
+	m := openTargetConfiguration(t)
+	targets := screens.ShellInstallTargetEntries("agent", true, "", agent, nil, false)
+	if len(targets) == 0 || targets[0].Choice != "agent" || !strings.Contains(targets[0].Description, "fd/rg") ||
+		!strings.Contains(targets[0].Description, "set aside") || !strings.Contains(targets[0].Description, "restored on uninstall") {
+		t.Fatalf("On my existing Pi does not state the set-aside: %+v", targets)
+	}
+	m = experienceFocus(t, m, screens.ShellExperienceInstallTarget, "agent")
+	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Model)
+	if m.shellExperience.mode != "agent" || m.shellExperience.choice != "agent" {
+		t.Fatalf("agent reuse with Pi's fd/rg was not selected: %+v", m.shellExperience)
+	}
+	m = shellHostCodeGraph(t, m)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnd})
+	m = next.(Model)
+	next, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = next.(Model)
+	if m.shellExperience != nil {
+		t.Fatalf("agent reuse with Pi's fd/rg was refused before the plan: %v", m.shellExperience.err)
+	}
+	if m.shellPlan == nil || m.shellPlanRequest.Mode != "agent" || m.shellPlanRequest.SharedAgent != agent || m.shellPlanRequest.Confirmation == "" {
+		t.Fatalf("agent reuse with Pi's fd/rg did not reach the plan: %+v", m.shellPlanRequest)
+	}
+	if after := snapshot(); after != before {
+		t.Fatalf("planning changed the agent bin:\n%s\n->\n%s", before, after)
+	}
+}
+
+// shellUninstallKeptNote is the completion note contract UninstallUserShellInstall
+// returns when the uninstall completed but kept a Pi-replaced tool.
+type shellUninstallKeptNote struct{ note string }
+
+func (n shellUninstallKeptNote) Error() string         { return "installation moved, but " + n.note }
+func (n shellUninstallKeptNote) UninstallNote() string { return n.note }
+
+// T16: an uninstall that completed but kept a Pi-replaced tool is a success
+// with a note; any other uninstall error still stays on the confirmation.
+func TestShellUninstallKeptToolIsSuccessWithNote(t *testing.T) {
+	install := shellinstaller.UserShellInstall{Target: "/home/u/.local/share/gentle-shell/install", Mode: "agent"}
+	note := "Pi's fd changed after installation; Pi's original is kept in /x.pi-tools"
+	m := NewModel(system.DetectionResult{}, "uninstall-note-test").WithShellInstaller()
+	m.Width, m.Height = 160, 40
+	m.shellManage = &shellManageState{install: install, confirm: true, working: true}
+	next, _ := m.updateShellManage(shellUninstallResult{backup: install.Target + ".removed-1", err: fmt.Errorf("wrapped: %w", shellUninstallKeptNote{note})})
+	done := next.(Model)
+	if !done.shellManage.uninstalled || done.shellManage.backup != install.Target+".removed-1" {
+		t.Fatalf("a completed uninstall with a kept tool was not shown as uninstalled: %+v", done.shellManage)
+	}
+	view := done.shellInstallView()
+	for _, want := range []string{"Installation uninstalled.", "Backup: " + install.Target + ".removed-1", "Note: " + note} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("uninstalled view lacks %q:\n%s", want, view)
+		}
+	}
+	if strings.Contains(view, "installation moved, but") || strings.Contains(view, "Uninstall (keep backup)") {
+		t.Fatalf("a completed uninstall is rendered as a failure:\n%s", view)
+	}
+	m.shellManage = &shellManageState{install: install, confirm: true, working: true}
+	next, _ = m.updateShellManage(shellUninstallResult{err: errors.New("the Pi agent changed after installation; uninstall aborted without touching it")})
+	failed := next.(Model)
+	if failed.shellManage.uninstalled || failed.shellManage.uninstallErr == nil || !strings.Contains(failed.shellInstallView(), "uninstall aborted") {
+		t.Fatalf("a refused uninstall was not kept as an error: %+v", failed.shellManage)
 	}
 }
 

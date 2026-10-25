@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -14,6 +15,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 )
 
@@ -147,13 +149,171 @@ func agentTargetRefusesEverywhere(t *testing.T, parent string, req UserInstallRe
 	}
 }
 
-// Rule 1 + 3: a stock Pi agent already holds Pi's own fd and rg. Gentle Shell
-// never replaces operator tools, so the refusal must come before any write and
-// say exactly what to move.
-func TestAgentTargetStockPiToolsRefuseUpFront(t *testing.T) {
+// T16 rule 1: a stock Pi agent already holds Pi's own fd and rg. They are no
+// longer refused: every preflight entry admits the agent for the set-aside,
+// without any effect on the agent or the installer parent.
+func TestAgentTargetStockPiToolsAreAdmittedForSetAside(t *testing.T) {
 	parent, req := agentTargetFixture(t, true)
-	bin := filepath.Join(req.SharedAgent, "bin")
-	agentTargetRefusesEverywhere(t, parent, req, "agent bin", "already contains fd", "and rg", filepath.Join(bin, "fd"), filepath.Join(bin, "rg"), "move", "retry")
+	before := agentTargetRecord(t, parent)
+	if err := ValidateUserInstall(req); err != nil {
+		t.Fatalf("stock agent with Pi's fd/rg refused: %v", err)
+	}
+	first, err := InspectUserInstall(req)
+	if err != nil || first == "" {
+		t.Fatalf("stock agent with Pi's fd/rg inspection refused: %q %v", first, err)
+	}
+	if again, err := InspectUserInstall(req); err != nil || again != first {
+		t.Fatalf("unchanged agent changed its confirmation: %q %v", again, err)
+	}
+	if after := agentTargetRecord(t, parent); after != before {
+		t.Fatalf("admission had effects:\n%s\n->\n%s", before, after)
+	}
+}
+
+// T16 rule 1: only Pi's own regular fd/rg files are set aside. Any other
+// entry in their place keeps the up-front refusal, with the path and the fix.
+func TestAgentTargetToolSetAsideRefusesForeignEntries(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		prepare func(t *testing.T, bin string)
+		want    []string
+	}{
+		{name: "symlinked fd", prepare: func(t *testing.T, bin string) {
+			outside := filepath.Join(filepath.Dir(filepath.Dir(bin)), "fd-elsewhere")
+			agentTargetWrite(t, outside, []byte("#!/bin/sh\nexit 0\n"), 0755)
+			if err := os.Symlink(outside, filepath.Join(bin, "fd")); err != nil {
+				t.Fatal(err)
+			}
+		}, want: []string{"{bin}/fd", "symbolic link", "regular"}},
+		{name: "fd directory", prepare: func(t *testing.T, bin string) {
+			if err := os.Mkdir(filepath.Join(bin, "fd"), 0755); err != nil {
+				t.Fatal(err)
+			}
+		}, want: []string{"{bin}/fd", "not a regular file"}},
+		{name: "fd fifo", prepare: func(t *testing.T, bin string) {
+			if err := syscall.Mkfifo(filepath.Join(bin, "fd"), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}, want: []string{"{bin}/fd", "not a regular file"}},
+		{name: "group-writable rg", prepare: func(t *testing.T, bin string) {
+			agentTargetWrite(t, filepath.Join(bin, "rg"), agentTargetBytes(4096, 'r'), 0775)
+		}, want: []string{"{bin}/rg", "writable by other users", "chmod go-w"}},
+		{name: "hard-linked rg", prepare: func(t *testing.T, bin string) {
+			agentTargetWrite(t, filepath.Join(bin, "rg"), agentTargetBytes(4096, 'r'), 0755)
+			if err := os.Link(filepath.Join(bin, "rg"), filepath.Join(filepath.Dir(filepath.Dir(bin)), "rg-link")); err != nil {
+				t.Fatal(err)
+			}
+		}, want: []string{"{bin}/rg", "hard links"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			parent, req := agentTargetFixture(t, false)
+			bin := filepath.Join(req.SharedAgent, "bin")
+			tc.prepare(t, bin)
+			want := append([]string(nil), tc.want...)
+			for index := range want {
+				want[index] = strings.ReplaceAll(want[index], "{bin}", bin)
+			}
+			agentTargetRefusesEverywhere(t, parent, req, want...)
+			if err := userSetAsideAgentTools(context.Background(), req.SharedAgent, filepath.Join(parent, "absent-stage")); err == nil {
+				t.Fatal("set-aside admitted a foreign tool entry")
+			}
+			if _, err := os.Lstat(filepath.Join(parent, "absent-stage")); !os.IsNotExist(err) {
+				t.Fatalf("refused set-aside wrote a stage: %v", err)
+			}
+		})
+	}
+}
+
+// agentToolsEvidence reads the set-aside evidence the install records.
+func agentToolsEvidence(t *testing.T, path string) userAgentToolsRecord {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var record userAgentToolsRecord
+	if err := json.Unmarshal(data, &record); err != nil {
+		t.Fatal(err)
+	}
+	return record
+}
+
+// agentTargetRecordWithout drops the named agent-relative entries from a
+// snapshot, so the rest of the agent can be compared exactly.
+func agentTargetRecordWithout(t *testing.T, root string, names ...string) string {
+	t.Helper()
+	var kept []string
+	for _, line := range strings.Split(agentTargetRecord(t, root), "\n") {
+		drop := false
+		for _, name := range names {
+			drop = drop || strings.HasPrefix(line, fmt.Sprintf("%q:", "/"+name))
+		}
+		if !drop {
+			kept = append(kept, line)
+		}
+	}
+	return strings.Join(kept, "\n")
+}
+
+// T16 rule 1: the set-aside moves exactly Pi's fd/rg into the installation
+// backup with their bytes, and records their digests, sizes and modes as the
+// installation's evidence. Nothing else in the agent changes, and the bind
+// precheck then finds free tool slots.
+func TestAgentTargetSetAsideMovesPiToolsIntoTheInstallation(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		tools []string
+	}{{"fd and rg", []string{"fd", "rg"}}, {"fd only", []string{"fd"}}, {"neither", nil}} {
+		t.Run(tc.name, func(t *testing.T) {
+			parent, req := agentTargetFixture(t, false)
+			agent, bin := req.SharedAgent, filepath.Join(req.SharedAgent, "bin")
+			originals := map[string][]byte{}
+			for _, name := range tc.tools {
+				originals[name] = agentTargetBytes(agentTargetStockFDSize, name[0])
+				agentTargetWrite(t, filepath.Join(bin, name), originals[name], 0755)
+			}
+			rest := agentTargetRecordWithout(t, agent, "bin/fd", "bin/rg")
+			root := filepath.Join(parent, "stage")
+			if err := os.MkdirAll(filepath.Join(root, "state"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := userSetAsideAgentTools(context.Background(), agent, root); err != nil {
+				t.Fatalf("set-aside refused Pi's own tools: %v", err)
+			}
+			if after := agentTargetRecord(t, agent); after != rest {
+				t.Fatalf("set-aside changed more than Pi's fd/rg:\n%s\n->\n%s", rest, after)
+			}
+			if len(tc.tools) == 0 {
+				for _, path := range []string{filepath.Join(root, userAgentToolsBackup), filepath.Join(root, userAgentToolsEvidence)} {
+					if _, err := os.Lstat(path); !os.IsNotExist(err) {
+						t.Fatalf("set-aside without tools wrote %q: %v", path, err)
+					}
+				}
+				return
+			}
+			record := agentToolsEvidence(t, filepath.Join(root, userAgentToolsEvidence))
+			if record.Schema != userAgentToolsSchema || record.Agent != agent || len(record.Files) != len(tc.tools) {
+				t.Fatalf("set-aside evidence = %+v", record)
+			}
+			for _, name := range tc.tools {
+				backup := filepath.Join(root, userAgentToolsBackup, name)
+				data, err := os.ReadFile(backup)
+				if err != nil || !bytes.Equal(data, originals[name]) {
+					t.Fatalf("backup of %s differs: %v", name, err)
+				}
+				if info, err := os.Lstat(backup); err != nil || info.Mode() != 0600 {
+					t.Fatalf("backup of %s mode = %v %v", name, info.Mode(), err)
+				}
+				image := record.Files[name]
+				if image.SHA256 != fmt.Sprintf("%x", sha256.Sum256(originals[name])) || image.Size != int64(len(originals[name])) || image.Mode != "0755" {
+					t.Fatalf("evidence of %s = %+v", name, image)
+				}
+			}
+			if err := userToolBinAvailable(agent); err != nil {
+				t.Fatalf("bind precheck still sees Pi's tools: %v", err)
+			}
+		})
+	}
 }
 
 // The Shared refusal keeps its message contract ("already contains fd", the
@@ -303,8 +463,8 @@ func TestAgentTargetLateCustodyAcceptsStockAgent(t *testing.T) {
 	if err := userCaptureAgentPostImages(agent, root); err != nil {
 		t.Fatalf("post-image evidence refused the pinned tools: %v", err)
 	}
-	if err := userRestoreAgentImages(root, agent); err != nil {
-		t.Fatalf("uninstall restore refused its own evidence: %v", err)
+	if kept, err := userRestoreAgentImages(root, agent); err != nil || len(kept) != 0 {
+		t.Fatalf("uninstall restore refused its own evidence: %v %v", kept, err)
 	}
 	for _, name := range []string{"bin/fd", "bin/rg", "mcp.json"} {
 		if _, err := os.Lstat(filepath.Join(agent, name)); !os.IsNotExist(err) {
@@ -391,6 +551,11 @@ func TestAgentTargetRollbackRestoresEveryMutationStep(t *testing.T) {
 				t.Fatal(err)
 			}
 		}},
+		{"set aside Pi's fd and rg", func(t *testing.T, agent, root string) {
+			if err := userSetAsideAgentTools(context.Background(), agent, root); err != nil {
+				t.Fatal(err)
+			}
+		}},
 		{"tool bind fd", func(t *testing.T, agent, _ string) {
 			if err := userToolWrite(filepath.Join(agent, "bin/fd"), agentTargetBytes(agentTargetStockFDSize, 'F'), 0700); err != nil {
 				t.Fatal(err)
@@ -412,6 +577,10 @@ func TestAgentTargetRollbackRestoresEveryMutationStep(t *testing.T) {
 		prepare func(t *testing.T, agent string)
 	}{
 		{"stock agent with bin", func(*testing.T, string) {}},
+		{"stock agent with Pi's fd and rg", func(t *testing.T, agent string) {
+			agentTargetWrite(t, filepath.Join(agent, "bin/fd"), agentTargetBytes(agentTargetStockFDSize, 'f'), 0755)
+			agentTargetWrite(t, filepath.Join(agent, "bin/rg"), agentTargetBytes(agentTargetStockRGSize, 'r'), 0755)
+		}},
 		{"agent without bin or settings, with mcp.json", func(t *testing.T, agent string) {
 			for _, path := range []string{filepath.Join(agent, "bin"), filepath.Join(agent, "settings.json")} {
 				if err := os.Remove(path); err != nil {
@@ -670,8 +839,8 @@ func TestAgentTargetFailureAfterPublicationCommitKeepsBindings(t *testing.T) {
 			if _, err := os.Lstat(filepath.Join(req.Destination, "installation.json")); err != nil {
 				t.Fatalf("published manifest missing: %v", err)
 			}
-			if err := userRestoreAgentImages(req.Destination, req.SharedAgent); err != nil {
-				t.Fatalf("published install is inconsistent with its agent: %v", err)
+			if kept, err := userRestoreAgentImages(req.Destination, req.SharedAgent); err != nil || len(kept) != 0 {
+				t.Fatalf("published install is inconsistent with its agent: %v %v", kept, err)
 			}
 			// Uninstall evidence restores contents and presence.
 			if data, err := os.ReadFile(filepath.Join(req.SharedAgent, "settings.json")); err != nil || string(data) != agentTargetSettings {
