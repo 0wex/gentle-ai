@@ -36,6 +36,8 @@ Fresh private-stage creation and preferences are now composed by the installatio
 
 Persona/background serialization now has one side-effect-free canonical codec consumed by the POSIX writer. Native custody, exclusive writes and staged readback remain in that writer; Windows non-nil profiles stay refused and no Windows guest qualification is admitted.
 
+Manage on a detected installation splits the selected delta: preference-only changes use **Apply preferences** in place; a component change (CodeGraph, or any change on an **On my existing Pi** install) offers **Update installation**, which reinstalls the target with the selected profile, including the preference changes of the same summary. **On my existing Pi** never offers CodeGraph ON: the CodeGraph library stages only into a Separate or Shared install.
+
 The confirmation review wraps to terminal width. Use PgUp/PgDn to scroll and Home/End to reach the first/last page, including the full Shared settings preview and recovery warnings; scrolling or resizing does not confirm or change your selection.
 
 For command-line installation, inspect, then use the **exact fresh printed confirmation** for that unchanged selection:
@@ -48,6 +50,8 @@ gentle-ai shell install --target /owned/private-parent/shell --mode separate --c
 For Shared, use `--mode shared` and supply `--prefix /owned/selected-prefix --agent /owned/selected-agent` on **both** calls. Do not reuse consent after changing paths or selected contents.
 
 Launch `TARGET/bin/gentle-shell` or `TARGET/bin/pi`. Normal launches have no installer menu; `TARGET/bin/gentle-shell install` reopens it. The installer does not modify PATH or shell files, replace an unrelated `pi`, or require a root installation.
+
+The installer TUI runs the portable direct worker, so it first probes the delegated systemd unit every later launch uses. When that probe fails (for example no `XDG_RUNTIME_DIR=/run/user/UID` or no user manager), the install is refused **before any change**: no target, launcher or registry entry is created. A published installation is recorded in `~/.gentle-ai/shell-installs.json` (0600) for Manage. That directory may be gentle-ai's usual `0755` state directory, but it must be owned by you, not a symlink, and not writable by group or others. If the installation cannot be recorded, the completion output says so; the installation itself is kept.
 
 ## Shared settings: preview before confirming
 

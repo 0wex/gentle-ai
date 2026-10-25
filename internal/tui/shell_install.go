@@ -223,13 +223,10 @@ func (m Model) restoreUpdateConfig(update *shellUpdateState) Model {
 	return m
 }
 
+// beginComponentUpdate reconfigures with the SELECTED profile: the installed
+// profile would silently drop every component and preference delta.
 func (m Model) beginComponentUpdate(update *shellUpdateState) (tea.Model, error) {
-	install := update.install
-	profile, err := shellinstaller.LoadUserShellExperience(install)
-	if err != nil {
-		return m, err
-	}
-	return m.beginShellUpdateInstall(install, profile)
+	return m.beginShellUpdateInstall(update.install, shellForceGGAOff(update.config.profile))
 }
 
 // beginShellUpdateInstall prepares the shared plan/confirmation flow for a
@@ -445,7 +442,11 @@ func manageActions(manage *shellManageState) []string {
 		return []string{"Back"}
 	}
 	var actions []string
-	if len(manage.preferences) > 0 {
+	// Component deltas need the full reconfigure, which also applies every
+	// preference change of the same delta; preference-only deltas stay in place.
+	if len(manage.components) > 0 {
+		actions = append(actions, "Update installation")
+	} else if len(manage.preferences) > 0 {
 		actions = append(actions, "Apply preferences")
 	}
 	actions = append(actions, "Back")
@@ -556,6 +557,15 @@ func (m Model) updateShellManage(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			manage.applied, manage.err = true, nil
+		case "Update installation":
+			next, err := m.beginShellUpdateInstall(manage.install, shellForceGGAOff(manage.config.profile))
+			if err != nil {
+				manage.err = err
+				return m, nil
+			}
+			planned := next.(Model)
+			planned.shellManage, planned.shellPlanConfig = nil, &manage.config
+			return planned, nil
 		case "Uninstall this installation":
 			manage.confirm, manage.cursor = true, 0
 		default:

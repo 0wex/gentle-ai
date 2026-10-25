@@ -237,6 +237,9 @@ func userServiceWithPlan(ctx context.Context, self string, args []string, stdin 
 	}()
 	env = append(env, "GENTLE_SHELL_UNIT="+unit, "GENTLE_SHELL_UNIT_RECEIPT="+filepath.Join(receiptDir, "kernel.json"))
 	env = append(env, userProgressEnvironment(ctx)...)
+	// The unit sees only this list: forward the registry, reconfigure and
+	// Main fallback intents explicitly or the worker silently loses them.
+	env = append(env, userServiceIntentEnvironment(os.Getenv("HOME"))...)
 	cwd, err := os.Getwd()
 	if err != nil {
 		return err
