@@ -69,6 +69,9 @@ Files checked for a profile (target `~/.local/share/gentle-shell/install`):
   `{"url": "https://mcp.context7.com/mcp", "enabled": <bool>, "exposure": "codemode"}`.
 - `config/update-channel.json`, when present: the channel matches.
 - `~/.local/bin/gentle-shell` (Separate): links to `<target>/bin/gentle-shell`.
+- Shell startup file (Separate, only when `~/.local/bin` was not on the
+  terminal's PATH): exactly one `# gentle-ai: gentle-shell launcher` line; none
+  after uninstall.
 - `~/.gentle-ai/shell-installs.json`: exactly one entry for the target, with
   its mode and channel.
 

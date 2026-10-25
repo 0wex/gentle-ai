@@ -18,6 +18,10 @@ func launcherTestTarget(t *testing.T) string {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", emptyBin)
+	// Pin every input of the startup file choice and both forwarded intents.
+	for _, key := range []string{"SHELL", "ZDOTDIR", "XDG_CONFIG_HOME", "GENTLE_AI_LAUNCHER_DIR_ON_PATH", "GENTLE_AI_LAUNCHER_PROFILE"} {
+		t.Setenv(key, "")
+	}
 	target := filepath.Join(home, "install")
 	bin := filepath.Join(target, "bin")
 	if err := os.MkdirAll(bin, 0700); err != nil {
@@ -58,7 +62,7 @@ func TestPublishUserShellLauncherPublishesBothCommands(t *testing.T) {
 		t.Fatal("launcher dir unexpectedly on PATH")
 	}
 	note := userShellLauncherNote(report)
-	for _, want := range []string{launcherLink(t, "gentle-shell"), launcherLink(t, "gs"), "is not on this session's PATH", "export PATH="} {
+	for _, want := range []string{launcherLink(t, "gentle-shell"), launcherLink(t, "gs"), "is not on this terminal's PATH", "export PATH="} {
 		if !strings.Contains(note, want) {
 			t.Fatalf("note misses %q: %s", want, note)
 		}
@@ -179,8 +183,64 @@ func TestPublishUserShellLauncherOmitsHintWhenDirOnPath(t *testing.T) {
 	if !report.DirOnPath {
 		t.Fatal("launcher dir not detected on PATH")
 	}
-	if strings.Contains(userShellLauncherNote(report), "is not on this session's PATH") {
+	if strings.Contains(userShellLauncherNote(report), "is not on this terminal's PATH") {
 		t.Fatal("remediation hint emitted while the launcher dir is on PATH")
+	}
+}
+
+// The Linux delegated unit runs with PATH=/usr/bin:/bin, so the launcher dir
+// decision must be the caller terminal's, forwarded as an intent (#5758).
+func TestPublishUserShellLauncherUsesForwardedTerminalPathDecision(t *testing.T) {
+	target := launcherTestTarget(t)
+	launcherDir := filepath.Dir(launcherLink(t, "gentle-shell"))
+	for _, test := range []struct {
+		name       string
+		terminal   string
+		wantOnPath bool
+	}{
+		{"terminal PATH holds the launcher dir", "/usr/local/bin" + string(os.PathListSeparator) + launcherDir, true},
+		{"terminal PATH lacks the launcher dir", "/usr/local/bin", false},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Setenv("GENTLE_AI_LAUNCHER_DIR_ON_PATH", "")
+			t.Setenv("GENTLE_AI_LAUNCHER_PROFILE", "")
+			t.Setenv("PATH", test.terminal)
+			forwarded := userServiceIntentEnvironment(os.Getenv("HOME"))
+			// Re-enter as the unit: its own PATH stays the fixed system one and
+			// only the forwarded entries cross the env -i boundary.
+			t.Setenv("PATH", "/usr/bin:/bin")
+			for _, entry := range forwarded {
+				key, value, _ := strings.Cut(entry, "=")
+				t.Setenv(key, value)
+			}
+			for _, entry := range forwarded {
+				if strings.HasPrefix(entry, "PATH=") || strings.Contains(entry, test.terminal) {
+					t.Fatalf("caller PATH leaked into the unit environment: %q", forwarded)
+				}
+			}
+			report, err := PublishUserShellLauncher(target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if report.DirOnPath != test.wantOnPath {
+				t.Fatalf("DirOnPath = %v, want %v (forwarded %q)", report.DirOnPath, test.wantOnPath, forwarded)
+			}
+			if hint := strings.Contains(userShellLauncherNote(report), "is not on this terminal's PATH"); hint == test.wantOnPath {
+				t.Fatalf("hint shown = %v with the launcher dir on the terminal PATH = %v", hint, test.wantOnPath)
+			}
+		})
+	}
+}
+
+// Only the exact forwarded value counts; anything else falls back to PATH.
+func TestUserLauncherDirOnPathIntentIsExact(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), ".local", "bin")
+	t.Setenv("PATH", "/usr/bin:/bin")
+	for value, want := range map[string]bool{"1": true, "": false, "0": false, "yes": false, "true": false} {
+		t.Setenv("GENTLE_AI_LAUNCHER_DIR_ON_PATH", value)
+		if got := userLauncherDirOnPath(dir); got != want {
+			t.Fatalf("intent %q: DirOnPath = %v, want %v", value, got, want)
+		}
 	}
 }
 
