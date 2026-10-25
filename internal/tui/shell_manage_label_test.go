@@ -100,7 +100,7 @@ func shellUpdateModel(t *testing.T, install shellinstaller.UserShellInstall, sel
 // and prepares the channel-pinned overlay request instead of the full
 // component reconfigure.
 func TestShellUpdateRoutesChannelOnlyDeltaToOverlay(t *testing.T) {
-	skipDarwinMainPreview(t)
+	skipUnqualifiedMainPreview(t)
 	_, target := managedInstallFixture(t)
 	install := shellinstaller.UserShellInstall{Target: target, Mode: "separate", Channel: "stable"}
 	loaded, err := shellinstaller.LoadUserShellExperience(install)

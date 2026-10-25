@@ -72,12 +72,12 @@ func shellHostCodeGraph(t *testing.T, m Model) Model {
 	return m
 }
 
-// skipDarwinMainPreview keeps Main preview flows on the platforms that ship
-// its producer; macOS refuses the channel until its runtime is ported.
-func skipDarwinMainPreview(t *testing.T) {
+// skipUnqualifiedMainPreview keeps Main preview flows on the platforms that
+// ship its producer: Linux amd64, macOS arm64 and Windows.
+func skipUnqualifiedMainPreview(t *testing.T) {
 	t.Helper()
-	if runtime.GOOS == "darwin" {
-		t.Skip("Main preview is not available on macOS yet")
+	if runtime.GOOS == "darwin" && runtime.GOARCH != "arm64" {
+		t.Skip("Main preview is qualified on macOS arm64 only")
 	}
 }
 
