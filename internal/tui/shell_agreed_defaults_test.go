@@ -37,17 +37,8 @@ func TestShellAgreedFreshDefaults(t *testing.T) {
 	if strings.Contains(m.View(), "Inherited") || strings.Contains(m.View(), "ADVANCED") || strings.Contains(m.View(), "GGA provider") {
 		t.Error("fresh menu still inherits or exposes an inactive provider")
 	}
+	// CodeGraph ON reaches the plan on macOS arm64 exactly as on Linux amd64.
 	planned := want
-	if runtime.GOOS == "darwin" {
-		// CodeGraph ON is refused on macOS with its precise reason; the
-		// remaining agreed defaults continue unchanged.
-		refused := experienceKey(experienceKey(m, tea.KeyMsg{Type: tea.KeyEnd}), tea.KeyMsg{Type: tea.KeyEnter})
-		if refused.shellExperience == nil || refused.shellExperience.err == nil || refused.shellExperience.err.Error() != "CodeGraph is not available on macOS yet; turn CodeGraph off to install" {
-			t.Fatalf("macOS CodeGraph ON was not refused precisely: %+v", refused.shellExperience)
-		}
-		m = shellHostCodeGraph(t, m)
-		planned.CodeGraph = "off"
-	}
 	for _, key := range []tea.KeyMsg{{Type: tea.KeyEnd}, {Type: tea.KeyEnter}} {
 		next, cmd = m.Update(key)
 		m = next.(Model)

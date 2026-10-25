@@ -65,16 +65,11 @@ func experienceStart(t *testing.T) Model {
 	return m
 }
 
-// shellHostCodeGraph turns CodeGraph OFF on macOS, where CodeGraph ON is
-// still refused, so flows written against the agreed defaults keep
-// exercising every other selection natively.
+// shellHostCodeGraph keeps the agreed defaults unchanged: CodeGraph ON is
+// qualified on every host that ships the TUI install, macOS arm64 included.
 func shellHostCodeGraph(t *testing.T, m Model) Model {
 	t.Helper()
-	if runtime.GOOS != "darwin" || m.shellExperience == nil || m.shellExperience.profile.CodeGraph != "on" {
-		return m
-	}
-	m = experienceFocus(t, m, screens.ShellExperienceCodeGraph, "")
-	return experienceKey(m, tea.KeyMsg{Type: tea.KeyEnter})
+	return m
 }
 
 // skipDarwinMainPreview keeps Main preview flows on the platforms that ship

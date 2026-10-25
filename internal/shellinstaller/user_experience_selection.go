@@ -47,11 +47,12 @@ func userQualifiedMainExperience(profile *UserExperience) bool {
 }
 
 // macOS arm64 Stable has no native runtime, but the darwin flow stages every
-// base and private preference through the same canonical writers as Linux.
-// CodeGraph ON and Main preview still have no darwin producer.
+// base and private preference through the same canonical writers as Linux,
+// including the pinned darwin-arm64 CodeGraph library. Main preview still has
+// no darwin producer.
 func userQualifiedDarwinExperience(profile *UserExperience) bool {
 	return profile != nil && runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" &&
-		profile.SDKSource != "main-preview" && profile.GGA != "on" && profile.CodeGraph != "on"
+		profile.SDKSource != "main-preview" && profile.GGA != "on"
 }
 
 // Every qualified distribution shares the canonical private writers.
@@ -59,11 +60,8 @@ func userQualifiedPrivateChoices(profile *UserExperience) bool {
 	return userQualifiedStockExperience(profile) || userQualifiedMainExperience(profile) || userQualifiedDarwinExperience(profile)
 }
 
-// The TUI names these refusals verbatim; the CLI has no flag that selects them.
-var (
-	errUserDarwinCodeGraph = errors.New("CodeGraph is not available on macOS yet; turn CodeGraph off to install")
-	errUserDarwinMain      = errors.New("Main preview is not available on macOS yet; choose Stable to install")
-)
+// The TUI names this refusal verbatim; the CLI has no flag that selects it.
+var errUserDarwinMain = errors.New("Main preview is not available on macOS yet; choose Stable to install")
 
 // The legacy authenticated worker acquires and installs GGA with its own setup
 // instructions, so GGA ON keeps the same private writers on Linux amd64. The
@@ -96,9 +94,6 @@ func userExperienceSupported(profile *UserExperience) error {
 	}
 	if profile.SDKSource == "main-preview" {
 		return userValidateMainExperience(profile)
-	}
-	if profile.CodeGraph == "on" && runtime.GOOS == "darwin" {
-		return errUserDarwinCodeGraph
 	}
 	qualified := userQualifiedStockExperience(profile) || userQualifiedLegacyExperience(profile) || userQualifiedDarwinExperience(profile)
 	if (profile.GlobalRDD != "" || profile.Context7 != "" || profile.StrictTDD != "" || profile.CodeGraph != "") && runtime.GOOS != "windows" && !qualified {

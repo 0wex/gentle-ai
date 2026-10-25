@@ -90,19 +90,18 @@ func assertStableCanonicalFiles(t *testing.T, root string, profile UserExperienc
 	}
 }
 
-// CodeGraph ON and Main preview have no macOS producer yet: both stay refused
-// with a precise reason, while CodeGraph OFF and Stable never refuse.
+// Main preview has no macOS producer yet and stays refused with a precise
+// reason, while Stable never refuses.
 func TestUserDarwinRefusesOnlyUnportedExperience(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("macOS admission boundary")
 	}
-	base := UserExperience{Persona: "gentleman", BackgroundSubagents: "on", StrictTDD: "on", GlobalRDD: "on", Context7: "on", CodeGraph: "off", GGA: "off"}
+	base := UserExperience{Persona: "gentleman", BackgroundSubagents: "on", StrictTDD: "on", GlobalRDD: "on", Context7: "on", CodeGraph: "on", GGA: "off"}
 	for _, tt := range []struct {
 		name string
 		edit func(*UserExperience)
 		want string
 	}{
-		{"codegraph-on", func(p *UserExperience) { p.CodeGraph = "on" }, "CodeGraph is not available on macOS yet; turn CodeGraph off to install"},
 		{"main-preview", func(p *UserExperience) { p.SDKSource = "main-preview" }, "Main preview is not available on macOS yet; choose Stable to install"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -118,6 +117,38 @@ func TestUserDarwinRefusesOnlyUnportedExperience(t *testing.T) {
 			}
 			if _, err := os.Lstat(target); !os.IsNotExist(err) {
 				t.Fatal("refused stage created the target")
+			}
+		})
+	}
+}
+
+// The TUI defaults (CodeGraph ON) reach physical review and stage the same
+// canonical files on macOS arm64 as on Linux amd64. The library itself is
+// provisioned after the runtime, never by the stage.
+func TestUserStableTUIDefaultsAdmitCodeGraph(t *testing.T) {
+	skipUnqualifiedStableHost(t)
+	for _, mode := range []string{"separate", "shared"} {
+		t.Run(mode, func(t *testing.T) {
+			profile := UserExperience{Persona: "gentleman", BackgroundSubagents: "on", StrictTDD: "on", GlobalRDD: "on", Context7: "on", CodeGraph: "on", GGA: "off"}
+			if err := userExperienceSupported(&profile); err != nil {
+				t.Fatalf("CodeGraph ON refused at admission: %v", err)
+			}
+			target := filepath.Join(userUnixTempRoot(t), "target")
+			if mode == "separate" {
+				req := UserInstallRequest{Destination: target, Mode: mode, Experience: &profile}
+				if token, err := InspectUserInstall(req); err != nil || token == "" {
+					t.Fatalf("CodeGraph ON refused at physical review: %q, %v", token, err)
+				}
+			}
+			if err := userPrepareInstallStage(context.Background(), target, mode, &profile); err != nil {
+				t.Fatalf("CodeGraph ON refused at the stage: %v", err)
+			}
+			if mode == "separate" {
+				// Shared stages Context7 into the selected agent later.
+				assertStableCanonicalFiles(t, target, profile)
+			}
+			if _, err := os.Lstat(filepath.Join(target, "runtime/codegraph")); !os.IsNotExist(err) {
+				t.Fatal("stage materialized the provisioned CodeGraph runtime")
 			}
 		})
 	}
