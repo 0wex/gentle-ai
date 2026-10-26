@@ -299,6 +299,10 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 			return result, privateError("refused", fmt.Errorf("component update requires a recorded installation: %w", manifestErr))
 		}
 		existing = &recorded
+	} else if recorded, manifestErr := userReadManifest(ctx, req.Destination); manifestErr == nil {
+		// A full reconfigure of a recorded installation still rebuilds a fresh
+		// stage, so the operator state is carried from the recorded agent.
+		existing = &recorded
 	}
 	userShellStepBegin(ctx, 2, 5, "Prepare the private stage and preferences")
 	userShellDetail(ctx, 2, 5, "Creating the private staging workspace")
@@ -452,6 +456,15 @@ func userRunInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 	userShellDetail(ctx, 4, 5, "Binding pinned tools into the agent")
 	if err = userTools(ctx, root, agent, !scope.reused[UserComponentSDK]); err != nil {
 		return result, privateError("source", err)
+	}
+	if req.Mode == "separate" && existing != nil && !scope.reused[UserComponentSDK] {
+		// A rebuilt agent must not look like a fresh installation to the
+		// operator: provider logins, sessions, project state and user models
+		// survive every update through the recorded installation's agent.
+		userShellDetail(ctx, 4, 5, "Carrying the installation's operator state")
+		if err = userCarryAgentState(ctx, existing.Agent, agent); err != nil {
+			return result, fmt.Errorf("operator state carry: %w", err)
+		}
 	}
 	userShellDetail(ctx, 4, 5, "Recording supervisor provenance")
 	self, err := userExecutable()
