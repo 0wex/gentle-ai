@@ -29,6 +29,7 @@ type UserShellUpdate struct {
 	Channel    string
 	Available  bool
 	Components []string
+	Scope      []string
 	Detail     string
 }
 
@@ -392,6 +393,7 @@ func CheckUserShellUpdate(ctx context.Context, install UserShellInstall) (UserSh
 		if manifest.MainCommit == "" {
 			update.Available = true
 			update.Components = []string{"SDK Main snapshot"}
+			update.Scope = []string{UserComponentSDK}
 			update.Detail = "Main SDK is not installed in this tree yet"
 			return update, nil
 		}
@@ -402,6 +404,7 @@ func CheckUserShellUpdate(ctx context.Context, install UserShellInstall) (UserSh
 		if latest.SHA != manifest.MainArchiveSHA {
 			update.Available = true
 			update.Components = []string{"SDK Main snapshot"}
+			update.Scope = []string{UserComponentSDK}
 			update.Detail = "new Main snapshot available"
 		}
 		return update, nil
@@ -421,12 +424,14 @@ func CheckUserShellUpdate(ctx context.Context, install UserShellInstall) (UserSh
 	if manifest.MainCommit != "" {
 		update.Available = true
 		update.Components = []string{"SDK Main snapshot"}
+		update.Scope = []string{UserComponentSDK}
 		update.Detail = "Main SDK is installed; the stable channel preference wants the stock composition"
 		return update, nil
 	}
 	if userWindowsSHA(image) != manifest.SupervisorSHA {
 		update.Available = true
 		update.Components = append(update.Components, "Gentle Shell supervisor")
+		update.Scope = append(update.Scope, UserComponentSupervisor)
 	}
 	node, err := userWindowsRead(filepath.Join(install.Target, "runtime", "node", "node.exe"), 256<<20)
 	if err != nil {
@@ -435,6 +440,7 @@ func CheckUserShellUpdate(ctx context.Context, install UserShellInstall) (UserSh
 	if userWindowsSHA(node) != userWindowsArtifacts[0].SHA {
 		update.Available = true
 		update.Components = append(update.Components, "Node runtime")
+		update.Scope = append(update.Scope, UserComponentNode)
 	}
 	if update.Available {
 		update.Detail = "stable channel components differ from this build"
