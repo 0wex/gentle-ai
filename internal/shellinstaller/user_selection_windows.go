@@ -13,6 +13,10 @@ type UserInstallRequest struct {
 	Destination, Mode, SharedPrefix, SharedAgent, Confirmation string
 	Channel                                                    string
 	Experience                                                 *UserExperience `json:",omitempty"`
+	// Scope mirrors the Unix component scope for transport parity. The
+	// Windows flow does not support component-scoped updates yet and treats
+	// every request as a full install; the TUI never sets a scope on Windows.
+	Scope string `json:",omitempty"`
 }
 
 func UserInstallChannel(channel string) (string, error) {
