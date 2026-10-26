@@ -681,14 +681,20 @@ const privateNativeInvoke = `import {installGentleAi} from './scripts/gentle-ai-
 
 // userWriteBootstrapHelpers writes the staged provisioning helpers. They are
 // needed by both the fresh Node bootstrap and a component-scoped reuse (the
-// provisioner imports the platform-closure normalizer from the stage root).
+// provisioner imports the platform-closure normalizer from the stage root),
+// so the write is idempotent: an earlier 0400 copy from the other call site
+// is removed before rewriting.
 func userWriteBootstrapHelpers(root string) error {
 	for _, name := range []string{"bootstrap-gentle-shell-private-node.sh", "complete-generated-lock-sri.mjs", "normalize-private-optional-platform-closure.mjs"} {
 		data, err := assets.ReadPrivateHelper(name)
 		if err != nil {
 			return err
 		}
-		if err := os.WriteFile(filepath.Join(root, name), data, 0400); err != nil {
+		path := filepath.Join(root, name)
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		if err := os.WriteFile(path, data, 0400); err != nil {
 			return err
 		}
 	}
