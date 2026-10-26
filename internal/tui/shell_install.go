@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 	"time"
 
@@ -173,12 +174,48 @@ func (m Model) beginComponentUpdate(update *shellUpdateState) (tea.Model, error)
 	if err != nil {
 		return m, err
 	}
-	return m.beginShellUpdateInstall(install, profile)
+	return m.beginShellUpdateInstall(install, profile, update.info.Scope)
+}
+
+// shellUpdateComponentLabels names the components in plans and reuse lines.
+var shellUpdateComponentLabels = map[string]string{
+	shellinstaller.UserComponentSupervisor: "Gentle Shell supervisor",
+	shellinstaller.UserComponentNode:       "Node runtime",
+	shellinstaller.UserComponentSDK:        "gentle-pi SDK",
+	shellinstaller.UserComponentCodeGraph:  "CodeGraph",
+	shellinstaller.UserComponentContext7:   "Context7",
+}
+
+// shellUpdatePlanSteps renders the plan for an update. A scoped update names
+// exactly the components that will be refreshed and the ones reused from the
+// installation; an unscoped update keeps the classic install plan.
+func shellUpdatePlanSteps(scope []string) []string {
+	if len(scope) == 0 {
+		return append([]string(nil), shellInstallStepLabels...)
+	}
+	requested := map[string]bool{}
+	var updating, reusing []string
+	for _, name := range scope {
+		requested[name] = true
+		updating = append(updating, shellUpdateComponentLabels[name])
+	}
+	for _, name := range []string{shellinstaller.UserComponentNode, shellinstaller.UserComponentSDK, shellinstaller.UserComponentCodeGraph, shellinstaller.UserComponentContext7} {
+		if !requested[name] {
+			reusing = append(reusing, shellUpdateComponentLabels[name])
+		}
+	}
+	steps := []string{"Validate the selection and target"}
+	if len(reusing) > 0 {
+		steps = append(steps, "Reuse unchanged: "+strings.Join(reusing, ", "))
+	}
+	return append(steps, "Update: "+strings.Join(updating, ", "), "Publish, verify and register the installation")
 }
 
 // beginShellUpdateInstall prepares the shared plan/confirmation flow for a
-// component update of the given profile.
-func (m Model) beginShellUpdateInstall(install shellinstaller.UserShellInstall, profile shellinstaller.UserExperience) (tea.Model, error) {
+// component update of the given profile. The scope carries the components to
+// refresh; an empty scope is a full install. The scope rides inside the
+// inspected request, so the confirmation token binds the exact component set.
+func (m Model) beginShellUpdateInstall(install shellinstaller.UserShellInstall, profile shellinstaller.UserExperience, scope []string) (tea.Model, error) {
 	if home, homeErr := os.UserHomeDir(); homeErr == nil {
 		_ = os.Setenv("GENTLE_AI_SHELL_REGISTRY_HOME", home)
 	}
@@ -187,6 +224,9 @@ func (m Model) beginShellUpdateInstall(install shellinstaller.UserShellInstall, 
 	if install.Mode == "separate" {
 		request.SharedPrefix, request.SharedAgent = "", ""
 	}
+	if runtime.GOOS != "windows" {
+		request.Scope = shellinstaller.CanonicalUpdateScope(scope)
+	}
 	token, err := shellinstaller.InspectUserInstall(request)
 	if err != nil {
 		return m, err
@@ -194,7 +234,7 @@ func (m Model) beginShellUpdateInstall(install shellinstaller.UserShellInstall, 
 	request.Confirmation = token
 	m.shellPlanRequest = request
 	m.shellPlanConfig = nil
-	m.shellPlan = append([]string(nil), shellInstallStepLabels...)
+	m.shellPlan = shellUpdatePlanSteps(scope)
 	m.shellInstallModel = cli.NewShellInstallModelWithExperience(nil, profile)
 	m.shellUpdate = nil
 	return m, nil
@@ -234,7 +274,7 @@ func (m Model) beginChannelOverlayUpdate(update *shellUpdateState) (tea.Model, e
 	if err != nil {
 		return m, err
 	}
-	return m.beginShellUpdateInstall(update.install, profile)
+	return m.beginShellUpdateInstall(update.install, profile, nil)
 }
 
 func (m Model) updateShellUpdate(msg tea.Msg) (tea.Model, tea.Cmd) {
