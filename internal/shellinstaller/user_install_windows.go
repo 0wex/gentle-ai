@@ -519,6 +519,11 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 			if pin, pinErr := userWindowsGoPinSHA(); pinErr == nil && scope.reused[UserComponentNode] && installed.GoSHA == pin {
 				goReuse = true
 			}
+		} else if recorded, manifestErr := userWindowsManifestRead(req.Destination); manifestErr == nil {
+			// A full reconfigure of a recorded installation still rebuilds a
+			// fresh stage, so the operator state is carried from the recorded
+			// agent.
+			installed = &recorded
 		}
 		backup = req.Destination + ".replaced-" + time.Now().UTC().Format("20060102T150405Z")
 		if _, err := os.Lstat(backup); !os.IsNotExist(err) {
@@ -768,6 +773,15 @@ func RunUserInstall(ctx context.Context, req UserInstallRequest) (result UserIns
 			return result, err
 		}
 		fmt.Fprintln(os.Stderr, "Windows install phase: overlay-ready main")
+	}
+	if installed != nil && !scope.reused[UserComponentSDK] {
+		// A rebuilt agent must not look like a fresh installation to the
+		// operator: provider logins, sessions, project state and user models
+		// survive every update through the retired installation's agent.
+		fmt.Fprintln(os.Stderr, "Windows install phase: carry-operator-state")
+		if err := userCarryAgentState(ctx, filepath.Join(backup, "agent"), filepath.Join(stage, "agent")); err != nil {
+			return result, fmt.Errorf("operator state carry: %w", err)
+		}
 	}
 	for _, product := range []string{"pi", "gentle-shell"} {
 		if err := userWindowsWrite(filepath.Join(stage, "bin", product+".cmd"), userWindowsBinding(req.Destination, product)); err != nil {
