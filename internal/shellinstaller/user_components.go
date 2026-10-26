@@ -50,8 +50,3 @@ func userScopeComponents(scope string) []string {
 	}
 	return strings.Split(scope, ",")
 }
-
-// userCanonicalScope renders a component set as the canonical request scope.
-func userCanonicalScope(components map[string]bool) string {
-	return strings.Join(userSortedComponents(components), ",")
-}
