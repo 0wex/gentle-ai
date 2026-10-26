@@ -456,6 +456,24 @@ func manageChanges(current, selected shellinstaller.UserExperience, inPlace bool
 	return preferences, components
 }
 
+// shellManageComponentScope maps the manage screen's component deltas onto
+// the scoped update request. A CodeGraph toggle becomes a codegraph-scoped
+// update: OFF→ON provisions the library, ON→OFF publishes the tree without
+// it. Every other component and the whole operator state (logins, sessions,
+// user models) is reused from the installation instead of rebuilt.
+func shellManageComponentScope(components []screens.ShellManageChange) []string {
+	var scope []string
+	for _, change := range components {
+		switch change.Label {
+		case "CodeGraph":
+			scope = append(scope, shellinstaller.UserComponentCodeGraph)
+		case "Context7":
+			scope = append(scope, shellinstaller.UserComponentContext7)
+		}
+	}
+	return scope
+}
+
 func manageContinueLabel(config shellExperienceConfig) string {
 	if !config.reconfigure || len(config.existing) != 1 {
 		return "Continue"
@@ -479,7 +497,7 @@ func manageActions(manage *shellManageState) []string {
 		return []string{"Back"}
 	}
 	var actions []string
-	// Component deltas need the full reconfigure, which also applies every
+	// Component deltas route through a scoped update, which also applies every
 	// preference change of the same delta; preference-only deltas stay in place.
 	if len(manage.components) > 0 {
 		actions = append(actions, "Update installation")
@@ -603,7 +621,7 @@ func (m Model) updateShellManage(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			manage.applied, manage.err = true, nil
 		case "Update installation":
-			next, err := m.beginShellUpdateInstall(manage.install, shellForceGGAOff(manage.config.profile), nil)
+			next, err := m.beginShellUpdateInstall(manage.install, shellForceGGAOff(manage.config.profile), shellManageComponentScope(manage.components))
 			if err != nil {
 				manage.err = err
 				return m, nil
