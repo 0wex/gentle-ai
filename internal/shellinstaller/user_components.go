@@ -29,3 +29,29 @@ func CanonicalUpdateScope(components []string) string {
 	sort.Strings(names)
 	return strings.Join(names, ",")
 }
+
+// userSortedComponents returns the scope names in canonical report order.
+func userSortedComponents(scope map[string]bool) []string {
+	names := make([]string, 0, len(scope))
+	for name, on := range scope {
+		if on {
+			names = append(names, name)
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
+// userScopeComponents returns the canonical component names of a request
+// scope string in sorted order; an empty scope is a full install.
+func userScopeComponents(scope string) []string {
+	if scope == "" {
+		return nil
+	}
+	return strings.Split(scope, ",")
+}
+
+// userCanonicalScope renders a component set as the canonical request scope.
+func userCanonicalScope(components map[string]bool) string {
+	return strings.Join(userSortedComponents(components), ",")
+}

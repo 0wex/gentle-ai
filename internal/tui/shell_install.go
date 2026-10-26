@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"runtime"
 	"strings"
 	"time"
 
@@ -224,9 +223,7 @@ func (m Model) beginShellUpdateInstall(install shellinstaller.UserShellInstall, 
 	if install.Mode == "separate" {
 		request.SharedPrefix, request.SharedAgent = "", ""
 	}
-	if runtime.GOOS != "windows" {
-		request.Scope = shellinstaller.CanonicalUpdateScope(scope)
-	}
+	request.Scope = shellinstaller.CanonicalUpdateScope(scope)
 	token, err := shellinstaller.InspectUserInstall(request)
 	if err != nil {
 		return m, err

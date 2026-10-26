@@ -13,9 +13,8 @@ type UserInstallRequest struct {
 	Destination, Mode, SharedPrefix, SharedAgent, Confirmation string
 	Channel                                                    string
 	Experience                                                 *UserExperience `json:",omitempty"`
-	// Scope mirrors the Unix component scope for transport parity. The
-	// Windows flow does not support component-scoped updates yet and treats
-	// every request as a full install; the TUI never sets a scope on Windows.
+	// Scope carries the canonical component scope (see user_components.go);
+	// the Windows update flow consumes it like the Unix flow.
 	Scope string `json:",omitempty"`
 }
 
@@ -30,7 +29,11 @@ func UserInstallChannel(channel string) (string, error) {
 }
 
 func userConfirmation(req UserInstallRequest, identity string) string {
-	data, err := userExperienceConfirmationData([]string{req.Destination, req.Mode, req.SharedPrefix, req.SharedAgent, req.Channel, identity}, req.Experience)
+	fields := []string{req.Destination, req.Mode, req.SharedPrefix, req.SharedAgent, req.Channel, identity}
+	if req.Scope != "" {
+		fields = append(fields, req.Scope)
+	}
+	data, err := userExperienceConfirmationData(fields, req.Experience)
 	if err != nil {
 		return ""
 	}
