@@ -159,6 +159,9 @@ func TestWindowsDiscoversPrePinManifest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := os.Remove(filepath.Join(target, "manifest.json")); err != nil {
+		t.Fatal(err)
+	}
 	if err := userWindowsWrite(filepath.Join(target, "manifest.json"), append(encoded, '\n')); err != nil {
 		t.Fatal(err)
 	}
