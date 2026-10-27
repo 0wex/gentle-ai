@@ -3,6 +3,7 @@ package agentbuilder
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,9 +22,11 @@ func ValidateAgentName(name string) error {
 	return nil
 }
 
-// Uninstall removes the specified custom agents from the registry and all configured adapter skills directories.
-// It validates agent names, removes agent skill files safely without escaping adapter directories,
-// updates the registry, and restores removed files if registry persistence fails.
+// Uninstall removes the specified custom agents from the registry and all
+// configured adapter skills directories. It validates agent names, removes the
+// agent's entire payload directory safely without escaping adapter
+// directories, updates the registry, and restores removed content if registry
+// persistence fails. Restore failures are reported, never swallowed.
 func Uninstall(registryPath string, agentNames []string, adapters []AdapterInfo) (err error) {
 	if len(agentNames) == 0 {
 		return nil
@@ -39,16 +42,12 @@ func Uninstall(registryPath string, agentNames []string, adapters []AdapterInfo)
 		return fmt.Errorf("load registry: %w", err)
 	}
 
-	var restorers []func()
+	var restorers []func() error
 	defer func() {
-		if err != nil {
-			for i := len(restorers) - 1; i >= 0; i-- {
-				restorers[i]()
-			}
-		}
+		err = runRestorers(err, restorers)
 	}()
 
-	// Remove files from all adapters for each requested agent.
+	// Remove the payload directory from all adapters for each requested agent.
 	for _, name := range agentNames {
 		for _, adapter := range adapters {
 			rFn, removeErr := uninstallFromAdapter(adapter.SkillsDir, name)
@@ -75,7 +74,96 @@ func Uninstall(registryPath string, agentNames []string, adapters []AdapterInfo)
 	return nil
 }
 
-func uninstallFromAdapter(skillsDir, name string) (func(), error) {
+// payloadSnapshot captures every file and symlink under an agent directory so
+// a failed uninstall can restore the exact payload.
+type payloadSnapshot struct {
+	files    map[string]payloadFile // paths relative to the skills root
+	symlinks map[string]string      // paths relative to the skills root -> targets
+}
+
+type payloadFile struct {
+	data []byte
+	perm os.FileMode
+}
+
+func snapshotPayload(root *os.Root, name string) (*payloadSnapshot, error) {
+	snap := &payloadSnapshot{files: map[string]payloadFile{}, symlinks: map[string]string{}}
+	walkErr := fs.WalkDir(root.FS(), name, func(p string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if p == name {
+			return nil
+		}
+		fi, err := root.Lstat(p)
+		if err != nil {
+			return err
+		}
+		switch {
+		case fi.Mode()&os.ModeSymlink != 0:
+			target, err := root.Readlink(p)
+			if err != nil {
+				return err
+			}
+			snap.symlinks[p] = target
+		case fi.Mode().IsRegular():
+			data, err := root.ReadFile(p)
+			if err != nil {
+				return err
+			}
+			snap.files[p] = payloadFile{data: data, perm: fi.Mode().Perm()}
+		}
+		return nil
+	})
+	if walkErr != nil {
+		return nil, walkErr
+	}
+	return snap, nil
+}
+
+func (s *payloadSnapshot) restore(root *os.Root) error {
+	var errs []error
+	for p, target := range s.symlinks {
+		if err := root.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if err := root.Symlink(target, p); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	for p, f := range s.files {
+		if err := root.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			errs = append(errs, err)
+			continue
+		}
+		if err := root.WriteFile(p, f.data, f.perm); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// runRestorers executes restorers in reverse order and joins every failure
+// onto err, so a partially restored payload is never reported as a clean
+// rollback. A nil err is returned untouched: restorers only run on failure.
+func runRestorers(err error, restorers []func() error) error {
+	if err == nil {
+		return nil
+	}
+	restoreErrs := make([]error, 0, len(restorers))
+	for i := len(restorers) - 1; i >= 0; i-- {
+		if rErr := restorers[i](); rErr != nil {
+			restoreErrs = append(restoreErrs, rErr)
+		}
+	}
+	if len(restoreErrs) > 0 {
+		return errors.Join(append([]error{err}, restoreErrs...)...)
+	}
+	return err
+}
+
+func uninstallFromAdapter(skillsDir, name string) (func() error, error) {
 	if skillsDir == "" {
 		return nil, nil
 	}
@@ -105,12 +193,13 @@ func uninstallFromAdapter(skillsDir, name string) (func(), error) {
 		if err := root.Remove(name); err != nil {
 			return nil, err
 		}
-		return func() {
+		return func() error {
 			r, err := os.OpenRoot(skillsDir)
-			if err == nil {
-				defer r.Close()
-				_ = r.Symlink(target, name)
+			if err != nil {
+				return err
 			}
+			defer r.Close()
+			return r.Symlink(target, name)
 		}, nil
 	}
 
@@ -118,37 +207,24 @@ func uninstallFromAdapter(skillsDir, name string) (func(), error) {
 		return nil, fmt.Errorf("expected directory or symlink for agent %s in %s", name, skillsDir)
 	}
 
-	skillPath := filepath.Join(name, "SKILL.md")
-	sfi, err := root.Lstat(skillPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			_ = root.Remove(name)
-			return nil, nil
-		}
-		return nil, err
-	}
-
-	// Reject directory payload (e.g. SKILL.md is a directory).
-	if sfi.IsDir() {
-		return nil, fmt.Errorf("payload %s is a directory, expected file", filepath.Join(skillsDir, skillPath))
-	}
-
-	content, err := root.ReadFile(skillPath)
+	// Snapshot the entire payload so a failed uninstall can restore it.
+	snap, err := snapshotPayload(root, name)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := root.Remove(skillPath); err != nil {
+	// Remove the whole agent directory: partial removals would leave
+	// untracked leftovers with no registry entry to retry from.
+	if err := root.RemoveAll(name); err != nil {
 		return nil, err
 	}
-	_ = root.Remove(name) // Best-effort cleanup of empty directory.
 
-	return func() {
+	return func() error {
 		r, err := os.OpenRoot(skillsDir)
-		if err == nil {
-			defer r.Close()
-			_ = r.MkdirAll(name, 0755)
-			_ = r.WriteFile(skillPath, content, 0644)
+		if err != nil {
+			return err
 		}
+		defer r.Close()
+		return snap.restore(r)
 	}, nil
 }

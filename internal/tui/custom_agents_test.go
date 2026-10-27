@@ -180,6 +180,13 @@ func TestCustomAgents_DeleteExecution_ErrorPreserved(t *testing.T) {
 	updated, _ = state.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	state = updated.(tui.Model)
 
+	// Make the registry file read-only so SaveRegistry fails after the
+	// payload removals: the uninstall error must survive the list reload.
+	if err := os.Chmod(regPath, 0o400); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(regPath, 0o600) })
+
 	// Press Enter on "Delete Selected" (cursor index 1)
 	state.Cursor = 1
 	updated, _ = state.Update(tea.KeyMsg{Type: tea.KeyEnter})

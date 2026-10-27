@@ -3,6 +3,7 @@ package agentbuilder_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -157,19 +158,34 @@ func TestUninstall_SymlinkSafety(t *testing.T) {
 	}
 }
 
-func TestUninstall_RejectDirectoryPayload(t *testing.T) {
+// TestUninstall_RemovesEntirePayloadDirectory pins that uninstall removes the
+// agent's whole payload directory, not just SKILL.md: partial removals would
+// leave untracked leftovers with no registry entry to retry from.
+func TestUninstall_RemovesEntirePayloadDirectory(t *testing.T) {
 	tempDir := t.TempDir()
 	regPath := filepath.Join(tempDir, "custom-agents.json")
 	skillsDir := filepath.Join(tempDir, "skills")
 
-	badDir := filepath.Join(skillsDir, "bad-agent", "SKILL.md")
-	if err := os.MkdirAll(badDir, 0755); err != nil {
+	agentDir := filepath.Join(skillsDir, "my-agent")
+	if err := os.MkdirAll(agentDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(agentDir, "SKILL.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(agentDir, "extra-asset.txt"), []byte("y"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(agentDir, "nested"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(agentDir, "nested", "deep.bin"), []byte("z"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
 	reg := &agentbuilder.Registry{
 		Version: 1,
-		Agents:  []agentbuilder.RegistryEntry{{Name: "bad-agent"}},
+		Agents:  []agentbuilder.RegistryEntry{{Name: "my-agent"}},
 	}
 	_ = agentbuilder.SaveRegistry(regPath, reg)
 
@@ -177,38 +193,59 @@ func TestUninstall_RejectDirectoryPayload(t *testing.T) {
 		{AgentID: model.AgentClaudeCode, SkillsDir: skillsDir},
 	}
 
-	err := agentbuilder.Uninstall(regPath, []string{"bad-agent"}, adapters)
-	if err == nil {
-		t.Fatal("expected error rejecting directory payload, got nil")
+	if err := agentbuilder.Uninstall(regPath, []string{"my-agent"}, adapters); err != nil {
+		t.Fatalf("uninstall with extra payload files reported: %v", err)
+	}
+	if _, err := os.Lstat(agentDir); !os.IsNotExist(err) {
+		t.Errorf("agent directory with extras should be fully removed, got: %v", err)
+	}
+	final, err := agentbuilder.LoadRegistry(regPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(final.Agents) != 0 {
+		t.Errorf("expected empty registry after uninstall, got %d entries", len(final.Agents))
 	}
 }
 
 func TestUninstall_RollbackOnSaveFailure(t *testing.T) {
 	tempDir := t.TempDir()
+	regPath := filepath.Join(tempDir, "custom-agents.json")
 	skillsDir := filepath.Join(tempDir, "skills")
 	agentDir := filepath.Join(skillsDir, "my-agent")
-	if err := os.MkdirAll(agentDir, 0755); err != nil {
+	if err := os.MkdirAll(agentDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	skillPath := filepath.Join(agentDir, "SKILL.md")
 	content := []byte("original content")
-	if err := os.WriteFile(skillPath, content, 0644); err != nil {
+	if err := os.WriteFile(skillPath, content, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	// Point registry to a directory path so SaveRegistry fails trying to write to it.
-	regDirPath := filepath.Join(tempDir, "reg-dir")
-	if err := os.MkdirAll(regDirPath, 0755); err != nil {
+	reg := &agentbuilder.Registry{
+		Version: 1,
+		Agents:  []agentbuilder.RegistryEntry{{Name: "my-agent"}},
+	}
+	if err := agentbuilder.SaveRegistry(regPath, reg); err != nil {
 		t.Fatal(err)
 	}
+	// Make SaveRegistry fail only at persistence time: removals already
+	// succeeded, so this exercises the real rollback path.
+	if err := os.Chmod(regPath, 0o400); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(regPath, 0o600) })
 
 	adapters := []agentbuilder.AdapterInfo{
 		{AgentID: model.AgentClaudeCode, SkillsDir: skillsDir},
 	}
 
-	err := agentbuilder.Uninstall(regDirPath, []string{"my-agent"}, adapters)
+	err := agentbuilder.Uninstall(regPath, []string{"my-agent"}, adapters)
 	if err == nil {
 		t.Fatal("expected error on save failure, got nil")
+	}
+	if !strings.Contains(err.Error(), "save registry") {
+		t.Errorf("expected save-registry failure, got: %v", err)
 	}
 
 	// Verify rollback restored the file
@@ -219,7 +256,19 @@ func TestUninstall_RollbackOnSaveFailure(t *testing.T) {
 	if string(restored) != string(content) {
 		t.Errorf("restored content = %q, want %q", string(restored), string(content))
 	}
+
+	// Registry entry must remain so the uninstall is retryable.
+	final, err := agentbuilder.LoadRegistry(regPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(final.Agents) != 1 || final.Agents[0].Name != "my-agent" {
+		t.Errorf("registry should still list the agent for retry, got %+v", final.Agents)
+	}
 }
+
+// TestUninstall_RestoreFailureSurfaces: covered in uninstall_internal_test.go
+// (runRestorers is package-internal); this file keeps end-to-end guarantees.
 
 func TestUninstall_RollbackMidwayMultiAgent(t *testing.T) {
 	tempDir := t.TempDir()
@@ -240,9 +289,10 @@ func TestUninstall_RollbackMidwayMultiAgent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// agent-2 has SKILL.md as directory (invalid payload)
-	dir2 := filepath.Join(skillsDir, "agent-2", "SKILL.md")
-	if err := os.MkdirAll(dir2, 0755); err != nil {
+	// agent-2 is an anomalous regular file (not a directory payload): the
+	// removal must fail midway and agent-1 must be restored.
+	fileAgent := filepath.Join(skillsDir, "agent-2")
+	if err := os.WriteFile(fileAgent, []byte("not a payload"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
