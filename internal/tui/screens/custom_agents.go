@@ -30,9 +30,9 @@ func RenderCustomAgents(agents []agentbuilder.RegistryEntry, cursor int, err err
 
 	options := make([]string, 0, len(agents)+2)
 	for _, a := range agents {
-		label := "• " + a.Name
+		label := "• " + sanitizeLabel(a.Name)
 		if a.Title != "" {
-			label = fmt.Sprintf("• %s ─── %s", a.Name, a.Title)
+			label = fmt.Sprintf("• %s ─── %s", sanitizeLabel(a.Name), sanitizeLabel(a.Title))
 		}
 		options = append(options, label)
 	}
@@ -71,9 +71,9 @@ func RenderCustomAgentDelete(agents []agentbuilder.RegistryEntry, selected map[s
 	}
 
 	for idx, a := range agents {
-		label := a.Name
+		label := sanitizeLabel(a.Name)
 		if a.Title != "" {
-			label = fmt.Sprintf("%s ─── %s", a.Name, a.Title)
+			label = fmt.Sprintf("%s ─── %s", sanitizeLabel(a.Name), sanitizeLabel(a.Title))
 		}
 		checked := selected != nil && selected[a.Name]
 		focused := idx == cursor
