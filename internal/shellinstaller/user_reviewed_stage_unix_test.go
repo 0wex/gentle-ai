@@ -71,7 +71,7 @@ func userLegacySupplierFixture(t *testing.T, recorded string) (string, userManif
 // The shared supplier authentication admits exactly the listed digests and
 // refuses a mismatch in either supplier file.
 func TestUserAuthenticateSupplierFiles(t *testing.T) {
-	pkg := t.TempDir()
+	pkg := filepath.Join(userUnixTempRoot(t), "prefix", "lib", "node_modules", "gentle-pi")
 	for _, directory := range []string{"scripts", "runtime"} {
 		if err := os.MkdirAll(filepath.Join(pkg, directory), 0700); err != nil {
 			t.Fatal(err)
